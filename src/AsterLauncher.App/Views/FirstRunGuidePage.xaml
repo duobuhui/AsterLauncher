@@ -1,0 +1,33 @@
+<Page
+    x:Class="AsterLauncher.App.Views.FirstRunGuidePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="Transparent">
+        <StackPanel MaxWidth="740" HorizontalAlignment="Center" Padding="32,36" Spacing="18">
+            <TextBlock Text="欢迎使用 AsterLauncher" FontSize="30" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+            <TextBlock Text="先查找已安装的游戏，再设置今后使用的游戏目录。可以随时到启动器设置中修改目录。" TextWrapping="Wrap" />
+            <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="20">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="1  查找现有游戏" FontSize="19" FontWeight="SemiBold" />
+                    <TextBlock Text="检查已保存的 EXE；终末地还检查运行进程和已验证的官方启动器安装信息。" TextWrapping="Wrap" />
+                    <Button x:Name="ScanButton" Content="自动查找现有游戏" Style="{StaticResource ThemeActionButtonStyle}" Click="ScanButton_OnClick" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="ScanResultText" Text="尚未开始查找" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="20">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="2  设置游戏目录" FontSize="19" FontWeight="SemiBold" />
+                    <TextBlock Text="在此目录及其子目录再次查找各游戏的 EXE，例如 StarRail.exe。请选已有文件夹。" TextWrapping="Wrap" />
+                    <Grid ColumnSpacing="10"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBox x:Name="DirectoryBox" PlaceholderText="例如 E:\Games" AutomationProperties.Name="游戏目录" />
+                        <Button Grid.Column="1" Content="浏览…" Click="BrowseButton_OnClick" />
+                    </Grid>
+                    <TextBlock Text="此目录会保存为未来下载功能的目标目录。当前官方下载会打开官网，官网安装器的路径需在官网程序中选择。" TextWrapping="Wrap" FontSize="12" />
+                    <TextBlock x:Name="DirectoryResultText" TextWrapping="Wrap" />
+                    <Button x:Name="FinishButton" Content="保存目录并进入启动器" Style="{StaticResource ThemeActionButtonStyle}" Click="FinishButton_OnClick" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

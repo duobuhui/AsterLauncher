@@ -1,0 +1,57 @@
+# AsterLauncher architecture
+
+## Beta 0.1.0 distribution
+
+`Directory.Build.props` is the version source. The app displays its informational version, and the project builds a single-file, self-contained x64 release named `AsterLauncher.exe`. `eng/package-release.ps1` creates a full ZIP and `aster-update.json`; later versions may also include a fixed-block binary delta from one exact previous version. The Settings page lists GitHub Releases rather than using the latest-release endpoint, so beta prereleases are visible. It selects an exact-base delta when supplied and a full ZIP otherwise, verifies both the downloaded archive and replacement EXE with SHA-256, then stages the replacement outside the running executable and restarts. User `Data` is outside the release ZIP. The remote update path requires an uploaded Release and remains unverified until one exists.
+
+The public source and ZIP include 26 attributed publisher-media files plus one original SVG fallback after the project owner confirmed redistribution authorization for this release on 2026-09-24. Publisher images remain publisher-owned and are not relicensed by any source-code license. Game identity, theme gradients, and user-selected local artwork remain available as fallbacks. The Endfield installation used for local validation is Bilibili B-channel; the current adapter does not persist or infer a channel from `Endfield.exe`.
+
+AsterLauncher is an original WinUI 3 application. It does not reuse Starward source, assets, layouts, or branding.
+
+## Boundaries
+
+- `AsterLauncher.Core`: framework-neutral domain models, adapter contracts, scan results, launch orchestration, argument parsing, and extension points such as `IGachaProvider`.
+- `AsterLauncher.Infrastructure`: JSON persistence, evidence-based install locators, process detection, owned-process lifetime management, logging, built-in adapter implementations, and UIGF v4.2 archive/capture services.
+- `AsterLauncher.App`: WinUI 3 views, view models, dependency injection composition, file pickers, and navigation.
+- `AsterLauncher.Tray`: a small Windows Forms notification icon host; the WinUI window owns the close policy and restore action.
+- `AsterLauncher.Core.Tests`: deterministic tests of launch order, failure policies, replacement launchers, owned-process cleanup, and evidence-based Endfield lookup.
+
+The main UI consumes `IGameAdapter` instances and never branches on a concrete game ID for launching or discovery. Game-specific behavior stays inside an adapter. `BuiltInGameCatalog` registers Endfield, Genshin Impact, Honkai Impact 3rd, Honkai: Star Rail, Zenless Zone Zero, Petit Planet, and Arknights at compile time. Dynamic DLL loading remains deferred.
+
+The game library persists an ordered list of game IDs and an explicit list of hidden built-in IDs in the existing JSON configuration. Older configurations default to showing every built-in game. Hiding a built-in keeps its executable path, history and launch profiles; restoring it moves it to the end of the visible rail. Custom game removal deletes that custom configuration and its profiles after confirmation, without touching the executable. Both visible and hidden lists can be reordered. Adding an EXE first matches the catalog's known executable names case-insensitively and then uses the matched adapter's manual validation; a successful match restores that built-in identity instead of creating a duplicate custom game. Games without a verified executable name remain manual/custom until the catalog has evidence for a name.
+
+Game Library drag reordering updates the same ordered ID list after a completed drag. Its bulk cleanup acts only on visible games whose saved executable does not exist: built-ins move to the hidden library, while custom game configuration and profiles are removed after a count-specific confirmation. No game files or local record archives are deleted. The Win32 window subclass enforces a 960×540 DIP minimum client area at the current window DPI, alongside the existing 16:9 interactive resize rule.
+
+## Launch pipeline
+
+`BeforeGame -> Game -> AfterGame -> wait for game exit -> OnGameExit -> close owned companions`
+
+Every external process is started from a file path with a structured argument list. The service records the exact `Process` instance it created. Cleanup can only target those owned handles; a pre-existing process may be detected and skipped, but is never acquired or terminated.
+
+An adapter supplies its definition, install locator, process detector, default launch arguments, and optional feature declarations. An explicit takeover step suppresses the default game executable and lets a user-selected tool launch the game.
+
+## Data and privacy
+
+MVP settings are JSON because the data is small and document-shaped. Passwords and account credentials are out of scope. The data root is `ASTERLAUNCHER_DATA_HOME` when set, otherwise a `Data` directory beside the executable. Build/run scripts set it to the project-local `.appdata` directory on E:.
+
+Automatic discovery reports each checked source and a typed outcome. Endfield discovery is deliberately narrow: saved executable path first, then the executable path of a running `Endfield.exe`, then standard uninstall entries whose display name is exactly `鹰角启动器` or `GRYPHLINK`. A locally inspected installation established the relative path `games\Endfield Game\Endfield.exe`; no disk-wide scan, random uninstall key, or unverified vendor configuration format is used. Manual selection always remains available and overrides an automatic result.
+
+The first-run guide saves a user-selected game directory. A later scan checks the existing adapter locator first, then searches only that directory and its subdirectories for the executable names declared by each built-in adapter. It skips directory links, caps directory traversal, and asks for manual selection when multiple installations match. For the miHoYo games, the existing locator checks a saved path; the selected-directory search adds `YuanShen.exe` / `GenshinImpact.exe`, `BH3.exe`, `StarRail.exe`, and `ZenlessZoneZero.exe`. Petit Planet has no verified executable name, so it remains manual-only. No unverified HoYoPlay registry or configuration rule is assumed.
+
+## Downloads and companion tools
+
+Built-in definitions expose an official download/documentation URI, not an embedded package downloader. HoYoPlay's modern Sophon flow and publisher launchers require live manifests, integrity checks, patch state, and channel handling; v0.4 intentionally opens the publisher source instead of copying an incomplete URL algorithm. Arknights and Endfield link to the official Hypergryph PC flow. `CompanionToolPresetFactory` supplies user-path-only templates for MAA/maa-cli, MaaEnd, March7thAssistant, and BetterGI; it downloads nothing and preserves the owned-process safety boundary.
+
+The game directory preference is persisted as the target for a future in-app downloader and is used for bounded discovery now. The current official-link action cannot control the publisher installer's destination; the guide and settings page state this explicitly. The X button preference is persisted as exit or minimize to tray; tray restore and exit use the Windows Shell notification area.
+
+Artwork sources are packaged or user-selected local files. During a running launcher session, `GameCardViewModel` reuses a `BitmapImage` for each unchanged file (path, modification time, length), and `MainWindow` keeps decoded wallpaper layers for return visits. A changed local file is reloaded. No game switch downloads wallpaper from the internet, and no duplicate project-owned media cache is written to disk.
+
+The profile editor projects the existing ordered `LaunchStep` list into an observable sequence that includes the default game executable when no takeover step is enabled. This projection mirrors the orchestrator's four phases and updates immediately after add/remove/select actions. Profile creation, rename, and deletion persist through the existing JSON store; the launcher keeps at least one profile per game. The settings UI groups app information, appearance, and window/path options into tabs. Theme presets only mutate original AsterLauncher color brushes; they do not contain third-party images.
+
+## Gacha boundary
+
+`IUigfArchiveService` is independent of `GameLaunchOrchestrator`. It imports and exports UIGF v4.x JSON and stores a project-local v4.2 archive. Capture is limited to verified HoYo Web cache layouts and official history endpoints for Genshin Impact, Honkai: Star Rail, and Zenless Zone Zero. The temporary history URL and `authkey` are never persisted or logged. Arknights and Endfield remain outside this provider because they do not use UIGF.
+
+Endfield has its own local JSON archive service. A rejected character/weapon record group no longer discards valid groups; the result explicitly reports partial sync. The restricted parser accepts a `data.list`, `data.records`, or array `data` envelope, and logs only a locally constructed, token-free error category or numeric server code. Stored and exported records are scrubbed of authorization fields and official record URLs. The cache may contain URLs from several sessions, so the reader applies the newest token for each official host and server to all discovered pools. The first request omits `seq_id`; later pages use the last record's `seqId` as the cursor. On 2026-09-24 a controlled official request and the isolated WinUI sync both succeeded: the archive contained 420 character records and no weapon records. The archive was checked for token and authorization URL fields.
+
+Endfield analysis reads the existing local archive on demand and does not persist derived statistics. It counts character `draw` records, excludes non-draw rewards, sorts by record time and sequence, and groups results by exact pool ID. Each pool exposes its recorded total, paid and free draws, free six-stars, and six-star occurrence positions. A six-star row's displayed draw count advances only on paid draws within that pool; a free draw neither advances nor resets it. Thus a six-star at raw record position 84 after ten free draws is displayed as 74 counted draws. Its bar uses 80 counted draws as the reference scale, with values above 65 shown in dark red. A source-reviewed catalog identifies announced Chartered pools since launch, the `绚丽异彩` Re-Factor series, and the separate `辉光庆典` event; unknown pool IDs still display their records without an inferred UP or guarantee. The 80-draw counters are kept by guarantee family, so Standard, Chartered, Re-Factor, and special-event histories cannot reset one another. The 120-draw UP observation is pool-local for Chartered pools and shared across the same named Re-Factor series; the celebration event awards a selection voucher rather than a guaranteed UP. These are estimates from the local archive, which can be incomplete, not verified live game pity. Announced pools use their own locally packaged official announcement banner, while Standard and unknown pools use the original project texture.

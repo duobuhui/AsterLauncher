@@ -1,0 +1,34 @@
+<Page
+    x:Class="AsterLauncher.App.Views.ToolsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:core="using:AsterLauncher.Core">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Padding="28,24" Spacing="16" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="2"><TextBlock Text="辅助工具" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /><TextBlock Text="当前游戏可用的外部工具" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
+            <ItemsControl ItemsSource="{Binding CurrentCompanionTools}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="core:CompanionTool">
+                        <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="#42DDEBFF" BorderThickness="0,0,0,1" CornerRadius="12" Padding="16" Margin="0,3">
+                            <Grid ColumnSpacing="18">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="10"><TextBlock Text="{x:Bind Name}" FontSize="18" FontWeight="SemiBold" /><TextBlock Text="{x:Bind Category}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" /></StackPanel>
+                                    <TextBlock Text="{x:Bind Description}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind ExecutablePath}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" ToolTipService.ToolTip="{x:Bind SuggestedExecutableText}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                                    <Button Content="选择 EXE" Tag="{Binding}" Click="SelectTool_OnClick" />
+                                    <Button Content="项目主页" Tag="{Binding}" Click="OpenHomepage_OnClick" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,13 @@
+.sdk/
+.dotnet-home/
+.nuget/
+.tmp/
+.artifacts/
+.appdata/
+.vs/
+.vscode/
+bin/
+obj/
+*.user
+*.suo
+TestResults/

@@ -1,0 +1,75 @@
+<Page
+    x:Class="AsterLauncher.App.Views.LaunchProfilesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:AsterLauncher.App.ViewModels">
+    <Grid Padding="28,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel Spacing="2"><TextBlock Text="启动方案" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /><TextBlock Text="按阶段安排游戏和外部工具" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
+
+        <Border Grid.Row="1" Margin="0,16,0,12" Padding="16" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16">
+            <Grid RowSpacing="10">
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <ComboBox x:Name="ProfileBox" Header="当前游戏的方案" ItemsSource="{Binding CurrentProfiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" SelectionChanged="ProfileBox_OnSelectionChanged" DisplayMemberPath="Name" HorizontalAlignment="Stretch" />
+                    <Button Grid.Column="1" Content="新建方案" Style="{StaticResource ThemeActionButtonStyle}" Click="AddProfile_OnClick" VerticalAlignment="Bottom" />
+                    <Button Grid.Column="2" Content="删除方案" Click="RemoveProfile_OnClick" VerticalAlignment="Bottom" />
+                    <Button Grid.Column="3" Content="更改游戏 EXE" Click="ChangeGameExecutable_OnClick" VerticalAlignment="Bottom" AutomationProperties.Name="更改游戏启动 EXE" />
+                </Grid>
+                <Grid Grid.Row="1" ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBox x:Name="ProfileNameBox" Header="方案名称" AutomationProperties.Name="方案名称" />
+                    <Button Grid.Column="1" Content="保存名称" Style="{StaticResource ThemeActionButtonStyle}" Click="RenameProfile_OnClick" VerticalAlignment="Bottom" />
+                </Grid>
+                <TextBlock Grid.Row="2" Text="{Binding LaunchOrderText}" FontSize="14" Foreground="{ThemeResource PageTitleBrush}" TextWrapping="Wrap" />
+                <ScrollViewer Grid.Row="3" HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="＋ 启动前" Style="{StaticResource ThemeActionButtonStyle}" Click="AddBefore_OnClick" />
+                        <Button Content="＋ 接管启动" Style="{StaticResource ThemeActionButtonStyle}" Click="AddTakeover_OnClick" />
+                        <Button Content="＋ 游戏启动后" Style="{StaticResource ThemeActionButtonStyle}" Click="AddAfter_OnClick" />
+                        <Button Content="＋ 游戏退出后" Style="{StaticResource ThemeActionButtonStyle}" Click="AddOnExit_OnClick" />
+                    </StackPanel>
+                </ScrollViewer>
+                <InfoBar x:Name="PathResultInfo" Grid.Row="4" IsOpen="False" IsClosable="True" />
+            </Grid>
+        </Border>
+
+        <ListView Grid.Row="2" ItemsSource="{Binding LaunchSequence}" SelectionMode="None" ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="CornerRadius" Value="12" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:LaunchSequenceItem">
+                    <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource ThemeStrokeBrush}" BorderThickness="0,0,0,1" CornerRadius="12" Padding="12" Margin="0,3" HorizontalAlignment="Stretch">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="48" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{x:Bind Number}" Foreground="{ThemeResource PageTitleBrush}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind Title}" FontSize="16" FontWeight="SemiBold" />
+                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource MutedTextStyle}" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind Stage}" FontWeight="SemiBold" />
+                            </StackPanel>
+                            <Button Grid.Column="3" Content="移除" Tag="{x:Bind Step}" Visibility="{x:Bind RemoveVisibility}" Click="RemoveStep_OnClick" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Page>
