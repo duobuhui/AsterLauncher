@@ -1,7 +1,6 @@
 # AsterLauncher
 
-独立开发的 Windows 游戏启动器，当前版本 **Beta 0.1.0**（Git 标签 `v0.1.0-beta`）。技术栈为 .NET 10、Windows App SDK 2.4、WinUI 3。项目主页：[github.com/duobuhui/AsterLauncher](https://github.com/duobuhui/AsterLauncher)。本项目不是 Starward Fork，不包含其代码、素材、品牌或精确布局。
-
+独立开发的 Windows 游戏启动器，当前版本 **Beta 0.1.0**（Git 标签 `v0.1.0-beta`）。技术栈为 .NET 10、Windows App SDK 2.4、WinUI 3。项目主页：[github.com/duobuhui/AsterLauncher](https://github.com/duobuhui/AsterLauncher)。
 ## 使用与现状
 
 - 首次启动可查找现有游戏，并设置游戏目录。自动查找先核对保存的 EXE；终末地还会检查运行进程及经本机样本验证的鹰角启动器卸载项；其余已知游戏会在用户选定目录内有限范围查找对应 EXE。多个结果须手动确认。
