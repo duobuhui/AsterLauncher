@@ -1,15 +1,22 @@
 # AsterLauncher
 
-独立开发的 Windows 游戏启动器，当前版本 **Beta 0.1.0**（Git 标签 `v0.1.0-beta`）。技术栈为 .NET 10、Windows App SDK 2.4、WinUI 3。项目主页：[github.com/duobuhui/AsterLauncher](https://github.com/duobuhui/AsterLauncher)。
-## 使用与现状
+独立开发的 Windows 游戏启动器，当前版本 **Beta 0.1.0**（Git 标签 `v0.1.0-beta`）。技术栈为 .NET 10、Windows App SDK 2.4、WinUI 3。项目不是 [Starward] 的分支。
+
+[下载与运行](#下载与运行) · [功能与现状](#功能与现状) · [内置游戏能力矩阵](#内置游戏能力矩阵) · [构建与测试](#构建与测试) · [鸣谢](#鸣谢)
+
+## 下载与运行
+
+发布包见 [GitHub Releases](https://github.com/duobuhui/AsterLauncher/releases)。下载 Windows x64 ZIP，解压后运行顶层的 `AsterLauncher.exe`；不要直接在压缩包内运行。若 Release 暂无附件，可按下文从源码构建。应用在程序旁创建 `Data` 目录；需要时可用 `ASTERLAUNCHER_DATA_HOME` 指定其他数据目录。
+
+## 功能与现状
 
 - 首次启动可查找现有游戏，并设置游戏目录。自动查找先核对保存的 EXE；终末地还会检查运行进程及经本机样本验证的鹰角启动器卸载项；其余已知游戏会在用户选定目录内有限范围查找对应 EXE。多个结果须手动确认。
 - 游戏库可隐藏内置游戏、重新唤出、拖动排序，也能清理未安装的可见游戏。添加已知 EXE 会识别为内置游戏。
 - 可创建启动方案、编排工具与游戏启动顺序、查看运行时间与日志。只清理启动器自己启动的伴随进程。
-- 抽卡记录：终末地使用独立本地 JSON 档案、卡池分析与 JSON/CSV 导出；原神、星穹铁道、绝区零使用 UIGF v4.2 档案。同步受游戏官方接口和本地缓存状态影响；本地记录缺失会影响保底估计。授权 URL 与 Token 不写入档案或日志。
+- 抽卡记录：终末地使用独立本地 JSON 档案、卡池分析与 JSON/CSV 导出；原神、星穹铁道、绝区零使用 [UIGF] v4.2 档案。同步受游戏官方接口和本地缓存状态影响；本地记录缺失会影响保底估计。授权 URL 与 Token 不写入档案或日志。
 - 设置包含主题、窗口关闭行为、游戏目录、项目主页及启动器更新。游戏目录用于查找；**目前没有游戏本体的内置下载/更新器**，官网按钮会打开发行商页面，官网安装器的安装路径仍由用户决定。
 
-公开源码与发布包包含游戏图标、主视觉及卡池图；项目负责人已确认本次发布有再分发授权。图片权利仍属于各游戏发行商，**不随本项目源码许可授予用户二次使用权**。用户也可在本地选择自己的图片。逐项来源与权利状态见 [ASSET_SOURCES.md](ASSET_SOURCES.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+公开源码与发布包包含已登记的游戏图标、主视觉及卡池图；项目负责人已确认 Beta 0.1.0 的再分发授权。图片权利仍属于各游戏发行商，不能因为图片出现在本仓库或其他开源项目中，就推定可以再次使用。用户也可在本地选择自己的图片。逐项来源与权利状态见 [ASSET_SOURCES.md](ASSET_SOURCES.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 完整支持一款游戏需要什么
 
@@ -30,13 +37,13 @@
 
 | 游戏 | 版本主视觉 | 本地查找 | 内置下载/更新 | 抽卡获取、显示、导入、导出 | 工具 | 图标与渠道 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 明日方舟：终末地 | 部分：随包静态图，不随官方版本自动变化 | 有：`Endfield.exe`、运行进程、经验证卸载项、选定目录 | 无 | 部分：本地同步、卡池分析、JSON 导入/导出、CSV 导出；依赖可用的游戏记录缓存 | MaaEnd 预设 | 部分：随包图标；**已测试样本是 B 服**，代码尚未按渠道区分安装和抽卡流程 |
-| 原神 | 部分：随包静态图 | 部分：`YuanShen.exe` / `GenshinImpact.exe` 与选定目录 | 无 | 部分：UIGF 获取、总数显示、导入/导出；尚无卡池明细分析 | BetterGI 预设 | 部分：随包图标；渠道未区分 |
+| 明日方舟：终末地 | 部分：随包静态图，不随官方版本自动变化 | 有：`Endfield.exe`、运行进程、经验证卸载项、选定目录 | 无 | 部分：本地同步、卡池分析、JSON 导入/导出、CSV 导出；依赖可用的游戏记录缓存 | [MaaEnd] 预设 | 部分：随包图标；**已测试样本是 B 服**，代码尚未按渠道区分安装和抽卡流程 |
+| 原神 | 部分：随包静态图 | 部分：`YuanShen.exe` / `GenshinImpact.exe` 与选定目录 | 无 | 部分：[UIGF] 获取、总数显示、导入/导出；尚无卡池明细分析 | [BetterGI] 预设 | 部分：随包图标；渠道未区分 |
 | 崩坏3 | 部分：随包静态图 | 部分：`BH3.exe` 与选定目录 | 无 | 无 | 暂无专用预设 | 部分：随包图标；渠道未区分 |
-| 崩坏：星穹铁道 | 部分：随包静态图 | 部分：`StarRail.exe` 与选定目录 | 无 | 部分：UIGF 获取、总数显示、导入/导出；尚无卡池明细分析 | March7thAssistant 预设 | 部分：随包图标；渠道未区分 |
-| 绝区零 | 部分：随包静态图 | 部分：`ZenlessZoneZero.exe` 与选定目录 | 无 | 部分：UIGF 获取、总数显示、导入/导出；尚无卡池明细分析 | 暂无专用预设 | 部分：随包图标；渠道未区分 |
+| 崩坏：星穹铁道 | 部分：随包静态图 | 部分：`StarRail.exe` 与选定目录 | 无 | 部分：[UIGF] 获取、总数显示、导入/导出；尚无卡池明细分析 | [March7thAssistant] 预设 | 部分：随包图标；渠道未区分 |
+| 绝区零 | 部分：随包静态图 | 部分：`ZenlessZoneZero.exe` 与选定目录 | 无 | 部分：[UIGF] 获取、总数显示、导入/导出；尚无卡池明细分析 | 暂无专用预设 | 部分：随包图标；渠道未区分 |
 | 星布谷地 | 无动态主视觉 | 无已验证 EXE，须手动指定 | 无 | 无 | 暂无专用预设 | 部分：随包图标；渠道未区分 |
-| 明日方舟 | 部分：随包静态图 | 无已验证 EXE，须手动指定 | 无 | 无 | MAA / maa-cli 预设 | 部分：随包图标；官服/B 服未区分 |
+| 明日方舟 | 部分：随包静态图 | 无已验证 EXE，须手动指定 | 无 | 无 | [MAA] / [maa-cli] 预设 | 部分：随包图标；官服/B 服未区分 |
 
 终末地抽卡的 80 抽六星、各类卡池的 UP 规则与免费十连由本地记录估算；免费抽不增加付费抽水位。缺少历史记录时，显示值不代表游戏内实时水位。各游戏的版本主视觉目前均不会随官方版本自动更新。
 
@@ -46,7 +53,7 @@
 
 首次 `v0.1.0-beta` 只能发布完整包。后续发布可用 `eng/package-release.ps1 -PreviousPackage <上一版完整包> -PreviousVersion <上一版版本号>` 生成差量包；脚本仅在差量 ZIP 比完整包小时将其写入清单。上传生成目录中的 ZIP、可选差量 ZIP 和 `aster-update.json` 到**同一个 GitHub Release**，标签与清单版本一致。当前本地打包产物本身不代表 GitHub Release 已上传或 OTA 已实测。
 
-发布 ZIP 顶层只有 `AsterLauncher.exe`。解压后运行它；不要直接从 ZIP 内运行。应用会在旁边创建 `Data`。不要把用户数据、日志、抽卡授权缓存、官方游戏素材或本机截图上传到仓库。
+发布 ZIP 顶层只有 `AsterLauncher.exe`。不要把用户数据、日志、抽卡授权缓存或本机截图上传到仓库；新增游戏素材前须核实并记录来源与权利状态。
 
 ## 构建与测试
 
@@ -59,4 +66,28 @@ dotnet test .\tests\AsterLauncher.Core.Tests\AsterLauncher.Core.Tests.csproj --n
 & .\eng\package-release.ps1
 ```
 
-首次构建需要先在项目内准备 SDK 和依赖，`-NoRestore` 只适用于已还原的工作副本。源码结构和行为见 [ARCHITECTURE.md](ARCHITECTURE.md)、[UI_SPEC.md](UI_SPEC.md)、[MILESTONES.md](MILESTONES.md)。
+首次构建需要先在项目内准备 SDK 和依赖，`-NoRestore` 只适用于已还原的工作副本。源码结构和行为见 [ARCHITECTURE.md](ARCHITECTURE.md)、[UI_SPEC.md](UI_SPEC.md)、[MILESTONES.md](MILESTONES.md)。问题与建议可提交到 [Issues](https://github.com/duobuhui/AsterLauncher/issues)；提交日志前请先移除个人路径、账户信息和授权数据。
+
+## 源码与素材授权
+
+本仓库目前没有单独的 `LICENSE` 文件。公开可见不代表源码已获得自由复制、修改或再分发的许可；游戏图片的权利应单独判断，详见 [ASSET_SOURCES.md](ASSET_SOURCES.md)。
+
+## 鸣谢
+
+感谢以下项目的维护者与贡献者提供公开资料、格式规范或可供用户自行安装的工具。AsterLauncher 独立实现自身功能，不捆绑这些工具，也不代表获得其官方背书。
+
+| 项目 | 关联内容 |
+| --- | --- |
+| [Starward] | 游戏启动器的产品范围与信息组织参考；没有复制其代码、界面、品牌或素材。 |
+| [UIGF] 与 [HoYoPlay 壁纸资料库] | 抽卡档案格式文档，以及 HoYoPlay 主视觉的来源线索；游戏图片权利仍属于发行商。 |
+| [MaaEnd]、[BetterGI]、[March7thAssistant] | 终末地、原神和星穹铁道的可选伴随工具预设。 |
+| [MAA] 与 [maa-cli] | 明日方舟的可选伴随工具预设。 |
+
+[Starward]: https://github.com/Scighost/Starward
+[UIGF]: https://github.com/UIGF-org/UIGF-org.github.io
+[HoYoPlay 壁纸资料库]: https://github.com/UIGF-org/HoYoPlay-Launcher-Background
+[MaaEnd]: https://github.com/MaaEnd/MaaEnd
+[BetterGI]: https://github.com/babalae/better-genshin-impact
+[March7thAssistant]: https://github.com/moesnow/March7thAssistant
+[MAA]: https://github.com/MaaAssistantArknights/MaaAssistantArknights
+[maa-cli]: https://github.com/MaaAssistantArknights/maa-cli
