@@ -1,6 +1,8 @@
 using AsterLauncher.App.ViewModels;
 using AsterLauncher.App.Services;
 using AsterLauncher.Core;
+using AsterLauncher.Infrastructure;
+using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -38,6 +40,7 @@ public sealed partial class SettingsPage : Page
         };
         CloseBehaviorBox.SelectedIndex = _viewModel.CloseButtonBehavior == CloseButtonBehavior.MinimizeToTray ? 1 : 0;
         DirectoryBox.Text = _viewModel.GameDownloadDirectory;
+        DataDirectoryBox.Text = LauncherDataPaths.ResolveDataDirectory();
         _initialized = true;
     }
 
@@ -76,6 +79,34 @@ public sealed partial class SettingsPage : Page
         DirectoryResultText.Text = "目录已保存，正在重新查找…";
         var (found, total) = await _viewModel.ScanBuiltInGamesAsync();
         DirectoryResultText.Text = $"目录已保存；当前找到 {found}/{total} 款游戏。";
+    }
+
+    private async void BrowseDataDirectory_OnClick(object sender, RoutedEventArgs e)
+    {
+        var directory = await _filePicker.PickGameDirectoryAsync(App.MainWindow);
+        if (directory is not null) DataDirectoryBox.Text = directory;
+    }
+
+    private async void RelocateData_OnClick(object sender, RoutedEventArgs e)
+    {
+        DataDirectoryResultText.Text = "正在复制启动器数据…";
+        try
+        {
+            if (!await LauncherDataPaths.RelocateAsync(DataDirectoryBox.Text))
+            {
+                DataDirectoryResultText.Text = "当前已在此目录。";
+                return;
+            }
+
+            var executable = Environment.ProcessPath
+                ?? throw new InvalidOperationException("无法确定启动器 EXE 路径。");
+            Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true });
+            Application.Current.Exit();
+        }
+        catch (Exception exception)
+        {
+            DataDirectoryResultText.Text = $"迁移失败：{exception.Message}";
+        }
     }
 
     private async void OpenRepository_OnClick(object sender, RoutedEventArgs e)

@@ -1,12 +1,12 @@
 # AsterLauncher
 
-独立开发的 Windows 游戏启动器，当前版本 **Beta 0.1.0**（Git 标签 `v0.1.0-beta`）。技术栈为 .NET 10、Windows App SDK 2.4、WinUI 3。项目不是 [Starward] 的分支。
+独立开发的 Windows 游戏启动器，当前版本 **Beta 0.1.1**（Git 标签 `v0.1.1-beta`）。技术栈为 .NET 10、Windows App SDK 2.4、WinUI 3。项目不是 [Starward] 的分支。
 
 [下载与运行](#下载与运行) · [功能与现状](#功能与现状) · [内置游戏能力矩阵](#内置游戏能力矩阵) · [构建与测试](#构建与测试) · [鸣谢](#鸣谢)
 
 ## 下载与运行
 
-发布包见 [GitHub Releases](https://github.com/duobuhui/AsterLauncher/releases)。下载 Windows x64 ZIP，解压后运行顶层的 `AsterLauncher.exe`；不要直接在压缩包内运行。若 Release 暂无附件，可按下文从源码构建。应用在程序旁创建 `Data` 目录；需要时可用 `ASTERLAUNCHER_DATA_HOME` 指定其他数据目录。
+发布包见 [GitHub Releases](https://github.com/duobuhui/AsterLauncher/releases)。下载 Windows x64 ZIP，解压后运行顶层的 `AsterLauncher.exe`；不要直接在压缩包内运行。若 Release 暂无附件，可按下文从源码构建。配置、日志、抽卡记录和壁纸缓存默认放在 `AsterLauncher.exe` 旁的 `Data` 目录。设置页“窗口与路径”可以迁移到用户指定的空目录；迁移后在 EXE 旁保存 `asterlauncher.data-location.json` 并重启。源码开发环境仍可用 `ASTERLAUNCHER_DATA_HOME` 指定数据目录。旧版单文件包误存到系统临时目录的数据，会在新位置为空时复制到新位置，旧数据保留。
 
 ## 功能与现状
 
@@ -49,9 +49,9 @@
 
 ## 启动器版本与更新
 
-设置页会查询 GitHub Releases 列表（包括 beta 预发布）。每个可安装 Release 须附带 `aster-update.json` 和完整 ZIP。若 Release 同时提供从**当前精确版本**到目标版本的差量包，应用优先使用差量包；跨版本、缺少差量包或差量包不合适时使用完整包。下载后校验 SHA-256，退出当前进程，在后台替换主程序，再启动新版本。用户数据位于 `Data` 或 `ASTERLAUNCHER_DATA_HOME`，不进入更新 ZIP。
+设置页会查询 GitHub Releases 列表（包括 beta 预发布）。每个可安装 Release 须附带 `aster-update.json` 和完整 ZIP。若 Release 同时提供从**当前精确版本**到目标版本的差量包，应用优先使用差量包；跨版本、缺少差量包或差量包不合适时使用完整包。下载后校验 SHA-256，退出当前进程，在后台替换主程序，再启动新版本。用户数据位于 EXE 旁的 `Data` 或用户指定目录，不进入更新 ZIP。
 
-首次 `v0.1.0-beta` 只能发布完整包。后续发布可用 `eng/package-release.ps1 -PreviousPackage <上一版完整包> -PreviousVersion <上一版版本号>` 生成差量包；脚本仅在差量 ZIP 比完整包小时将其写入清单。上传生成目录中的 ZIP、可选差量 ZIP 和 `aster-update.json` 到**同一个 GitHub Release**，标签与清单版本一致。当前本地打包产物本身不代表 GitHub Release 已上传或 OTA 已实测。
+`v0.1.1-beta` 可从 `v0.1.0-beta` 制作精确版本差量包。后续发布可用 `eng/package-release.ps1 -PreviousPackage <上一版完整包> -PreviousVersion <上一版版本号>` 生成差量包；脚本仅在差量 ZIP 比完整包小时将其写入清单。上传生成目录中的 ZIP、可选差量 ZIP 和 `aster-update.json` 到**同一个 GitHub Release**，标签与清单版本一致。当前本地打包产物本身不代表 GitHub Release 已上传或 OTA 已实测。
 
 发布 ZIP 顶层只有 `AsterLauncher.exe`。不要把用户数据、日志、抽卡授权缓存或本机截图上传到仓库；新增游戏素材前须核实并记录来源与权利状态。
 

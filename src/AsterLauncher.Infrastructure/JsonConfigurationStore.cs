@@ -14,17 +14,12 @@ public sealed class JsonConfigurationStore : IConfigurationStore
     };
 
     private readonly ILogger<JsonConfigurationStore> _logger;
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
 
     public JsonConfigurationStore(ILogger<JsonConfigurationStore> logger)
     {
         _logger = logger;
-        var dataRoot = Environment.GetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            dataRoot = Path.Combine(AppContext.BaseDirectory, "Data");
-        }
-
-        ConfigurationPath = Path.Combine(Path.GetFullPath(dataRoot), "launcher.settings.json");
+        ConfigurationPath = Path.Combine(LauncherDataPaths.ResolveDataDirectory(), "launcher.settings.json");
     }
 
     public string ConfigurationPath { get; }
@@ -62,31 +57,35 @@ public sealed class JsonConfigurationStore : IConfigurationStore
     public async Task SaveAsync(LauncherConfiguration configuration, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        var directory = Path.GetDirectoryName(ConfigurationPath)!;
-        Directory.CreateDirectory(directory);
-        var temporaryPath = Path.Combine(directory, $"launcher.settings.{Guid.NewGuid():N}.tmp");
-
+        await _saveGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                await JsonSerializer.SerializeAsync(stream, configuration, SerializerOptions, cancellationToken)
-                    .ConfigureAwait(false);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
+            var directory = Path.GetDirectoryName(ConfigurationPath)!;
+            Directory.CreateDirectory(directory);
+            var temporaryPath = Path.Combine(directory, $"launcher.settings.{Guid.NewGuid():N}.tmp");
 
-            File.Move(temporaryPath, ConfigurationPath, overwrite: true);
-            _logger.LogInformation("Configuration saved to {ConfigurationPath}", ConfigurationPath);
+            try
+            {
+                await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    await JsonSerializer.SerializeAsync(stream, configuration, SerializerOptions, cancellationToken)
+                        .ConfigureAwait(false);
+                    await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                File.Move(temporaryPath, ConfigurationPath, overwrite: true);
+                _logger.LogInformation("Configuration saved to {ConfigurationPath}", ConfigurationPath);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
         }
         finally
         {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
+            _saveGate.Release();
         }
     }
-
     private static LauncherConfiguration CreateInitialConfiguration()
     {
         var profile = new LaunchProfile

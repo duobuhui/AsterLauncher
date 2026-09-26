@@ -12,6 +12,17 @@ $publish = Join-Path $output 'publish'
 $payload = Join-Path $output 'payload'
 $fullName = "AsterLauncher-v$version-win-x64.zip"
 $fullPath = Join-Path $output $fullName
+function Reset-ReleaseTemporaryDirectory([string]$directory) {
+    $absolute = [System.IO.Path]::GetFullPath($directory)
+    $safePrefix = [System.IO.Path]::GetFullPath($output).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $absolute.StartsWith($safePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Temporary release path escaped the release directory: $absolute"
+    }
+    if (Test-Path -LiteralPath $absolute) {
+        Remove-Item -LiteralPath $absolute -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $absolute | Out-Null
+}
 New-Item -ItemType Directory -Force -Path $output, $publish, $payload | Out-Null
 Get-ChildItem -LiteralPath $output -Filter '*-delta.zip' -File -ErrorAction SilentlyContinue |
     ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
@@ -48,14 +59,14 @@ if ($PreviousPackage) {
         throw 'PreviousVersion must be a beta semantic version.'
     }
     $previousRoot = Join-Path $output 'previous'
-    New-Item -ItemType Directory -Force -Path $previousRoot | Out-Null
+    Reset-ReleaseTemporaryDirectory $previousRoot
     [System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path -LiteralPath $PreviousPackage).Path,
         $previousRoot)
     $previousExe = Join-Path $previousRoot 'AsterLauncher.exe'
     if (-not (Test-Path -LiteralPath $previousExe -PathType Leaf)) { throw 'Previous package has no AsterLauncher.exe.' }
 
     $deltaRoot = Join-Path $output 'delta'
-    New-Item -ItemType Directory -Force -Path $deltaRoot | Out-Null
+    Reset-ReleaseTemporaryDirectory $deltaRoot
     $blockSize = 1048576
     $changed = [System.Collections.Generic.List[int]]::new()
     $old = [System.IO.File]::OpenRead($previousExe)

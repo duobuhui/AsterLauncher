@@ -1,5 +1,12 @@
 # Milestones
 
+## Beta 0.1.1 - portable data and launch correction
+
+- Resolve persistent data from the installed EXE directory, migrate the previous single-file temporary data copy on first use, and allow relocation to a selected empty directory.
+- Query all six mainland China Star Rail gacha types through the working getGachaLog endpoint. Verify with a local fake-server regression test and an authorized, return-code-only official API probe.
+- Track launch sessions per game so a running game does not block another game or mark it running after selection.
+- Package a full release and an optional exact-base delta from 0.1.0-beta for OTA testing. A remote OTA remains unverified until its GitHub Release assets are uploaded and the installed 0.1.0-beta client exercises it.
+
 ## Beta 0.1.0 - first public source and release candidate
 
 - Use one version source for the assembly and display, with `v0.1.0-beta` as the first release tag.

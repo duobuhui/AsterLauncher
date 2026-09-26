@@ -41,3 +41,9 @@ The surfaces share tint, edge highlight, and readable text tokens while preservi
 ## Validation targets
 
 Inspect the actual running window at 1280×800 and narrower equivalent viewports, including high DPI. Confirm wallpaper edges, game-rail selection, complete launch controls, expanded panel width, and secondary-page scrolling. Verify build, existing unit tests, and app startup separately.
+
+## Beta 0.1.1 settings and runtime state
+
+- "窗口与路径" shows the current configuration file, a data-folder picker and a "迁移并重启" action. The target must be an existing empty directory. The operation copies configuration, logs, gacha archives and artwork, keeps the source as a backup, records the selected path beside the EXE and restarts.
+- A clean single-file release writes app data beside the installed EXE. The .NET runtime may extract native dependencies elsewhere; that location is not shown as the app data root.
+- Home and Game Library launch controls reflect the selected game only. Switching to another game while a launch session remains active restores that game's independent button and running indicator; each game can have its own active session.

@@ -14,13 +14,7 @@ public sealed class LauncherLogStore : ILoggerProvider
 
     public LauncherLogStore()
     {
-        var dataRoot = Environment.GetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            dataRoot = Path.Combine(AppContext.BaseDirectory, "Data");
-        }
-
-        _logDirectory = Path.Combine(Path.GetFullPath(dataRoot), "logs");
+        _logDirectory = Path.Combine(LauncherDataPaths.ResolveDataDirectory(), "logs");
         Directory.CreateDirectory(_logDirectory);
     }
 

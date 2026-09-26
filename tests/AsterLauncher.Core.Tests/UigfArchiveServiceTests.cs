@@ -1,4 +1,6 @@
 using AsterLauncher.Infrastructure;
+using System.Net;
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AsterLauncher.Core.Tests;
@@ -57,6 +59,54 @@ public sealed class UigfArchiveServiceTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Contains("v4", result.Message);
+    }
+
+    [Fact]
+    public async Task StarRailCapture_UsesWorkingGachaEndpointForAllSixTypes()
+    {
+        var gameDirectory = Path.Combine(_root, "StarRail");
+        var cacheDirectory = Path.Combine(gameDirectory, "StarRail_Data", "webCaches", "1", "Cache", "Cache_Data");
+        Directory.CreateDirectory(cacheDirectory);
+        var executable = Path.Combine(gameDirectory, "StarRail.exe");
+        await File.WriteAllTextAsync(executable, "");
+        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "data_2"),
+            "https://webstatic.mihoyo.com/hkrpg/event/e20211215gacha-v2/index.html?lang=zh-cn");
+
+        var requestedTypes = new HashSet<string>();
+        using var client = new HttpClient(new StarRailHandler(requestedTypes));
+        using var service = new UigfArchiveService(NullLogger<UigfArchiveService>.Instance, client);
+
+        var result = await service.CaptureFromGameAsync("honkai-star-rail", executable);
+        var summary = await service.GetSummaryAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(6, summary.StarRailCount);
+        Assert.Equal(new[] { "1", "2", "11", "12", "21", "22" }, requestedTypes.OrderBy(value => int.Parse(value)));
+    }
+
+    private sealed class StarRailHandler(HashSet<string> requestedTypes) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var uri = request.RequestUri!;
+            Assert.EndsWith("/getGachaLog", uri.AbsolutePath);
+            Assert.Equal("public-operation-hkrpg.mihoyo.com", uri.Host);
+            var query = uri.Query.TrimStart('?').Split('&')
+                .Select(part => part.Split('=', 2))
+                .ToDictionary(part => part[0], part => part[1]);
+            var type = query["gacha_type"];
+            requestedTypes.Add(type);
+            var list = query["end_id"] == "0"
+                ? $"[{{\"id\":\"{type}\",\"uid\":\"100000001\",\"gacha_type\":\"{type}\"}}]"
+                : "[]";
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($"{{\"retcode\":0,\"data\":{{\"list\":{list}}}}}",
+                    Encoding.UTF8, "application/json")
+            };
+            return Task.FromResult(response);
+        }
     }
 
     public void Dispose()

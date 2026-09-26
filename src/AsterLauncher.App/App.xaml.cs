@@ -17,6 +17,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        LauncherDataPaths.MigrateLegacyBundleDataIfNeeded();
         var services = new ServiceCollection();
         ConfigureServices(services);
         _services = services.BuildServiceProvider();

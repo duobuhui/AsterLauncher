@@ -59,13 +59,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         _logger = logger;
         _httpClient = httpClient;
         _ownsClient = ownsClient;
-        var dataRoot = Environment.GetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            dataRoot = Path.Combine(AppContext.BaseDirectory, "Data");
-        }
-
-        ArchivePath = Path.Combine(Path.GetFullPath(dataRoot), "gacha", "uigf-v4.2.json");
+        ArchivePath = Path.Combine(LauncherDataPaths.ResolveDataDirectory(), "gacha", "uigf-v4.2.json");
     }
 
     public string ArchivePath { get; }
@@ -487,7 +481,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         public string GetEndpoint(bool global, string gachaType)
         {
             var endpoint = global ? GlobalEndpoint : ChinaEndpoint;
-            return UigfKey == "hkrpg" && gachaType is "21" or "22"
+            return global && UigfKey == "hkrpg" && (gachaType is "21" or "22")
                 ? endpoint.Replace("getGachaLog", "getLdGachaLog", StringComparison.Ordinal)
                 : endpoint;
         }

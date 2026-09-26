@@ -54,13 +54,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
         _httpClient = httpClient;
         _ownsClient = ownsClient;
         _cachePathProvider = cachePathProvider;
-        var dataRoot = Environment.GetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            dataRoot = Path.Combine(AppContext.BaseDirectory, "Data");
-        }
-
-        ArchivePath = Path.Combine(Path.GetFullPath(dataRoot), "gacha", "endfield-records.json");
+        ArchivePath = Path.Combine(LauncherDataPaths.ResolveDataDirectory(), "gacha", "endfield-records.json");
     }
 
     public string ArchivePath { get; }

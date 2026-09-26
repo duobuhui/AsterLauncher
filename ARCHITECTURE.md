@@ -1,6 +1,6 @@
 # AsterLauncher architecture
 
-## Beta 0.1.0 distribution
+## Beta 0.1.1 distribution
 
 `Directory.Build.props` is the version source. The app displays its informational version, and the project builds a single-file, self-contained x64 release named `AsterLauncher.exe`. `eng/package-release.ps1` creates a full ZIP and `aster-update.json`; later versions may also include a fixed-block binary delta from one exact previous version. The Settings page lists GitHub Releases rather than using the latest-release endpoint, so beta prereleases are visible. It selects an exact-base delta when supplied and a full ZIP otherwise, verifies both the downloaded archive and replacement EXE with SHA-256, then stages the replacement outside the running executable and restarts. User `Data` is outside the release ZIP. The remote update path requires an uploaded Release and remains unverified until one exists.
 
@@ -32,7 +32,7 @@ An adapter supplies its definition, install locator, process detector, default l
 
 ## Data and privacy
 
-MVP settings are JSON because the data is small and document-shaped. Passwords and account credentials are out of scope. The data root is `ASTERLAUNCHER_DATA_HOME` when set, otherwise a `Data` directory beside the executable. Build/run scripts set it to the project-local `.appdata` directory on E:.
+MVP settings are JSON because the data is small and document-shaped. Passwords and account credentials are out of scope. The data root is selected by an EXE-adjacent `asterlauncher.data-location.json`, then `ASTERLAUNCHER_DATA_HOME` for development, then an EXE-adjacent `Data` directory. `Environment.ProcessPath` locates the installed EXE; `AppContext.BaseDirectory` can be the single-file extraction directory and is used only for packaged read-only assets. The first 0.1.1 launch copies the newest beta 0.1.0 bundle-extraction data to the EXE-adjacent Data directory when that directory is empty; it leaves the legacy copy intact. Settings can copy data to an existing empty directory and restart. Build/run scripts set the development override to project-local `.appdata` on E:. The .NET single-file runtime may still unpack native files into its own temporary directory; app-owned configuration, logs, records and artwork do not use that directory.
 
 Automatic discovery reports each checked source and a typed outcome. Endfield discovery is deliberately narrow: saved executable path first, then the executable path of a running `Endfield.exe`, then standard uninstall entries whose display name is exactly `鹰角启动器` or `GRYPHLINK`. A locally inspected installation established the relative path `games\Endfield Game\Endfield.exe`; no disk-wide scan, random uninstall key, or unverified vendor configuration format is used. Manual selection always remains available and overrides an automatic result.
 

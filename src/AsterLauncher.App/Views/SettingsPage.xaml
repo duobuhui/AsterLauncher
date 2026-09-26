@@ -50,7 +50,17 @@
                         </Grid>
                         <TextBlock x:Name="DirectoryResultText" TextWrapping="Wrap" FontSize="12" />
                     </StackPanel></Border>
-                    <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="16"><StackPanel Spacing="5"><TextBlock Text="配置位置" FontSize="16" FontWeight="SemiBold" /><TextBlock Text="{Binding ConfigurationPath}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" IsTextSelectionEnabled="True" /></StackPanel></Border>
+                    <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="16"><StackPanel Spacing="8">
+                        <TextBlock Text="启动器数据" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="配置、日志、抽卡记录和壁纸缓存。默认保存在 EXE 旁的 Data 文件夹；更改位置会复制现有数据并重启启动器。" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                        <TextBlock Text="{Binding ConfigurationPath}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                        <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBox x:Name="DataDirectoryBox" AutomationProperties.Name="启动器数据目录" />
+                            <Button Grid.Column="1" Content="浏览…" Click="BrowseDataDirectory_OnClick" />
+                            <Button Grid.Column="2" Content="迁移并重启" Style="{StaticResource ThemeActionButtonStyle}" Click="RelocateData_OnClick" />
+                        </Grid>
+                        <TextBlock x:Name="DataDirectoryResultText" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel></Border>
                 </StackPanel></ScrollViewer>
             </TabViewItem>
         </TabView>

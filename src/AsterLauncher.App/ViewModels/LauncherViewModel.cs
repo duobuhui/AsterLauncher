@@ -17,7 +17,7 @@ public sealed class LauncherViewModel : ObservableObject
     private LauncherConfiguration _configuration = new();
     private GameCardViewModel? _currentGame;
     private LaunchProfile? _selectedProfile;
-    private bool _isLaunching;
+    private readonly HashSet<string> _activeLaunchGameIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _isRunning;
     private string _statusText = "正在初始化…";
     private string _scanStatus = "尚未扫描";
@@ -59,6 +59,9 @@ public sealed class LauncherViewModel : ObservableObject
             if (SetProperty(ref _currentGame, value))
             {
                 OnPropertyChanged(nameof(HasCurrentGame));
+                OnPropertyChanged(nameof(IsLaunching));
+                OnPropertyChanged(nameof(LaunchButtonText));
+                IsRunning = value?.IsRunning == true;
                 OnPropertyChanged(nameof(CanLaunch));
                 OnPropertyChanged(nameof(CompanionSummary));
                 OnPropertyChanged(nameof(CurrentCompanionTools));
@@ -83,13 +86,15 @@ public sealed class LauncherViewModel : ObservableObject
         }
     }
 
-    public bool IsLaunching
+    public bool IsLaunching => CurrentGame is not null && _activeLaunchGameIds.Contains(CurrentGame.Id);
+
+    private void SetLaunching(string gameId, bool launching)
     {
-        get => _isLaunching;
-        private set
+        if (launching ? _activeLaunchGameIds.Add(gameId) : _activeLaunchGameIds.Remove(gameId))
         {
-            if (SetProperty(ref _isLaunching, value))
+            if (string.Equals(CurrentGame?.Id, gameId, StringComparison.OrdinalIgnoreCase))
             {
+                OnPropertyChanged(nameof(IsLaunching));
                 OnPropertyChanged(nameof(CanLaunch));
                 OnPropertyChanged(nameof(LaunchButtonText));
             }
@@ -187,6 +192,7 @@ public sealed class LauncherViewModel : ObservableObject
         CurrentGame = game;
         _configuration.SelectedGameId = game.Id;
         RefreshProfiles();
+        StatusText = game.IsRunning ? "游戏运行中" : "就绪";
         await RefreshRunningStateAsync();
         await _configurationStore.SaveAsync(_configuration);
     }
@@ -538,22 +544,27 @@ public sealed class LauncherViewModel : ObservableObject
             return null;
         }
 
-        IsLaunching = true;
-        StatusText = "正在执行启动方案…";
         var selectedGame = CurrentGame;
         var selectedProfile = SelectedProfile;
+        SetLaunching(selectedGame.Id, true);
+        StatusText = "正在执行启动方案…";
         _logger.LogInformation("Launch button accepted for {GameId} with profile {ProfileId}", selectedGame.Id, selectedProfile.Id);
         var request = new GameLaunchRequest(
             selectedGame.Adapter.Definition,
             selectedGame.State.ExecutablePath!,
             selectedProfile,
             selectedGame.Adapter.ProcessDetector);
-        var progress = new Progress<LaunchProgress>(item => StatusText = item.Message);
+        var progress = new Progress<LaunchProgress>(item =>
+        {
+            if (string.Equals(CurrentGame?.Id, selectedGame.Id, StringComparison.OrdinalIgnoreCase))
+                StatusText = item.Message;
+        });
 
         try
         {
             var result = await _orchestrator.LaunchAsync(request, progress);
-            StatusText = result.Message;
+            if (string.Equals(CurrentGame?.Id, selectedGame.Id, StringComparison.OrdinalIgnoreCase))
+                StatusText = result.Message;
             if (result.Status == LaunchSessionStatus.Completed)
             {
                 selectedGame.State.LastPlayedAt = result.StartedAt;
@@ -578,7 +589,7 @@ public sealed class LauncherViewModel : ObservableObject
         }
         finally
         {
-            IsLaunching = false;
+            SetLaunching(selectedGame.Id, false);
             await RefreshRunningStateAsync();
         }
     }

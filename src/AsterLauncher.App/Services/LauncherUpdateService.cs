@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using AsterLauncher.Infrastructure;
 
 namespace AsterLauncher.App.Services;
 
@@ -14,7 +15,7 @@ public sealed class LauncherUpdateService
 
     public string CurrentVersion => typeof(App).Assembly
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-        .InformationalVersion.Split('+')[0] ?? "0.1.0-beta";
+        .InformationalVersion.Split('+')[0] ?? "0.1.1-beta";
 
     public async Task<LauncherUpdate?> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -73,8 +74,7 @@ public sealed class LauncherUpdateService
         {
             throw new InvalidOperationException("请从正式发布包运行启动器后再安装更新。");
         }
-        var dataRoot = Environment.GetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataRoot)) dataRoot = Path.Combine(AppContext.BaseDirectory, "Data");
+        var dataRoot = LauncherDataPaths.ResolveDataDirectory();
         var stage = Path.Combine(dataRoot, "updates", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
         var packagePath = Path.Combine(stage, "package.zip");

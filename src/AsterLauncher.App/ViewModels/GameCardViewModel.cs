@@ -1,4 +1,5 @@
 using AsterLauncher.Core;
+using AsterLauncher.Infrastructure;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
@@ -215,11 +216,7 @@ public sealed class GameCardViewModel : ObservableObject
             return GetCachedImage(explicitPath);
         }
 
-        var dataRoot = Environment.GetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME");
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            dataRoot = Path.Combine(AppContext.BaseDirectory, "Data");
-        }
+        var dataRoot = LauncherDataPaths.ResolveDataDirectory();
 
         var safeId = string.Concat(definition.Id.Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
         foreach (var extension in new[] { ".jpg", ".png", ".webp" })
