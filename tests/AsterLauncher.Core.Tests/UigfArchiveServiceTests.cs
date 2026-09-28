@@ -84,6 +84,109 @@ public sealed class UigfArchiveServiceTests : IDisposable
         Assert.Equal(new[] { "1", "2", "11", "12", "21", "22" }, requestedTypes.OrderBy(value => int.Parse(value)));
     }
 
+    [Fact]
+    public async Task StarRailCapture_KeepsOtherPoolsWhenOptionalTypesReturnMinus110()
+    {
+        var gameDirectory = Path.Combine(_root, "StarRailOptional");
+        var cacheDirectory = Path.Combine(gameDirectory, "StarRail_Data", "webCaches", "1", "Cache", "Cache_Data");
+        Directory.CreateDirectory(cacheDirectory);
+        var executable = Path.Combine(gameDirectory, "StarRail.exe");
+        await File.WriteAllTextAsync(executable, "");
+        await File.WriteAllTextAsync(Path.Combine(cacheDirectory, "data_2"),
+            "https://webstatic.mihoyo.com/hkrpg/event/e20211215gacha-v2/index.html?authkey=test-key&lang=zh-cn");
+
+        var handler = new StarRailOptionalRejectedHandler();
+        using var client = new HttpClient(handler);
+        using var service = new UigfArchiveService(NullLogger<UigfArchiveService>.Instance, client);
+
+        var result = await service.CaptureFromGameAsync("honkai-star-rail", executable);
+        var summary = await service.GetSummaryAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(4, result.ImportedCount);
+        Assert.Equal(4, summary.StarRailCount);
+        Assert.Contains("21、22", result.Message);
+        Assert.Equal(2, handler.Type11FirstPageRequests);
+        Assert.DoesNotContain("test-key", await File.ReadAllTextAsync(service.ArchivePath));
+    }
+
+    [Fact]
+    public async Task StarRailAnalysis_CarriesFiveStarIntervalsAcrossBanners_ButSeparatesTypesAndAccounts()
+    {
+        var input = Path.Combine(_root, "analysis.json");
+        await File.WriteAllTextAsync(input, """
+        {
+          "info": { "version": "v4.2" },
+          "hkrpg": [
+            { "uid": "100000001", "list": [
+              { "id": "1", "gacha_id": "2001", "gacha_type": "11", "time": "2026-01-01 00:00:01", "rank_type": "3" },
+              { "id": "2", "gacha_id": "2001", "gacha_type": "11", "time": "2026-01-01 00:00:02", "rank_type": "5", "name": "角色甲" },
+              { "id": "9", "gacha_id": "2002", "gacha_type": "11", "time": "2026-02-01 00:00:01", "rank_type": "3" },
+              { "id": "10", "gacha_id": "2002", "gacha_type": "11", "time": "2026-02-01 00:00:01", "rank_type": "5", "name": "角色乙" },
+              { "id": "5", "gacha_id": "3001", "gacha_type": "12", "time": "2026-02-01 00:00:03", "rank_type": "3" },
+              { "id": "6", "gacha_id": "1001", "gacha_type": "1", "time": "2026-02-01 00:00:04", "rank_type": "3" }
+            ] },
+            { "uid": "100000002", "list": [
+              { "id": "7", "gacha_id": "2001", "gacha_type": "11", "time": "2026-02-01 00:00:05", "rank_type": "3" }
+            ] }
+          ]
+        }
+        """);
+        using var service = new UigfArchiveService(NullLogger<UigfArchiveService>.Instance);
+        Assert.True((await service.ImportAsync(input)).Success);
+
+        var analysis = await service.GetStarRailAnalysisAsync();
+
+        Assert.Equal(2, analysis.Accounts.Count);
+        var first = analysis.Accounts.Single(account => account.Uid == "100000001");
+        var roles = first.Sections.Single(section => section.Type == "11");
+        var cones = first.Sections.Single(section => section.Type == "12");
+        var standard = first.Sections.Single(section => section.Type == "1");
+        Assert.Equal(0, roles.PityCount);
+        Assert.Equal(4, roles.RecordCount);
+        Assert.Equal(2, roles.FiveStarCount);
+        Assert.Equal(0, roles.FourStarCount);
+        Assert.Equal(2, roles.ThreeStarCount);
+        Assert.Equal("2026/01/01 — 2026/02/01", roles.DateRange);
+        Assert.Equal(new[] { "角色乙", "角色甲" }, roles.FiveStars.Select(pull => pull.Name));
+        Assert.Equal("均抽 2.0", roles.AverageText);
+        Assert.Equal(2, roles.Banners.Count);
+        Assert.Equal("2002", roles.Banners[0].PoolId);
+        Assert.Equal("角色乙", roles.Banners[0].FiveStars[0].Name);
+        Assert.Equal(2, roles.Banners[0].FiveStars[0].LocalPullCount);
+        Assert.True(roles.Banners[0].FiveStars[0].HasPreviousFiveStar);
+        Assert.False(roles.Banners[1].FiveStars[0].HasPreviousFiveStar);
+        Assert.Equal(1, cones.PityCount);
+        Assert.Equal(1, standard.PityCount);
+        Assert.Equal(1, analysis.Accounts.Single(account => account.Uid == "100000002")
+            .Sections.Single(section => section.Type == "11").PityCount);
+    }
+    private sealed class StarRailOptionalRejectedHandler : HttpMessageHandler
+    {
+        public int Type11FirstPageRequests { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var query = request.RequestUri!.Query.TrimStart('?').Split('&')
+                .Select(part => part.Split('=', 2))
+                .ToDictionary(part => part[0], part => part[1]);
+            var type = query["gacha_type"];
+            if (type == "11" && query["end_id"] == "0")
+            {
+                Type11FirstPageRequests++;
+            }
+            var body = type is "21" or "22" || (type == "11" && Type11FirstPageRequests == 1 && query["end_id"] == "0")
+                ? """{"retcode":-110,"message":"test-key"}"""
+                : query["end_id"] == "0"
+                    ? $"{{\"retcode\":0,\"data\":{{\"list\":[{{\"id\":\"{type}\",\"uid\":\"100000001\",\"gacha_type\":\"{type}\"}}]}}}}"
+                    : """{"retcode":0,"data":{"list":[]}}""";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            });
+        }
+    }
+
     private sealed class StarRailHandler(HashSet<string> requestedTypes) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,

@@ -15,7 +15,7 @@ public sealed class LauncherUpdateService
 
     public string CurrentVersion => typeof(App).Assembly
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-        .InformationalVersion.Split('+')[0] ?? "0.1.1-beta";
+        .InformationalVersion.Split('+')[0] ?? "unknown";
 
     public async Task<LauncherUpdate?> CheckAsync(CancellationToken cancellationToken = default)
     {

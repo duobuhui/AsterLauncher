@@ -154,6 +154,8 @@ public sealed class GameCardViewModel : ObservableObject
 
     public void SetRunning(bool isRunning) => IsRunning = isRunning;
 
+    public void RefreshArtwork() => BackgroundImage = ResolveArtwork(Adapter.Definition, State.ArtworkPath);
+
     public void Refresh()
     {
         BackgroundImage = ResolveArtwork(Adapter.Definition, State.ArtworkPath);
@@ -226,6 +228,12 @@ public sealed class GameCardViewModel : ObservableObject
             {
                 return GetCachedImage(path);
             }
+        }
+
+        var cloudPath = Path.Combine(dataRoot, "artwork", "cloud", safeId + ".jpg");
+        if (File.Exists(cloudPath))
+        {
+            return GetCachedImage(cloudPath);
         }
 
         return ResolvePackagedImage(definition.HeroAssetPath);

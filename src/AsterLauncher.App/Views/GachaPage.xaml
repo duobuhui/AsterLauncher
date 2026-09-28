@@ -7,11 +7,77 @@
     Loaded="Page_OnLoaded">
     <Page.Resources>
         <views:PoolBannerImageConverter x:Key="PoolBannerImageConverter" />
+        <views:HistoryCountVisibilityConverter x:Key="HistoryCountVisibilityConverter" />
+        <views:SectionHeaderWidthConverter x:Key="SectionHeaderWidthConverter" />
+        <views:PortraitImageConverter x:Key="PortraitImageConverter" />
+        <DataTemplate x:Key="SixStarPullTemplate" x:DataType="core:EndfieldSixStarPull">
+            <Grid ColumnSpacing="7" MinHeight="40">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <Border Width="34" Height="34" CornerRadius="7" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1">
+                    <Grid>
+                        <TextBlock Text="✦" FontSize="13" Foreground="{ThemeResource PageTitleBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Image Source="{x:Bind OperatorName, Converter={StaticResource PortraitImageConverter}, ConverterParameter=endfield}" Stretch="UniformToFill" />
+                    </Grid>
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Stretch">
+                    <Grid ColumnSpacing="5"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock Text="{x:Bind OperatorName}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="{x:Bind BarTitle}" FontSize="10" Foreground="{ThemeResource PageTitleBrush}" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                    <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{x:Bind BarPercent}" Tag="{x:Bind IsOver65}" Loaded="SixStarBar_OnLoaded" HorizontalAlignment="Stretch" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" ToolTipService.ToolTip="计入保底的抽数，以 80 抽为满格；免费抽不计入。" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" HorizontalAlignment="Right" Spacing="1">
+                    <TextBlock Text="{x:Bind RecordedSpanText}" FontSize="11" HorizontalAlignment="Right" />
+                    <TextBlock Text="{x:Bind ObtainedAtText}" FontSize="10" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Right" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate x:Key="StarRailPullTemplate" x:DataType="core:StarRailFiveStarPull">
+            <Grid ColumnSpacing="5" MinHeight="32" Padding="0,1" ToolTipService.ToolTip="五星间隔按同类跃迁连续计算；首次可见记录可能缺少更早抽数。">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="27" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <Border Width="25" Height="25" CornerRadius="5" Background="#38475868" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1">
+                    <Grid>
+                        <TextBlock Text="★" FontSize="12" Foreground="{ThemeResource PageTitleBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Image Source="{x:Bind Name, Converter={StaticResource PortraitImageConverter}, ConverterParameter=honkai-star-rail}" Stretch="UniformToFill" />
+                    </Grid>
+                </Border>
+                <Grid Grid.Column="1" Height="24">
+                    <Border Background="#70404D5B" CornerRadius="4" />
+                    <Border Background="{ThemeResource PageTitleBrush}" CornerRadius="4" Opacity="0.6" Tag="{x:Bind IsHighCount}" Loaded="StarRailFill_OnLoaded" RenderTransformOrigin="0,0.5">
+                        <Border.RenderTransform><ScaleTransform ScaleX="{x:Bind BarFraction}" /></Border.RenderTransform>
+                    </Border>
+                    <TextBlock Text="{x:Bind Name}" FontSize="11" FontWeight="SemiBold" Margin="7,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </Grid>
+                <StackPanel Grid.Column="2" MinWidth="50" Spacing="0" HorizontalAlignment="Right">
+                    <TextBlock Text="{x:Bind PullCountText}" FontSize="11" HorizontalAlignment="Right" />
+                    <TextBlock Text="{x:Bind TimeText}" FontSize="9" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Right" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>        <DataTemplate x:Key="StarRailBannerTemplate" x:DataType="core:StarRailWarpBanner">
+            <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" ToolTipService.ToolTip="{x:Bind PoolTooltip}">
+                <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <StackPanel Padding="11,5" Spacing="2" HorizontalAlignment="Stretch">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind Title}" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                            </Grid>
+                            <TextBlock Text="{x:Bind StarNames}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel Padding="11,0,11,9" Spacing="5">
+                        <TextBlock Text="{x:Bind DateText}" FontSize="10" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                        <ItemsControl ItemsSource="{x:Bind FiveStars}" ItemTemplate="{StaticResource StarRailPullTemplate}" />
+                    </StackPanel>
+                </Expander>
+            </Border>
+        </DataTemplate>
     </Page.Resources>
     <ScrollViewer x:Name="GachaScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" SizeChanged="GachaScrollViewer_OnSizeChanged">
         <StackPanel Padding="24,18" Spacing="10" HorizontalAlignment="Stretch">
             <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <TextBlock Text="抽卡记录" FontSize="23" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                     <TextBlock x:Name="CurrentGameText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
@@ -19,6 +85,7 @@
                 </StackPanel>
                 <ProgressRing x:Name="BusyRing" Grid.Column="2" Width="20" Height="20" VerticalAlignment="Center" IsActive="False" />
                 <Button x:Name="CaptureButton" Grid.Column="3" Content="同步记录" Style="{StaticResource AccentButtonStyle}" Click="Capture_OnClick" VerticalAlignment="Center" />
+                <Button x:Name="FullCaptureButton" Grid.Column="4" Content="全量同步" Click="FullCapture_OnClick" VerticalAlignment="Center" Visibility="Collapsed" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" ToolTipService.ToolTip="重新扫描全部记录，补齐可能缺失的历史。" />
             </Grid>
 
             <Grid x:Name="EndfieldPityStrip" ColumnSpacing="8" Visibility="Collapsed" ToolTipService.ToolTip="按本地记录估算；缺失的历史记录会影响计数，免费抽不计入保底。">
@@ -30,15 +97,17 @@
                     </Grid>
                 </Border>
                 <Border Grid.Column="1" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,6">
-                    <Grid ColumnSpacing="6"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Grid ColumnSpacing="6" RowSpacing="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                         <TextBlock x:Name="LimitedPityLabel" Text="小保底已垫" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <TextBlock x:Name="LimitedPityText" Grid.Column="1" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                        <ProgressBar x:Name="LimitedPityBar" Grid.Row="1" Grid.ColumnSpan="2" Height="4" Minimum="0" Maximum="100" Value="0" Foreground="{ThemeResource PageTitleBrush}" Background="#798A9AAB" ToolTipService.ToolTip="按当前寻访类型累计 80 抽六星保底；重构池之间共用，免费十连不计入。" />
                     </Grid>
                 </Border>
                 <Border Grid.Column="2" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,6">
-                    <Grid ColumnSpacing="6"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Grid ColumnSpacing="6" RowSpacing="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                         <TextBlock x:Name="UpRemainingLabel" Text="UP池剩余" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <TextBlock x:Name="UpRemainingText" Grid.Column="1" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                        <ProgressBar x:Name="UpPityBar" Grid.Row="1" Grid.ColumnSpan="2" Height="4" Minimum="0" Maximum="100" Value="0" Foreground="{ThemeResource PageTitleBrush}" Background="#798A9AAB" ToolTipService.ToolTip="同名重构池的首次 120 抽 UP 保底跨期继承，仅触发一次；免费十连不计入。" Visibility="Collapsed" />
                     </Grid>
                 </Border>
             </Grid>
@@ -47,6 +116,9 @@
 
             <StackPanel x:Name="EndfieldAnalysisPanel" Visibility="Collapsed" Spacing="8">
                 <TextBlock x:Name="SixStarEmptyText" Text="暂无终末地寻访记录" Foreground="{ThemeResource GlassMutedTextBrush}" Visibility="Collapsed" />
+                <ItemsRepeater x:Name="HistoryPoolItems" Visibility="Collapsed">
+                    <ItemsRepeater.Layout><StackLayout Spacing="10" /></ItemsRepeater.Layout>
+                </ItemsRepeater>
                 <ItemsRepeater x:Name="PoolItems">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="10" />
@@ -69,46 +141,50 @@
                                             </LinearGradientBrush>
                                         </Border.Background>
                                     </Border>
-                                    <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                                        <Expander.Header>
-                                            <StackPanel Padding="10,6" Spacing="3" HorizontalAlignment="Stretch">
-                                                <Grid ColumnSpacing="8">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                                    <TextBlock Text="{x:Bind PoolName}" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
-                                                </Grid>
-                                                <TextBlock Text="{x:Bind OperatorSummary}" FontSize="12" TextWrapping="Wrap" MaxLines="2" />
-                                                <TextBlock Text="{x:Bind DetailText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel HorizontalAlignment="Stretch">
+                                        <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                            <Expander.Header>
+                                                <StackPanel Padding="10,6" Spacing="3" HorizontalAlignment="Stretch">
+                                                    <Grid ColumnSpacing="8">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{x:Bind PoolName}" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
+                                                    </Grid>
+                                                    <TextBlock Text="{x:Bind OperatorSummary}" FontSize="12" TextWrapping="Wrap" MaxLines="2" />
+                                                    <TextBlock Text="{x:Bind DetailText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Expander.Header>
+                                            <StackPanel Padding="10,0,10,10" Spacing="7" HorizontalAlignment="Stretch">
+                                                <TextBlock Text="{x:Bind StatusText}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                <ItemsControl ItemsSource="{x:Bind SixStarPulls}" ItemTemplate="{StaticResource SixStarPullTemplate}">
+                                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="5" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                                </ItemsControl>
                                             </StackPanel>
-                                        </Expander.Header>
-                                        <StackPanel Padding="10,0,10,10" Spacing="7" HorizontalAlignment="Stretch">
-                                            <TextBlock Text="{x:Bind StatusText}" FontSize="11" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                                            <ItemsControl ItemsSource="{x:Bind SixStarPulls}">
-                                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="5" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        </Expander>
+                                        <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Visibility="{x:Bind PreviousPhaseCount, Converter={StaticResource HistoryCountVisibilityConverter}}">
+                                            <Expander.Header>
+                                                <TextBlock Text="{x:Bind PreviousPhaseLabel}" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" Margin="12,1,0,1" />
+                                            </Expander.Header>
+                                            <ItemsControl ItemsSource="{x:Bind PreviousPhases}">
                                                 <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="core:EndfieldSixStarPull">
-                                                        <Grid ColumnSpacing="7" MinHeight="40">
-                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                                            <Border Width="34" Height="34" CornerRadius="7" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" ToolTipService.ToolTip="干员头像预留位">
-                                                                <TextBlock Text="头像" FontSize="9" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                            </Border>
-                                                            <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Stretch">
-                                                                <Grid ColumnSpacing="5"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                                                    <TextBlock Text="{x:Bind OperatorName}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                                                    <TextBlock Grid.Column="1" Text="{x:Bind BarTitle}" FontSize="10" Foreground="{ThemeResource PageTitleBrush}" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" />
+                                                    <DataTemplate x:DataType="core:EndfieldPoolAnalysis">
+                                                        <Border Margin="10,0,10,8" Padding="10,7" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="9">
+                                                            <StackPanel Spacing="4">
+                                                                <Grid ColumnSpacing="8">
+                                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="{x:Bind PoolName}" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                                                 </Grid>
-                                                                <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{x:Bind BarPercent}" Tag="{x:Bind IsOver65}" Loaded="SixStarBar_OnLoaded" HorizontalAlignment="Stretch" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" ToolTipService.ToolTip="计入保底的抽数，以 80 抽为满格；免费抽不计入。" />
+                                                                <TextBlock Text="{x:Bind OperatorSummary}" FontSize="11" TextWrapping="Wrap" MaxLines="2" />
+                                                                <TextBlock Text="{x:Bind DetailText}" FontSize="10" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                                                                <ItemsControl ItemsSource="{x:Bind SixStarPulls}" ItemTemplate="{StaticResource SixStarPullTemplate}" />
                                                             </StackPanel>
-                                                            <StackPanel Grid.Column="2" HorizontalAlignment="Right" Spacing="1">
-                                                                <TextBlock Text="{x:Bind RecordedSpanText}" FontSize="11" HorizontalAlignment="Right" />
-                                                                <TextBlock Text="{x:Bind ObtainedAtText}" FontSize="10" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Right" />
-                                                            </StackPanel>
-                                                        </Grid>
+                                                        </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                        </StackPanel>
-                                    </Expander>
+                                        </Expander>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -125,6 +201,80 @@
                 </Grid>
             </StackPanel>
 
+            <Grid x:Name="StarRailPityStrip" ColumnSpacing="8" Visibility="Collapsed" ToolTipService.ToolTip="本地 UIGF 档案估算；历史缺失会影响水位。角色、光锥、常驻分别计算。">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
+                    <StackPanel Spacing="2"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock Text="角色活动" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                        <TextBlock x:Name="StarRailRolePityText" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                    </Grid><ProgressBar x:Name="StarRailRolePityBar" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
+                </Border>
+                <Border Grid.Column="1" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
+                    <StackPanel Spacing="2"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock Text="光锥活动" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                        <TextBlock x:Name="StarRailConePityText" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                    </Grid><ProgressBar x:Name="StarRailConePityBar" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
+                </Border>
+                <Border Grid.Column="2" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
+                    <StackPanel Spacing="2"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock Text="常驻" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                        <TextBlock x:Name="StarRailStandardPityText" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                    </Grid><ProgressBar x:Name="StarRailStandardPityBar" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
+                </Border>
+            </Grid>
+            <StackPanel x:Name="StarRailAnalysisPanel" Visibility="Collapsed" Spacing="7" SizeChanged="StarRailAnalysisPanel_OnSizeChanged">
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="本地记录 · 同类卡池共用五星计数 · UP 未判定" FontSize="10" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
+                    <ComboBox x:Name="StarRailAccountSelector" Grid.Column="1" MinWidth="150" Visibility="Collapsed" SelectionChanged="StarRailAccountSelector_SelectionChanged" />
+                </Grid>
+                <TextBlock x:Name="StarRailEmptyText" Text="暂无星穹铁道记录；同步或导入 UIGF 后显示。" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" Visibility="Collapsed" />
+                <ItemsRepeater x:Name="StarRailSections">
+                    <ItemsRepeater.Layout><StackLayout Spacing="8" /></ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="core:StarRailWarpSection">
+                            <Border x:Name="StarRailSectionBorder" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="11,8">
+                                <StackPanel Spacing="5">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Text="{x:Bind Title}" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind DateRange}" FontSize="10" Foreground="{ThemeResource GlassMutedTextBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Text="{x:Bind CountText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <Grid ColumnSpacing="12" RowSpacing="1">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                        <TextBlock Text="{x:Bind FiveStarStat}" FontSize="11" Foreground="#FFFFBA49" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind FourStarStat}" FontSize="11" Foreground="#FFE29AF4" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Row="1" Text="{x:Bind ThreeStarStat}" FontSize="11" Foreground="#FF8FC9F8" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind AverageText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                    </Grid>
+                                    <ItemsRepeater ItemsSource="{x:Bind FiveStars}" ItemTemplate="{StaticResource StarRailPullTemplate}">
+                                        <ItemsRepeater.Layout>
+                                            <UniformGridLayout MinItemWidth="210" MinColumnSpacing="9" MinRowSpacing="3" ItemsStretch="Fill" />
+                                        </ItemsRepeater.Layout>
+                                    </ItemsRepeater>
+                                    <Expander Background="Transparent" Visibility="{x:Bind PreviousBannerCount, Converter={StaticResource HistoryCountVisibilityConverter}}" HorizontalContentAlignment="Stretch">
+                                        <Expander.Header><Grid Width="{Binding ActualWidth, ElementName=StarRailSectionBorder, Converter={StaticResource SectionHeaderWidthConverter}}"><TextBlock Text="{x:Bind BreakdownLabel}" FontSize="10" Foreground="{ThemeResource GlassMutedTextBrush}" /></Grid></Expander.Header>
+                                        <ItemsControl ItemsSource="{x:Bind Banners}" ItemTemplate="{StaticResource StarRailBannerTemplate}" HorizontalContentAlignment="Stretch">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                    </Expander>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+                <Grid x:Name="StarRailColumns" ColumnSpacing="8" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <ItemsRepeater x:Name="StarRailRoleSections">
+                        <ItemsRepeater.Layout><StackLayout Spacing="8" /></ItemsRepeater.Layout>
+                    </ItemsRepeater>
+                    <ItemsRepeater x:Name="StarRailOtherSections" Grid.Column="1">
+                        <ItemsRepeater.Layout><StackLayout Spacing="8" /></ItemsRepeater.Layout>
+                    </ItemsRepeater>
+                </Grid>
+            </StackPanel>
             <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="8">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <Button x:Name="ImportButton" Content="导入 UIGF v4 JSON" Click="Import_OnClick" />

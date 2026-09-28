@@ -35,6 +35,14 @@ public sealed class LauncherViewModel : ObservableObject
         _runtimeTimer.Tick += RuntimeTimerOnTick;
     }
 
+    public void RefreshArtwork(IReadOnlyCollection<string> gameIds)
+    {
+        foreach (var game in _allGames)
+        {
+            if (gameIds.Contains(game.Id)) game.RefreshArtwork();
+        }
+    }
+
     public ObservableCollection<GameCardViewModel> Games { get; } = [];
 
     public ObservableCollection<GameCardViewModel> LibraryGames { get; } = [];

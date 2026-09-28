@@ -22,6 +22,39 @@ internal static class EndfieldPoolCatalog
             ["冬猎"] = ("提弗洛斯", "Gacha/winter.jpg")
         };
 
+    public static string RefactorSeriesName(string poolName)
+    {
+        var trimmed = poolName.Trim();
+        var hash = trimmed.LastIndexOfAny(['#', '＃']);
+        var withoutPhase = hash >= 0 && int.TryParse(trimmed[(hash + 1)..].Trim(), out var phase) && phase > 0
+            ? trimmed[..hash].TrimEnd()
+            : trimmed;
+        return withoutPhase.EndsWith("重构寻访", StringComparison.Ordinal)
+            ? withoutPhase[..^"重构寻访".Length].TrimEnd()
+            : withoutPhase;
+    }
+
+    public static string RefactorDisplayName(string poolName, string? poolVersion)
+    {
+        var series = RefactorSeriesName(poolName);
+        return int.TryParse(poolVersion, out var phase) && phase > 0
+            ? $"{series} #{phase}"
+            : poolName;
+    }
+
+    public static int RefactorPhaseNumber(string poolName, string? poolVersion)
+    {
+        if (int.TryParse(poolVersion, out var version) && version > 0)
+        {
+            return version;
+        }
+
+        var hash = poolName.LastIndexOfAny(['#', '＃']);
+        return hash >= 0 && int.TryParse(poolName[(hash + 1)..].Trim(), out var namedVersion)
+            ? namedVersion
+            : 0;
+    }
+
     public static EndfieldPoolDefinition Resolve(string poolId, string poolName)
     {
         if (poolId.Equals("standard", StringComparison.OrdinalIgnoreCase)
@@ -30,14 +63,18 @@ internal static class EndfieldPoolCatalog
             return new(EndfieldPoolCategory.Standard, null, "standard", poolId, "endfield-pool-card.svg");
         }
 
+        var refactorSeries = RefactorSeriesName(poolName);
+        if (poolId.StartsWith("rerun_chr_", StringComparison.OrdinalIgnoreCase)
+            || refactorSeries.Equals("绚丽异彩", StringComparison.Ordinal))
+        {
+            var known = refactorSeries.Equals("绚丽异彩", StringComparison.Ordinal);
+            return new(EndfieldPoolCategory.Refactor, known ? "伊冯" : null, "refactor",
+                $"refactor:{refactorSeries}", known ? "Gacha/refactor-vivid.png" : "endfield-pool-card.svg");
+        }
+
         if (CharteredFeatured.TryGetValue(poolName, out var featured))
         {
             return new(EndfieldPoolCategory.Chartered, featured.Featured, "chartered", poolId, featured.Banner);
-        }
-
-        if (poolName.StartsWith("绚丽异彩", StringComparison.Ordinal))
-        {
-            return new(EndfieldPoolCategory.Refactor, "伊冯", "refactor", "绚丽异彩", "Gacha/refactor-vivid.png");
         }
 
         if (poolName.Equals("辉光庆典", StringComparison.Ordinal))

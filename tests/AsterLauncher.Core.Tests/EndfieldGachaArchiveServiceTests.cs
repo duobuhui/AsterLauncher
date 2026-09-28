@@ -242,6 +242,122 @@ public sealed class EndfieldGachaArchiveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Analysis_SameRerunIdShowsCurrentPhaseAndKeepsHistoryAndSharedPity()
+    {
+        var input = Path.Combine(_root, "rerun-periods.json");
+        await File.WriteAllTextAsync(input, """
+        {"characters":[
+          {"seqId":1,"gachaTs":1700000001000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":1,"rarity":4},
+          {"seqId":2,"gachaTs":1700000002000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":1,"rarity":6,"charName":"伊冯","isFree":true},
+          {"seqId":3,"gachaTs":1700000003000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":1,"rarity":4},
+          {"seqId":4,"gachaTs":1700000004000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":2,"rarity":4},
+          {"seqId":5,"gachaTs":1700000005000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":2,"rarity":6,"charName":"黎风"},
+          {"seqId":6,"gachaTs":1700000006000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":2,"rarity":4}
+        ],"weapons":[]}
+        """);
+        var service = new EndfieldGachaArchiveService(NullLogger<EndfieldGachaArchiveService>.Instance);
+
+        Assert.True((await service.ImportAsync(input)).Success);
+        var analysis = await service.GetAnalysisAsync();
+        var second = Assert.Single(analysis.Pools);
+        var first = Assert.Single(second.PreviousPhases!);
+
+        Assert.Equal(1, second.PreviousPhaseCount);
+        Assert.Equal("往期记录 · 1 期", second.PreviousPhaseLabel);
+        Assert.Equal("绚丽异彩 #1", first.PoolName);
+        Assert.Equal("绚丽异彩 #2", second.PoolName);
+        Assert.Equal(3, first.DrawCount);
+        Assert.Equal(3, second.DrawCount);
+        Assert.Equal(2, first.PaidDrawCount);
+        Assert.Equal(3, second.PaidDrawCount);
+        Assert.True(first.HasFreeFeatured);
+        Assert.False(analysis.Pity.UpRecorded);
+        Assert.Equal(5, analysis.Pity.UpPaidCount);
+        Assert.Equal("5 / 120", analysis.Pity.UpText);
+        Assert.Equal(1, analysis.Pity.LimitedSinceSixStar);
+        Assert.Equal(4, Assert.Single(second.SixStarPulls).CountedDrawsSincePaidSixStar);
+        Assert.Equal(5, second.SeriesPaidDrawCount);
+    }
+
+    [Fact]
+    public async Task Import_SamePoolAndSequenceDifferentRerunVersionRemainSeparate()
+    {
+        var input = Path.Combine(_root, "rerun-sequence-reuse.json");
+        await File.WriteAllTextAsync(input, """
+        {"characters":[
+          {"seqId":42,"gachaTs":1700000001000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":1,"rarity":4},
+          {"seqId":42,"gachaTs":1700000002000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":2,"rarity":4}
+        ],"weapons":[]}
+        """);
+        var service = new EndfieldGachaArchiveService(NullLogger<EndfieldGachaArchiveService>.Instance);
+
+        var first = await service.ImportAsync(input);
+        var second = await service.ImportAsync(input);
+        var analysis = await service.GetAnalysisAsync();
+
+        Assert.True(first.Success, first.Message);
+        Assert.Equal(2, first.ImportedCount);
+        Assert.True(second.Success, second.Message);
+        Assert.Equal(0, second.ImportedCount);
+        Assert.Equal(2, analysis.CharacterDrawCount);
+        var current = Assert.Single(analysis.Pools);
+        Assert.Equal("2", current.PoolVersion);
+        Assert.Equal("1", Assert.Single(current.PreviousPhases!).PoolVersion);
+    }
+
+    [Fact]
+    public async Task Analysis_UnknownRerunUsesSharedSixStarPityButIndependentNamedSeries()
+    {
+        var input = Path.Combine(_root, "future-rerun.json");
+        await File.WriteAllTextAsync(input, """
+        {"characters":[
+          {"seqId":1,"gachaTs":1700000001000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":1,"rarity":4},
+          {"seqId":2,"gachaTs":1700000002000,"kind":"draw","poolId":"rerun_chr_future","poolName":"未来复刻","poolVersion":1,"rarity":6,"charName":"未知干员"},
+          {"seqId":3,"gachaTs":1700000003000,"kind":"draw","poolId":"rerun_chr_future","poolName":"未来复刻","poolVersion":1,"rarity":4}
+        ],"weapons":[]}
+        """);
+        var service = new EndfieldGachaArchiveService(NullLogger<EndfieldGachaArchiveService>.Instance);
+
+        Assert.True((await service.ImportAsync(input)).Success);
+        var analysis = await service.GetAnalysisAsync();
+        var future = Assert.Single(analysis.Pools, pool => pool.PoolId == "rerun_chr_future");
+
+        Assert.Equal(EndfieldPoolCategory.Refactor, future.Category);
+        Assert.Null(future.FeaturedOperatorName);
+        Assert.Equal("endfield-pool-card.svg", future.BannerAssetFileName);
+        Assert.Equal(2, Assert.Single(future.SixStarPulls).CountedDrawsSincePaidSixStar);
+        Assert.Equal(2, future.SeriesPaidDrawCount);
+        Assert.Equal(1, analysis.Pity.LimitedSinceSixStar);
+        Assert.Equal("待核对", analysis.Pity.UpText);
+    }
+
+    [Fact]
+    public async Task Analysis_MultipleRerunSeriesShowOnlyNewestPhasePerCard()
+    {
+        var input = Path.Combine(_root, "multiple-rerun-series.json");
+        await File.WriteAllTextAsync(input, """
+        {"characters":[
+          {"seqId":1,"gachaTs":1700000005000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":1,"rarity":4},
+          {"seqId":2,"gachaTs":1700000002000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":2,"rarity":4},
+          {"seqId":3,"gachaTs":1700000003000,"kind":"draw","poolId":"rerun_chr_future","poolName":"未来复刻","poolVersion":1,"rarity":4},
+          {"seqId":4,"gachaTs":1700000004000,"kind":"draw","poolId":"rerun_chr_yvonne","poolName":"绚丽异彩","poolVersion":3,"rarity":4}
+        ],"weapons":[]}
+        """);
+        var service = new EndfieldGachaArchiveService(NullLogger<EndfieldGachaArchiveService>.Instance);
+
+        Assert.True((await service.ImportAsync(input)).Success);
+        var analysis = await service.GetAnalysisAsync();
+        var yvonne = Assert.Single(analysis.Pools, pool => pool.PoolId == "rerun_chr_yvonne");
+        var future = Assert.Single(analysis.Pools, pool => pool.PoolId == "rerun_chr_future");
+
+        Assert.Equal(2, analysis.Pools.Count);
+        Assert.Equal("3", yvonne.PoolVersion);
+        Assert.Equal(new[] { "2", "1" }, yvonne.PreviousPhases!.Select(phase => phase.PoolVersion));
+        Assert.Equal(2, yvonne.PreviousPhaseCount);
+        Assert.Equal(0, future.PreviousPhaseCount);
+    }
+
+    [Fact]
     public async Task Analysis_RefactorSharesItsSeriesCountButKeepsPoolResultsSeparate()
     {
         var input = Path.Combine(_root, "refactor-series.json");
@@ -257,8 +373,11 @@ public sealed class EndfieldGachaArchiveServiceTests : IDisposable
 
         Assert.True((await service.ImportAsync(input)).Success);
         var analysis = await service.GetAnalysisAsync();
-        var first = Assert.Single(analysis.Pools, pool => pool.PoolName == "绚丽异彩#1");
-        var second = Assert.Single(analysis.Pools, pool => pool.PoolName == "绚丽异彩#2");
+        var second = Assert.Single(analysis.Pools);
+        var first = Assert.Single(second.PreviousPhases!);
+
+        Assert.Equal("绚丽异彩#1", first.PoolName);
+        Assert.Equal("绚丽异彩#2", second.PoolName);
 
         Assert.Equal(EndfieldPoolCategory.Refactor, first.Category);
         Assert.Equal(1, first.FreeDrawCount);
@@ -407,6 +526,73 @@ public sealed class EndfieldGachaArchiveServiceTests : IDisposable
         Assert.Equal(6, result.ImportedCount);
         Assert.Equal(2, handler.Requests.Count);
         Assert.Contains("seq_id=5", handler.Requests[1].Query);
+    }
+
+    [Fact]
+    public async Task Import_KeepsSameSequenceFromDifferentPools()
+    {
+        var source = Path.Combine(_root, "two-pools.json");
+        await File.WriteAllTextAsync(source,
+            """{"characters":[{"seqId":1,"poolId":"standard"},{"seqId":1,"poolId":"limited"}],"weapons":[]}""");
+        using var service = new EndfieldGachaArchiveService(
+            NullLogger<EndfieldGachaArchiveService>.Instance);
+
+        var result = await service.ImportAsync(source);
+        var summary = await service.GetSummaryAsync();
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(2, summary.CharacterCount);
+    }
+
+    [Fact]
+    public async Task CaptureFromGame_StopsAtExistingRecordUnlessFullRefresh()
+    {
+        var cache = Path.Combine(_root, "data_1");
+        await File.WriteAllTextAsync(cache,
+            "https://ef-webview.hypergryph.com/api/record/char?token=test-token&server_id=1&pool_type=standard");
+        var handler = new IncrementalRecordHandler();
+        using var client = new HttpClient(handler);
+        using var service = new EndfieldGachaArchiveService(
+            NullLogger<EndfieldGachaArchiveService>.Instance, client, () => cache);
+        Directory.CreateDirectory(Path.GetDirectoryName(service.ArchivePath)!);
+        await File.WriteAllTextAsync(service.ArchivePath,
+            """{"info":{},"characters":[{"seqId":4,"poolId":"standard"},{"seqId":3,"poolId":"standard"},{"seqId":2,"poolId":"standard"},{"seqId":1,"poolId":"standard"}],"weapons":[]}""");
+
+        var incremental = await service.CaptureFromGameAsync();
+        var summary = await service.GetSummaryAsync();
+
+        Assert.True(incremental.Success, incremental.Message);
+        Assert.Equal(4, incremental.ImportedCount);
+        Assert.Equal(8, summary.CharacterCount);
+        Assert.Single(handler.Requests);
+
+        handler.Requests.Clear();
+        var full = await service.CaptureFromGameAsync(fullRefresh: true);
+        summary = await service.GetSummaryAsync();
+
+        Assert.True(full.Success, full.Message);
+        Assert.Equal(0, full.ImportedCount);
+        Assert.Equal(8, summary.CharacterCount);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Contains("seq_id=4", handler.Requests[1].Query);
+    }
+
+    private sealed class IncrementalRecordHandler : HttpMessageHandler
+    {
+        public List<Uri> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var uri = Assert.IsType<Uri>(request.RequestUri);
+            Requests.Add(uri);
+            var body = uri.Query.Contains("seq_id=", StringComparison.Ordinal)
+                ? """{"data":{"list":[{"seqId":3,"poolId":"standard"},{"seqId":2,"poolId":"standard"},{"seqId":1,"poolId":"standard"}],"hasMore":false}}"""
+                : """{"data":{"list":[{"seqId":8,"poolId":"standard"},{"seqId":7,"poolId":"standard"},{"seqId":6,"poolId":"standard"},{"seqId":5,"poolId":"standard"},{"seqId":4,"poolId":"standard"}],"hasMore":true}}""";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body)
+            });
+        }
     }
 
     [Fact]

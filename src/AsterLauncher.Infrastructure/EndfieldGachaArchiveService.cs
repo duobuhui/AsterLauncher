@@ -110,7 +110,8 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
 
     public async Task<GachaImportResult> CaptureFromGameAsync(
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool fullRefresh = false)
     {
         var cachePath = _cachePathProvider();
         if (string.IsNullOrWhiteSpace(cachePath) || !File.Exists(cachePath))
@@ -127,8 +128,11 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                 return new GachaImportResult(false, 0, "缓存中没有可用的官方记录链接。请在游戏内重新打开抽卡记录页面。");
             }
 
-            progress?.Report("已找到本地链接，正在通过官方接口同步…");
-            var (incoming, failedGroups) = await FetchAllAsync(captureUrls, progress, cancellationToken).ConfigureAwait(false);
+            var current = File.Exists(ArchivePath)
+                ? await ReadObjectAsync(ArchivePath, cancellationToken).ConfigureAwait(false)
+                : NewArchive();
+            progress?.Report(fullRefresh ? "正在全量同步终末地记录…" : "正在增量同步终末地记录…");
+            var (incoming, failedGroups) = await FetchAllAsync(captureUrls, current, fullRefresh, progress, cancellationToken).ConfigureAwait(false);
             var fetched = Count(incoming);
             if (fetched == 0)
             {
@@ -137,9 +141,6 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                     : $"部分记录分组同步失败（{failedGroups} 个）；其他分组没有可保存的记录。请在游戏内重新打开记录页面后重试。");
             }
 
-            var current = File.Exists(ArchivePath)
-                ? await ReadObjectAsync(ArchivePath, cancellationToken).ConfigureAwait(false)
-                : NewArchive();
             var before = Count(current);
             MergeArray(current, incoming, "characters");
             MergeArray(current, incoming, "weapons");
@@ -281,10 +282,16 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
 
     private async Task<(JsonObject Archive, int FailedGroups)> FetchAllAsync(
         IReadOnlyList<Uri> captureUrls,
+        JsonObject current,
+        bool fullRefresh,
         IProgress<string>? progress,
         CancellationToken cancellationToken)
     {
         var result = NewArchive();
+        var knownCharacters = (current["characters"] as JsonArray ?? [])
+            .OfType<JsonObject>().Select(GetCheckpointIdentity).ToHashSet(StringComparer.Ordinal);
+        var knownWeapons = (current["weapons"] as JsonArray ?? [])
+            .OfType<JsonObject>().Select(GetCheckpointIdentity).ToHashSet(StringComparer.Ordinal);
         var failedGroups = 0;
         var successfulGroups = 0;
         InvalidDataException? lastInvalidResponse = null;
@@ -294,6 +301,8 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                 ? (JsonArray)result["characters"]!
                 : (JsonArray)result["weapons"]!;
             var groupRecords = new JsonArray();
+            var knownRecords = captureUrl.AbsolutePath.EndsWith("/char", StringComparison.OrdinalIgnoreCase)
+                ? knownCharacters : knownWeapons;
             string? sequenceId = null;
             try
             {
@@ -318,10 +327,15 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                 }
 
                 string? nextSequenceId = null;
+                var reachedExistingRecord = false;
                 foreach (var item in list.EnumerateArray())
                 {
                     if (JsonNode.Parse(item.GetRawText()) is JsonObject record)
                     {
+                        if (!fullRefresh && knownRecords.Contains(GetCheckpointIdentity(record)))
+                        {
+                            reachedExistingRecord = true;
+                        }
                         groupRecords.Add(record);
                     }
 
@@ -336,7 +350,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                 var hasMore = data.ValueKind == JsonValueKind.Object && data.TryGetProperty("hasMore", out var hasMoreNode)
                     ? hasMoreNode.ValueKind == JsonValueKind.True
                     : list.GetArrayLength() == 5;
-                if (!hasMore || string.IsNullOrWhiteSpace(nextSequenceId) || nextSequenceId == sequenceId)
+                if (reachedExistingRecord || !hasMore || string.IsNullOrWhiteSpace(nextSequenceId) || nextSequenceId == sequenceId)
                 {
                     break;
                 }
@@ -584,12 +598,12 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
         var targetArray = target[key] as JsonArray ?? [];
         target[key] = targetArray;
         StripSensitiveFields(targetArray);
-        var identities = targetArray.OfType<JsonObject>().Select(GetIdentity).ToHashSet(StringComparer.Ordinal);
+        var identities = targetArray.OfType<JsonObject>().Select(GetCheckpointIdentity).ToHashSet(StringComparer.Ordinal);
         foreach (var record in (incoming[key] as JsonArray ?? []).OfType<JsonObject>())
         {
             var safeRecord = (JsonObject)record.DeepClone();
             StripSensitiveFields(safeRecord);
-            if (identities.Add(GetIdentity(safeRecord)))
+            if (identities.Add(GetCheckpointIdentity(safeRecord)))
             {
                 targetArray.Add(safeRecord);
             }
@@ -638,6 +652,10 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
             }
         }
     }
+
+    private static string GetCheckpointIdentity(JsonObject record) =>
+        $"{record["poolId"]?.ToJsonString() ?? record["pool_id"]?.ToJsonString() ?? "null"}|" +
+        $"{record["poolVersion"]?.ToString() ?? record["pool_version"]?.ToString() ?? ""}|{GetIdentity(record)}";
 
     private static string GetIdentity(JsonObject record)
     {

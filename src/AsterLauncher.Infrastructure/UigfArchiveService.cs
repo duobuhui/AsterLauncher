@@ -89,6 +89,24 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         }
     }
 
+    public async Task<StarRailGachaAnalysis> GetStarRailAnalysisAsync(CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(ArchivePath))
+        {
+            return StarRailGachaAnalysis.Empty;
+        }
+
+        try
+        {
+            var root = await ReadRootAsync(ArchivePath, cancellationToken).ConfigureAwait(false);
+            return StarRailGachaAnalyzer.Analyze(root);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException)
+        {
+            _logger.LogWarning("Could not analyze Star Rail archive; error type {ErrorType}", exception.GetType().Name);
+            return StarRailGachaAnalysis.Empty;
+        }
+    }
     public async Task<GachaImportResult> ImportAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         try
@@ -171,10 +189,13 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
             }
 
             progress?.Report("已找到本地链接，正在通过官方接口同步…");
-            var records = await FetchAllAsync(capturedUrl, definition, progress, cancellationToken).ConfigureAwait(false);
+            var (records, unavailableTypes) = await FetchAllAsync(capturedUrl, definition, progress, cancellationToken).ConfigureAwait(false);
+            var unavailableNote = unavailableTypes.Count == 0
+                ? string.Empty
+                : $"类别 {string.Join("、", unavailableTypes)} 暂不可用（官方返回 -110）。";
             if (records.Count == 0)
             {
-                return new GachaImportResult(true, 0, "官方接口返回成功，但没有新的抽卡记录。");
+                return new GachaImportResult(true, 0, $"没有读取到新的抽卡记录。{unavailableNote}");
             }
 
             var incoming = CreateArchive(definition.UigfKey, records);
@@ -187,7 +208,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
             await SaveRootAsync(root, ArchivePath, cancellationToken).ConfigureAwait(false);
             var afterCount = (await GetSummaryAsync(cancellationToken).ConfigureAwait(false)).TotalCount;
             var imported = Math.Max(0, afterCount - beforeCount);
-            return new GachaImportResult(true, imported, $"同步完成：读取 {records.Count} 条，新增 {imported} 条。授权链接未写入日志或配置。");
+            return new GachaImportResult(true, imported, $"同步完成：读取 {records.Count} 条，新增 {imported} 条。{unavailableNote}");
         }
         catch (OperationCanceledException)
         {
@@ -217,9 +238,11 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         }
     }
 
-    private async Task<List<JsonObject>> FetchAllAsync(Uri capturedUrl, CaptureDefinition definition, IProgress<string>? progress, CancellationToken cancellationToken)
+    private async Task<(List<JsonObject> Records, List<string> UnavailableTypes)> FetchAllAsync(Uri capturedUrl, CaptureDefinition definition, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         var result = new List<JsonObject>();
+        var unavailableTypes = new List<string>();
+        var requestCount = 0;
         var isGlobal = capturedUrl.Host.Contains("hoyoverse.com", StringComparison.OrdinalIgnoreCase);
         foreach (var gachaType in definition.GachaTypes)
         {
@@ -228,16 +251,26 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var endpoint = definition.GetEndpoint(isGlobal, gachaType);
+                if (requestCount++ > 0)
+                {
+                    await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+                }
                 var requestUri = BuildApiUri(endpoint, capturedUrl.Query, gachaType, endId);
-                using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+                using var document = await FetchPageAsync(requestUri,
+                    definition.UigfKey == "hkrpg" && (gachaType is "21" or "22"),
+                    progress, cancellationToken).ConfigureAwait(false);
                 var root = document.RootElement;
                 var retcode = root.TryGetProperty("retcode", out var code) ? code.GetInt32() : -1;
+                if (retcode == -110 && definition.UigfKey == "hkrpg" && (gachaType is "21" or "22"))
+                {
+                    // These optional pools can be rejected for an otherwise valid Star Rail authkey.
+                    // Keep records from the other pools instead of discarding the whole capture.
+                    unavailableTypes.Add(gachaType);
+                    break;
+                }
                 if (retcode != 0)
                 {
-                    throw new InvalidDataException("官方接口拒绝了当前链接，请在游戏内重新打开记录页面。");
+                    throw new InvalidDataException($"官方接口拒绝类别 {gachaType}（错误码 {retcode}）。请在游戏内重新打开记录页面。");
                 }
 
                 if (!root.TryGetProperty("data", out var data)
@@ -271,7 +304,32 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
             }
         }
 
-        return result;
+        return (result, unavailableTypes);
+    }
+
+    private async Task<JsonDocument> FetchPageAsync(
+        Uri requestUri, bool optionalStarRailPool, IProgress<string>? progress, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            using var response = await _httpClient.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var root = document.RootElement;
+            var retcode = root.TryGetProperty("retcode", out var code) && code.TryGetInt32(out var numeric)
+                ? numeric : -1;
+            if (retcode != -110 || optionalStarRailPool || attempt == 2)
+            {
+                return document;
+            }
+
+            document.Dispose();
+            progress?.Report("官方接口暂时拒绝请求，稍后重试…");
+            await Task.Delay(TimeSpan.FromSeconds(attempt + 1), cancellationToken).ConfigureAwait(false);
+        }
+
+        throw new InvalidOperationException("记录请求未完成。");
     }
 
     private static Uri BuildApiUri(string endpoint, string capturedQuery, string gachaType, string endId)

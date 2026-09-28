@@ -91,6 +91,8 @@ public interface IUigfArchiveService
 
     Task<UigfArchiveSummary> GetSummaryAsync(CancellationToken cancellationToken = default);
 
+    Task<StarRailGachaAnalysis> GetStarRailAnalysisAsync(CancellationToken cancellationToken = default);
+
     Task<GachaImportResult> ImportAsync(string sourcePath, CancellationToken cancellationToken = default);
 
     Task<GachaImportResult> ExportAsync(string destinationPath, CancellationToken cancellationToken = default);
@@ -122,7 +124,8 @@ public interface IEndfieldGachaArchiveService
 
     Task<GachaImportResult> CaptureFromGameAsync(
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool fullRefresh = false);
 
     Task<GachaImportResult> ImportAsync(string sourcePath, CancellationToken cancellationToken = default);
 
@@ -162,7 +165,10 @@ public sealed record EndfieldPityOverview(
     string? LimitedFamily,
     string? UpPoolName,
     int? UpRemaining,
-    bool UpRecorded)
+    bool UpRecorded,
+    int? UpPaidCount = null,
+    bool UpIsRefactor = false,
+    bool UpOperatorKnown = true)
 {
     public static EndfieldPityOverview Empty { get; } = new(null, null, null, null, null, false);
 
@@ -170,11 +176,22 @@ public sealed record EndfieldPityOverview(
 
     public string LimitedText => LimitedSinceSixStar is int count ? $"{count} / 80" : "—";
 
-    public string LimitedLabel => LimitedFamily is null ? "小保底已垫" : $"小保底已垫 · {LimitedFamily}";
+    public string LimitedLabel => LimitedFamily == "重构" ? "重构六星 · 共用" :
+        LimitedFamily is null ? "小保底已垫" : $"小保底已垫 · {LimitedFamily}";
 
-    public string UpText => UpRecorded ? "已出" : UpRemaining is int count ? $"{count} 抽" : "—";
+    public string UpText => UpPoolName is null ? "—" : !UpOperatorKnown ? "待核对" : UpRecorded ? "已出" :
+        UpIsRefactor && UpPaidCount is >= 120 ? "待核对" :
+        UpIsRefactor && UpPaidCount is int paid ? $"{paid} / 120" :
+        UpRemaining is int count ? $"剩 {count} 抽" : "—";
 
-    public string UpLabel => UpPoolName is null ? "UP池剩余" : $"UP池剩余 · {UpPoolName}";
+    public string UpLabel => UpIsRefactor && UpPoolName is not null ? $"同名首 UP · {UpPoolName}" :
+        UpPoolName is null ? "UP池剩余" : $"UP池剩余 · {UpPoolName}";
+
+    public double LimitedPercent => Math.Clamp((LimitedSinceSixStar ?? 0) * 100d / 80d, 0d, 100d);
+
+    public double UpPercent => Math.Clamp((UpPaidCount ?? 0) * 100d / 120d, 0d, 100d);
+
+    public bool LimitedOver65 => LimitedSinceSixStar > 65;
 }
 
 public sealed record EndfieldPoolAnalysis(
@@ -189,13 +206,25 @@ public sealed record EndfieldPoolAnalysis(
     string BannerAssetFileName,
     IReadOnlyList<EndfieldSixStarPull> SixStarPulls,
     int? FeaturedPaidDrawNumber,
-    bool HasFreeFeatured)
+    bool HasFreeFeatured,
+    string PoolKey = "",
+    string? PoolVersion = null,
+    int? SeriesPaidDrawCount = null,
+    bool SeriesUpRecorded = false,
+    string SeriesKey = "",
+    IReadOnlyList<EndfieldPoolAnalysis>? PreviousPhases = null)
 {
+    public int PreviousPhaseCount => PreviousPhases?.Count ?? 0;
+
+    public string PreviousPhaseLabel => $"往期记录 · {PreviousPhaseCount} 期";
+
     public string CountText => $"{DrawCount} 抽 · {SixStarPulls.Count} 六星";
 
-    public string DetailText => FreeDrawCount > 0
-        ? $"计数 {PaidDrawCount} · 免费 {FreeDrawCount}（六星 {FreeSixStarCount}）"
-        : $"计数 {PaidDrawCount} · 免费无记录";
+    public string DetailText => Category == EndfieldPoolCategory.Refactor
+        ? $"本期计数 {PaidDrawCount} · 同名累计 {SeriesPaidDrawCount ?? PaidDrawCount} · 免费 {FreeDrawCount}（六星 {FreeSixStarCount}）"
+        : FreeDrawCount > 0
+            ? $"计数 {PaidDrawCount} · 免费 {FreeDrawCount}（六星 {FreeSixStarCount}）"
+            : $"计数 {PaidDrawCount} · 免费无记录";
 
     public string FeaturedText => FeaturedOperatorName is null ? Category switch
     {
@@ -212,8 +241,13 @@ public sealed record EndfieldPoolAnalysis(
                 ? "仅免费出"
                 : "未见";
 
-    public string StatusText => FeaturedOperatorName is null
-        ? RuleText
+    public string RefactorSeriesStatus => SeriesUpRecorded ? "已出" :
+        SeriesPaidDrawCount is >= 120 ? "待核对" : $"{SeriesPaidDrawCount ?? 0}/120";
+
+    public string StatusText => Category == EndfieldPoolCategory.Refactor
+        ? FeaturedOperatorName is null ? "重构共用 80 · 同名首次 UP 待核对"
+            : $"重构共用 80 · 同名首次 UP {RefactorSeriesStatus} · {FeaturedOperatorName} 本期{FeaturedObservationText}"
+        : FeaturedOperatorName is null ? RuleText
         : $"{RuleText} · {FeaturedOperatorName} {FeaturedObservationText}";
 
     public string OperatorSummary => SixStarPulls.Count == 0
@@ -238,7 +272,8 @@ public sealed record EndfieldSixStarPull(
     bool IsFree,
     DateTimeOffset? ObtainedAt,
     bool IsFeatured = false,
-    string PoolId = "")
+    string PoolId = "",
+    string PoolKey = "")
 {
     public string OperatorDisplayName => IsFree ? $"{OperatorName}（免费）" : OperatorName;
 

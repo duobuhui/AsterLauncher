@@ -4,9 +4,17 @@ Beta 0.1.0 source control and the single-file Release include 26 publisher-media
 
 AsterLauncher contains no Starward artwork, icons, or branding. Packaged game media has an explicit source and may be replaced by users through Game Settings.
 
-The v0.7 theme presets are original color definitions in XAML/C#. Their names do not add any game artwork, logos, or other third-party media. The wallpaper reuse change only caches the already documented local assets in memory for the running process.
+The v0.7 theme presets are original color definitions in XAML/C#. Their names do not add any game artwork, logos, or other third-party media.
+
+## Beta 0.1.2 publisher media update (2026-09-28)
+
+- The launcher checks wallpaper metadata once after startup. HoYoPlay's [official game list](https://hyp-api.mihoyo.com/hyp/hyp-connect/api/getGames?launcher_id=jGHBHlcOq1&language=zh-cn) supplies the current background URLs for 原神、崩坏3、星穹铁道、绝区零、星布谷地. [终末地官网](https://endfield.hypergryph.com/) supplies the newest version-update cover; [明日方舟官网](https://ak.hypergryph.com/) supplies its current preloaded homepage hero. The returned publisher CDN images are converted to JPEG by the publishers' image endpoints and cached under `Data/artwork/cloud/`. These runtime cache files are not part of the Git release. An unchanged source URL reuses the cached file; a failed check keeps the previous image. User-selected artwork and user data artwork take priority, followed by the cloud cache and then the attributed packaged fallback below. This is a public-media request, with no account authorization data.
+- Sidebar/game-library icons stay in the package. The existing 13 Endfield pool banners and original fallback texture also stay in the package; neither is fetched at runtime.
+- The release now bundles **88 Star Rail character portraits** from the [official character page](https://sr.mihoyo.com/character) and its [publisher content service](https://act-api-takumi-static.mihoyo.com/content_v2_user/app/1963de8dc19e461c/getContentList?iChanId=253&iPageSize=999&iPage=1&sLangKey=zh-cn), plus **33 Endfield operator portraits** from the [official operator page](https://endfield.hypergryph.com/operator). Each downloaded file's exact official CDN URL, character name, and source page are recorded in [`portrait-index.json`](src/AsterLauncher.App/Assets/Games/Gacha/Portraits/portrait-index.json). `eng/update-character-portraits.ps1` refreshes this index from those publisher sources. These images are publisher artwork, with copyright retained by miHoYo/HoYoverse or Hypergryph. Packaging follows the project owner's confirmed redistribution authorization; the AsterLauncher or Starward source license does not grant image rights. Unknown characters and light cones use the existing glyph fallback.
 
 The 2026-09-24 Endfield record-response investigation used no media or artwork and introduced no new packaged assets. Publisher media rights remain as described below.
+
+The 2026-09-28 Re-Factor phase and pity update studied the official [rules](https://endfield.hypergryph.com/news/4776) and [绚丽异彩 notice](https://endfield.hypergryph.com/news/2651). It introduced no new images or packaged assets. The existing `refactor-vivid.png` remains attributed below; its publisher rights are unchanged. Unknown future Re-Factor cards use the original `endfield-pool-card.svg` until a verified banner and rights record are added.
 
 The six-star analysis table uses only local record text and the project's existing color resources. No GitHub artwork, operator portraits, or third-party UI assets were imported.
 
@@ -27,7 +35,7 @@ The four 2560x1440 PNG files are lossless local conversions of pure-background W
 - `honkai-star-rail.png`: `output/hoyoplay_cn_pure/hkrpg_cn/2026/08/17/b3811afc4a6a4e7e3879c830329f8ae2_4041979032811000021.webp`
 - `zenless-zone-zero.png`: `output/hoyoplay_cn_pure/nap_cn/2026/08/26/86fa3b52c96b8835f8b7f1f967efac28_8820261911238438183.webp`
 
-Petit Planet retains the original AsterLauncher gradient placeholder because no stable production launcher asset and executable contract were verified. Custom user artwork always takes priority over packaged media.
+Petit Planet retains the original AsterLauncher gradient as its packaged offline fallback because no stable production executable contract was verified. The current HoYoPlay image can be cached at runtime. Custom user artwork always takes priority over downloaded and packaged media.
 
 ## Official website identity icons (retrieved 2026-09-23)
 
@@ -62,4 +70,8 @@ For later versions or additional assets, review the scope of permission again. S
 | `refactor-vivid.png` | 绚丽异彩重构寻访 | [2651](https://endfield.hypergryph.com/news/2651) | [CDN](https://web.hycdn.cn/upload/image/20260921/394fc7fba6fed31434e0c65f69ecdecd.png) |
 | `celebration.jpg` | 辉光庆典 | [9342](https://endfield.hypergryph.com/news/9342) | [CDN](https://web.hycdn.cn/upload/image/20260429/1f7ef0a09bd76ca66e1438efc7cde069.jpg) |
 
-- Each expanded six-star row currently uses an original XAML portrait placeholder. The user-supplied Starward reference screenshot is not packaged. If portraits are added later, record the exact source and verify redistribution rights before packaging them; publisher character artwork is not licensed by another repository's source-code license.
+- Expanded six-star rows use the bundled official operator portraits when the recorded name matches the catalog above; unmatched names retain the original XAML glyph. The user-supplied Starward reference screenshot is not packaged.
+
+## Star Rail history preview (2026-09-28)
+
+- Five-star character rows use the bundled official portraits listed above; light cones and unmatched names retain the project-authored XAML glyph. The user-supplied Starward screenshot is a density reference only and is not bundled. Cards use existing theme brushes. UIGF record data and official rule notices are factual references, not artwork sources.

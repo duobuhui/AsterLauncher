@@ -25,6 +25,13 @@ internal static class EndfieldGachaAnalyzer
                 ?? ReadText(record, "poolName", "pool_name")
                 ?? "未分类卡池";
             var poolName = ReadText(record, "poolName", "pool_name") ?? poolId;
+            var poolVersion = ReadText(record, "poolVersion", "pool_version");
+            var definition = EndfieldPoolCatalog.Resolve(poolId, poolName);
+            // The observed rerun record includes poolVersion; later phases may reuse poolId/name.
+            // Without a version, a distinct suffixed name is the only safe fallback.
+            var poolKey = definition.Category == EndfieldPoolCategory.Refactor
+                ? $"{poolId}\u001f{poolVersion ?? poolName}"
+                : poolId;
             var timestamp = ReadLong(record, "gachaTs", "gacha_ts");
             if (timestamp is > 0 and < 100_000_000_000)
             {
@@ -34,6 +41,9 @@ internal static class EndfieldGachaAnalyzer
             draws.Add(new DrawRecord(
                 poolId,
                 poolName,
+                poolVersion,
+                poolKey,
+                definition,
                 ReadText(record, "charName", "nameText", "name") ?? "未知干员",
                 rarity,
                 ReadBoolean(record, "isFree", "is_free"),
@@ -42,27 +52,27 @@ internal static class EndfieldGachaAnalyzer
                 index++));
         }
 
+        var orderedDraws = draws.OrderBy(item => item.Timestamp)
+            .ThenBy(item => item.Sequence)
+            .ThenBy(item => item.Index).ToArray();
         var poolDrawCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var countedDrawsSinceSixStar = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var sixStars = new List<EndfieldSixStarPull>();
-        var orderedDraws = draws.OrderBy(item => item.Timestamp)
-                     .ThenBy(item => item.Sequence)
-                     .ThenBy(item => item.Index).ToArray();
-        var definitions = orderedDraws.GroupBy(item => item.PoolId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key,
-                group => EndfieldPoolCatalog.Resolve(group.Key, group.Last().PoolName),
-                StringComparer.OrdinalIgnoreCase);
         foreach (var draw in orderedDraws)
         {
-            poolDrawCounts.TryGetValue(draw.PoolId, out var count);
-            var poolDrawNumber = count + 1;
-            poolDrawCounts[draw.PoolId] = poolDrawNumber;
-            countedDrawsSinceSixStar.TryGetValue(draw.PoolId, out var countedDraws);
+            poolDrawCounts.TryGetValue(draw.PoolKey, out var poolCount);
+            var poolDrawNumber = poolCount + 1;
+            poolDrawCounts[draw.PoolKey] = poolDrawNumber;
+
+            // Six-star pity follows the guarantee family, not an individual rerun phase.
+            var family = draw.Definition.PityFamily;
+            countedDrawsSinceSixStar.TryGetValue(family, out var countedDraws);
             if (!draw.IsFree)
             {
                 countedDraws++;
-                countedDrawsSinceSixStar[draw.PoolId] = countedDraws;
+                countedDrawsSinceSixStar[family] = countedDraws;
             }
+
             if (draw.Rarity != 6)
             {
                 continue;
@@ -75,23 +85,26 @@ internal static class EndfieldGachaAnalyzer
                 countedDraws,
                 draw.IsFree,
                 ToDateTime(draw.Timestamp),
-                string.Equals(draw.OperatorName, definitions[draw.PoolId].FeaturedOperator, StringComparison.Ordinal),
-                PoolId: draw.PoolId));
+                string.Equals(draw.OperatorName, draw.Definition.FeaturedOperator, StringComparison.Ordinal),
+                PoolId: draw.PoolId,
+                PoolKey: draw.PoolKey));
             if (!draw.IsFree)
             {
-                countedDrawsSinceSixStar[draw.PoolId] = 0;
+                countedDrawsSinceSixStar[family] = 0;
             }
         }
 
-        var pools = orderedDraws.GroupBy(item => item.PoolId, StringComparer.OrdinalIgnoreCase)
+        var phasePools = orderedDraws.GroupBy(item => item.PoolKey, StringComparer.OrdinalIgnoreCase)
             .Select(group =>
             {
-                var poolSixStars = sixStars.Where(item => string.Equals(item.PoolId, group.Key, StringComparison.OrdinalIgnoreCase))
-                    .Reverse().ToArray();
-                var definition = definitions[group.Key];
+                var last = group.Last();
+                var definition = last.Definition;
                 var featuredName = definition.FeaturedOperator;
-                var upSeriesDraws = definition.Category == EndfieldPoolCategory.Refactor
-                    ? orderedDraws.Where(item => definitions[item.PoolId].UpSeries == definition.UpSeries)
+                var poolSixStars = sixStars
+                    .Where(item => string.Equals(item.PoolKey, group.Key, StringComparison.OrdinalIgnoreCase))
+                    .Reverse().ToArray();
+                IEnumerable<DrawRecord> upSeriesDraws = definition.Category == EndfieldPoolCategory.Refactor
+                    ? orderedDraws.Where(item => string.Equals(item.Definition.UpSeries, definition.UpSeries, StringComparison.OrdinalIgnoreCase))
                     : group;
                 var paidPosition = 0;
                 int? featuredPaidPosition = null;
@@ -103,7 +116,7 @@ internal static class EndfieldGachaAnalyzer
                         paidPosition++;
                     }
 
-                    if (!string.Equals(draw.PoolId, group.Key, StringComparison.OrdinalIgnoreCase)
+                    if (!string.Equals(draw.PoolKey, group.Key, StringComparison.OrdinalIgnoreCase)
                         || !string.Equals(draw.OperatorName, featuredName, StringComparison.Ordinal))
                     {
                         continue;
@@ -118,9 +131,22 @@ internal static class EndfieldGachaAnalyzer
                         featuredPaidPosition ??= paidPosition;
                     }
                 }
+
+                var seriesPaidCount = definition.Category == EndfieldPoolCategory.Refactor
+                    ? orderedDraws.Count(item => !item.IsFree
+                        && string.Equals(item.Definition.UpSeries, definition.UpSeries, StringComparison.OrdinalIgnoreCase))
+                    : (int?)null;
+                var seriesUpRecorded = definition.Category == EndfieldPoolCategory.Refactor
+                    && featuredName is not null
+                    && orderedDraws.Any(item => !item.IsFree
+                        && string.Equals(item.Definition.UpSeries, definition.UpSeries, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(item.OperatorName, featuredName, StringComparison.Ordinal));
+                var displayName = definition.Category == EndfieldPoolCategory.Refactor
+                    ? EndfieldPoolCatalog.RefactorDisplayName(last.PoolName, last.PoolVersion)
+                    : last.PoolName;
                 return new EndfieldPoolAnalysis(
-                    group.Key,
-                    group.Last().PoolName,
+                    last.PoolId,
+                    displayName,
                     group.Count(),
                     group.Count(item => !item.IsFree),
                     group.Count(item => item.IsFree),
@@ -130,39 +156,75 @@ internal static class EndfieldGachaAnalyzer
                     definition.BannerAssetFileName,
                     poolSixStars,
                     featuredPaidPosition,
-                    hasFreeFeatured);
+                    hasFreeFeatured,
+                    PoolKey: group.Key,
+                    PoolVersion: last.PoolVersion,
+                    SeriesPaidDrawCount: seriesPaidCount,
+                    SeriesUpRecorded: seriesUpRecorded,
+                    SeriesKey: definition.UpSeries);
             })
             .OrderBy(item => item.Category == EndfieldPoolCategory.Standard ? 1 : 0)
-            .ThenByDescending(item => orderedDraws.Last(draw => string.Equals(draw.PoolId, item.PoolId, StringComparison.OrdinalIgnoreCase)).Timestamp)
+            .ThenByDescending(item => orderedDraws.Last(draw =>
+                string.Equals(draw.PoolKey, item.PoolKey, StringComparison.OrdinalIgnoreCase)).Timestamp)
+            .ToArray();
+
+        // Keep one visible card per named rerun series. Phase records remain separate in
+        // the archive and analysis; only the newest phase is visible until history opens.
+        var pools = phasePools.GroupBy(item => item.Category == EndfieldPoolCategory.Refactor
+                ? item.SeriesKey : item.PoolKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                if (group.First().Category != EndfieldPoolCategory.Refactor)
+                {
+                    return group.First();
+                }
+
+                var phases = group.OrderByDescending(item => EndfieldPoolCatalog.RefactorPhaseNumber(
+                        item.PoolName, item.PoolVersion))
+                    .ThenByDescending(item => orderedDraws.Last(draw => string.Equals(
+                        draw.PoolKey, item.PoolKey, StringComparison.OrdinalIgnoreCase)).Timestamp)
+                    .ToArray();
+                return phases[0] with { PreviousPhases = phases.Skip(1).ToArray() };
+            })
             .ToArray();
 
         var pityCounters = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var draw in orderedDraws.Where(item => !item.IsFree))
         {
-            var family = definitions[draw.PoolId].PityFamily;
+            var family = draw.Definition.PityFamily;
             pityCounters.TryGetValue(family, out var count);
             pityCounters[family] = draw.Rarity == 6 ? 0 : count + 1;
         }
 
         var lastLimitedDraw = orderedDraws.LastOrDefault(item =>
-            definitions[item.PoolId].Category is EndfieldPoolCategory.Chartered or EndfieldPoolCategory.Refactor);
-        var limitedFamily = lastLimitedDraw is null ? null : definitions[lastLimitedDraw.PoolId].PityFamily;
+            item.Definition.Category is EndfieldPoolCategory.Chartered or EndfieldPoolCategory.Refactor);
+        var limitedFamily = lastLimitedDraw?.Definition.PityFamily;
         var latestUpPool = pools.FirstOrDefault(item =>
             item.Category is EndfieldPoolCategory.Chartered or EndfieldPoolCategory.Refactor);
-        var upSeries = latestUpPool is null ? null : definitions[latestUpPool.PoolId].UpSeries;
+        var latestUpDraw = latestUpPool is null ? null : orderedDraws.Last(item =>
+            string.Equals(item.PoolKey, latestUpPool.PoolKey, StringComparison.OrdinalIgnoreCase));
+        var upSeries = latestUpDraw?.Definition.UpSeries;
         var upPaidCount = upSeries is null ? 0 : orderedDraws.Count(item =>
-            !item.IsFree && definitions[item.PoolId].UpSeries == upSeries);
-        var upRecorded = latestUpPool is not null && orderedDraws.Any(item =>
+            !item.IsFree && string.Equals(item.Definition.UpSeries, upSeries, StringComparison.OrdinalIgnoreCase));
+        var upKnown = latestUpPool?.FeaturedOperatorName is not null;
+        var upRecorded = upKnown && orderedDraws.Any(item =>
             !item.IsFree
-            && definitions[item.PoolId].UpSeries == upSeries
-            && string.Equals(item.OperatorName, latestUpPool.FeaturedOperatorName, StringComparison.Ordinal));
+            && string.Equals(item.Definition.UpSeries, upSeries, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(item.OperatorName, latestUpPool!.FeaturedOperatorName, StringComparison.Ordinal));
+        var isRefactor = latestUpPool?.Category == EndfieldPoolCategory.Refactor;
+        var upPoolName = isRefactor && latestUpDraw is not null
+            ? EndfieldPoolCatalog.RefactorSeriesName(latestUpDraw.PoolName)
+            : latestUpPool?.PoolName;
         var pity = new EndfieldPityOverview(
             pityCounters.TryGetValue("standard", out var standardCount) ? standardCount : null,
             limitedFamily is not null && pityCounters.TryGetValue(limitedFamily, out var limitedCount) ? limitedCount : null,
             limitedFamily switch { "chartered" => "特许", "refactor" => "重构", _ => null },
-            latestUpPool?.PoolName,
+            upPoolName,
             latestUpPool is not null && !upRecorded && upPaidCount < 120 ? 120 - upPaidCount : null,
-            upRecorded);
+            upRecorded,
+            latestUpPool is null ? null : upPaidCount,
+            isRefactor,
+            upKnown);
 
         return new EndfieldGachaAnalysis(
             draws.Count,
@@ -209,6 +271,9 @@ internal static class EndfieldGachaAnalyzer
     private sealed record DrawRecord(
         string PoolId,
         string PoolName,
+        string? PoolVersion,
+        string PoolKey,
+        EndfieldPoolDefinition Definition,
         string OperatorName,
         long Rarity,
         bool IsFree,

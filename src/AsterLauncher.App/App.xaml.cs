@@ -35,11 +35,30 @@ public partial class App : Application
             _window = _services.GetRequiredService<MainWindow>();
             MainWindow = _window;
             _window.Activate();
+            _ = RefreshWallpapersAsync();
         }
         catch (Exception exception)
         {
             _services.GetRequiredService<ILogger<App>>().LogCritical(exception, "Application startup failed");
             throw;
+        }
+    }
+
+    private async Task RefreshWallpapersAsync()
+    {
+        try
+        {
+            var updated = await _services.GetRequiredService<WallpaperUpdateService>().RefreshOnceAsync();
+            if (updated.Count > 0)
+            {
+                _window?.DispatcherQueue.TryEnqueue(() =>
+                    _services.GetRequiredService<LauncherViewModel>().RefreshArtwork(updated));
+            }
+        }
+        catch (Exception exception)
+        {
+            _services.GetRequiredService<ILogger<App>>().LogWarning(
+                "Wallpaper update ended with {ErrorType}", exception.GetType().Name);
         }
     }
 
@@ -67,6 +86,15 @@ public partial class App : Application
         services.AddSingleton<IUigfArchiveService, UigfArchiveService>();
         services.AddSingleton<IEndfieldGachaArchiveService, EndfieldGachaArchiveService>();
         services.AddSingleton<LauncherUpdateService>();
+        services.AddSingleton(provider => new WallpaperUpdateService(
+            new HttpClient(new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                UseDefaultCredentials = false
+            }) { Timeout = TimeSpan.FromSeconds(20) },
+            LauncherDataPaths.ResolveDataDirectory(),
+            provider.GetRequiredService<ILogger<WallpaperUpdateService>>()));
 
         services.AddSingleton<LauncherViewModel>();
         services.AddSingleton<GameLibraryViewModel>();

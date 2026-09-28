@@ -1,5 +1,11 @@
 # Milestones
 
+## Beta 0.1.2 - publisher wallpaper refresh and bundled portraits
+
+- Check the supported publishers' current wallpaper metadata once per startup. Download only changed JPEGs to the configured local data directory, keep the last valid cache for offline use, and leave user-selected art in priority. Switching games performs no wallpaper request.
+- Keep game identity icons and Endfield pool images bundled. Bundle 88 official Star Rail character portraits and 33 official Endfield operator portraits, with an exact official source manifest and glyph fallback for unmatched records.
+- Carry the unreleased Re-Factor phase grouping and Star Rail history display into this beta after build, tests, packaged-app launch, and screenshot verification. Live Star Rail sync remains dependent on the game's current authorization cache and official endpoint response.
+
 ## Beta 0.1.1 - portable data and launch correction
 
 - Resolve persistent data from the installed EXE directory, migrate the previous single-file temporary data copy on first use, and allow relocation to a selected empty directory.
@@ -109,3 +115,21 @@
 - Added game icons in both lists and drag-based ordering in place of the row of arrow buttons.
 - Added confirmed one-click cleanup for uninstalled visible games: hide built-ins, remove custom configuration and profiles, retain game files.
 - Enforced a 960×540 DIP minimum client area at the window's DPI while preserving 16:9 interactive resize behavior.
+
+## Beta 0.1.1 follow-up (included in Beta 0.1.2)
+
+- Pace HoYo history requests and retry temporary `-110` responses for ordinary pools. Star Rail categories 21/22 may still return `-110`; report their unavailability and retain records from successful categories.
+- Default Endfield history sync to a local-record checkpoint, with a separate full-sync button for older gaps. Record identity includes pool and sequence so one pool does not stop another.
+
+## Re-Factor pool follow-up (included in Beta 0.1.2)
+
+- Key Endfield Re-Factor archive records and phase projections by `poolId` plus `poolVersion`, so later same-name phases retain separate lists even if the raw pool ID repeats. Display one named-series card with the newest phase visible and older phases behind an inline expander.
+- Carry the shared 80 six-star count across all Re-Factor phases; carry the first 120 paid UP count only across a same-name series and show both in the compact top strip. Exclude free ten results. Unknown future Re-Factor IDs use generic rules without guessing their featured operator or banner.
+- The 2026-09-28 local archive contained only `绚丽异彩` phase 1. Multi-phase grouping and history expansion were checked with synthetic records; an actual later-phase sync remains unverified.
+
+## Star Rail history display follow-up (included in Beta 0.1.2)
+
+- Added a read-only UIGF hkrpg analysis and dense Star Rail page with separate per-UID character, light-cone, Standard, departure, and special-category groups. Banner cards group exact gacha_id; five-star intervals and local pity waterlines carry across IDs within the same ordinary category.
+- Replaced large banner cards with visible five-star progress rows, compact rarity and average statistics, and a secondary exact-banner-ID expander. Character history fills two row columns when room allows; the other categories stack beside it. Rows reserve portrait space and fill a 90/80 reference bar; high counts turn dark red.
+- A missing banner-name/featured-item catalog means UP win/loss and next-featured guarantees remain unclassified. The first locally observed interval is a lower bound. The page does not change Star Rail capture behavior; the user's real-time sync failure needs separate validation.
+- Tested analysis with independent accounts/categories and an across-banner five-star interval. Previewed the WinUI page from an isolated copy of an existing 1,118-record UIGF archive; actual in-game sync and multi-account UI remain unverified.
