@@ -167,7 +167,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             var state = State(channel);
             state.RemoteVersion = package.Version;
             state.HasTrustedPlan = true;
-            state.Plan = $"缺失 {plan.Missing.Count} · 损坏 {plan.Corrupt.Count} · 需下载 {FormatBytes(plan.DownloadBytes)} · 预留空间至少 {FormatBytes(plan.EstimatedRequiredFreeBytes)}（共享复用后重算）";
+            state.Plan = $"缺失 {plan.Missing.Count} · 损坏 {plan.Corrupt.Count} · 需下载 {FormatBytes(plan.DownloadBytes)} · 预留空间 {FormatBytes(plan.EstimatedRequiredFreeBytes)}";
             state.Patch = package.PrePatch;
             state.Preload = package.PrePatch is null ? "未开放" : $"可预下载至 {package.PrePatch.TargetVersion}";
             SetStage(channel, "检查完成");
@@ -307,14 +307,14 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         var second = _launcher.OtherEndfieldInstallation;
         if (first?.InstallRoot is not { Length: > 0 } || second?.InstallRoot is not { Length: > 0 })
         {
-            State(channel).Sharing = "两服设置独立目录后可扫描共享资源";
+            State(channel).Sharing = "设置两服目录后可扫描";
             if (Channel == channel) Refresh();
             return;
         }
         try
         {
             var summary = await _service.GetSharingAsync(first, second);
-            State(channel).Sharing = $"真实硬链接 {summary.FileCount} 个 · 共享 {FormatBytes(summary.SharedBytes)} · 预计节省 {FormatBytes(summary.EstimatedSavedBytes)}";
+            State(channel).Sharing = $"硬链接 {summary.FileCount} 个 · 共享 {FormatBytes(summary.SharedBytes)} · 预计节省 {FormatBytes(summary.EstimatedSavedBytes)}";
         }
         catch (Exception)
         {
@@ -338,7 +338,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                 return;
             }
             var summary = await _service.OptimizeAsync(first, second, token);
-            State(channel).Sharing = $"真实硬链接 {summary.FileCount} 个 · 共享 {FormatBytes(summary.SharedBytes)} · 预计节省 {FormatBytes(summary.EstimatedSavedBytes)}";
+            State(channel).Sharing = $"硬链接 {summary.FileCount} 个 · 共享 {FormatBytes(summary.SharedBytes)} · 预计节省 {FormatBytes(summary.EstimatedSavedBytes)}";
             if (Channel == channel) Refresh();
         });
     }

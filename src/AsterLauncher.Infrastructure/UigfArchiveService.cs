@@ -161,7 +161,8 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         string gameId,
         string executablePath,
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool fullRefresh = false)
     {
         if (!CaptureDefinitions.TryGetValue(gameId, out var definition))
         {
@@ -189,7 +190,26 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
             }
 
             progress?.Report("已找到本地链接，正在通过官方接口同步…");
-            var (records, unavailableTypes) = await FetchAllAsync(capturedUrl, definition, progress, cancellationToken).ConfigureAwait(false);
+            var existing = File.Exists(ArchivePath)
+                ? await ReadRootAsync(ArchivePath, cancellationToken).ConfigureAwait(false)
+                : NewRoot();
+            var knownRecords = new HashSet<(string Uid, string Type, string Id)>();
+            if (definition.UigfKey == "hkrpg" && !fullRefresh)
+            {
+                foreach (var user in (existing["hkrpg"] as JsonArray ?? []).OfType<JsonObject>())
+                {
+                    var uid = user["uid"]?.GetValue<string>() ?? string.Empty;
+                    foreach (var record in (user["list"] as JsonArray ?? []).OfType<JsonObject>())
+                    {
+                        var type = record["gacha_type"]?.GetValue<string>() ?? string.Empty;
+                        var id = record["id"]?.GetValue<string>() ?? string.Empty;
+                        if (uid.Length > 0 && type.Length > 0 && id.Length > 0)
+                            knownRecords.Add((uid, type, id));
+                    }
+                }
+            }
+            var (records, unavailableTypes) = await FetchAllAsync(
+                capturedUrl, definition, knownRecords, progress, cancellationToken).ConfigureAwait(false);
             var unavailableNote = unavailableTypes.Count == 0
                 ? string.Empty
                 : $"类别 {string.Join("、", unavailableTypes)} 暂不可用（官方返回 -110）。";
@@ -238,7 +258,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         }
     }
 
-    private async Task<(List<JsonObject> Records, List<string> UnavailableTypes)> FetchAllAsync(Uri capturedUrl, CaptureDefinition definition, IProgress<string>? progress, CancellationToken cancellationToken)
+    private async Task<(List<JsonObject> Records, List<string> UnavailableTypes)> FetchAllAsync(Uri capturedUrl, CaptureDefinition definition, HashSet<(string Uid, string Type, string Id)> knownRecords, IProgress<string>? progress, CancellationToken cancellationToken)
     {
         var result = new List<JsonObject>();
         var unavailableTypes = new List<string>();
@@ -282,6 +302,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
                 }
 
                 string? nextEndId = null;
+                var reachedKnownRecord = false;
                 foreach (var item in list.EnumerateArray())
                 {
                     var node = JsonNode.Parse(item.GetRawText()) as JsonObject;
@@ -292,10 +313,15 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
 
                     result.Add(node);
                     nextEndId = node["id"]?.GetValue<string>();
+                    var uid = node["uid"]?.GetValue<string>() ?? string.Empty;
+                    var type = node["gacha_type"]?.GetValue<string>() ?? gachaType;
+                    if (!string.IsNullOrWhiteSpace(nextEndId) && type == gachaType
+                        && knownRecords.Contains((uid, type, nextEndId)))
+                        reachedKnownRecord = true;
                 }
 
                 progress?.Report($"正在同步 {gachaType}：已读取 {result.Count} 条…");
-                if (string.IsNullOrWhiteSpace(nextEndId) || nextEndId == endId)
+                if (reachedKnownRecord || string.IsNullOrWhiteSpace(nextEndId) || nextEndId == endId)
                 {
                     break;
                 }

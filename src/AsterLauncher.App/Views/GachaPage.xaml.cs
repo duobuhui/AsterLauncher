@@ -48,8 +48,8 @@ public sealed partial class GachaPage : Page
             or BuiltInGameIds.HonkaiStarRail
             or BuiltInGameIds.ZenlessZoneZero;
         CaptureButton.Visibility = isEndfield || supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
-        CaptureButton.Content = isEndfield ? "增量同步" : "同步记录";
-        FullCaptureButton.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
+        CaptureButton.Content = isEndfield || isStarRail ? "增量同步" : "同步记录";
+        FullCaptureButton.Visibility = isEndfield || isStarRail ? Visibility.Visible : Visibility.Collapsed;
         ImportButton.Content = isEndfield ? "导入终末地 JSON" : "导入 UIGF v4 JSON";
         ExportButton.Content = isEndfield ? "导出终末地 JSON" : "导出 UIGF v4.2 JSON";
         ExportCsvButton.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
@@ -253,17 +253,20 @@ public sealed partial class GachaPage : Page
 
     private async void FullCapture_OnClick(object sender, RoutedEventArgs e)
     {
-        await RunAsync(() => _endfieldArchive.CaptureFromGameAsync(
-            new Progress<string>(message =>
-            {
-                ResultInfo.Title = "正在全量同步";
-                ResultInfo.Message = message;
-                ResultInfo.Severity = InfoBarSeverity.Informational;
-                ResultInfo.IsOpen = true;
-            }),
-            fullRefresh: true));
+        var game = _launcher.CurrentGame;
+        if (game is null) return;
+        var progress = new Progress<string>(message =>
+        {
+            ResultInfo.Title = "正在全量同步";
+            ResultInfo.Message = message;
+            ResultInfo.Severity = InfoBarSeverity.Informational;
+            ResultInfo.IsOpen = true;
+        });
+        await RunAsync(() => game.Id == BuiltInGameIds.Endfield
+            ? _endfieldArchive.CaptureFromGameAsync(progress, fullRefresh: true)
+            : _archive.CaptureFromGameAsync(
+                game.Id, game.State.ExecutablePath ?? string.Empty, progress, fullRefresh: true));
     }
-
     private async void Import_OnClick(object sender, RoutedEventArgs e)
     {
         var path = await _filePicker.PickJsonAsync(App.MainWindow);

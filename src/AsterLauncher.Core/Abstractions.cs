@@ -101,7 +101,8 @@ public interface IUigfArchiveService
         string gameId,
         string executablePath,
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool fullRefresh = false);
 }
 
 public sealed record UigfArchiveSummary(

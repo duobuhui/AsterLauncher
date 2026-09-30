@@ -59,6 +59,11 @@ public sealed partial class GameLibraryPage : Page
         {
             if (args.PropertyName == nameof(EndfieldMaintenanceViewModel.CanPreload))
                 EndfieldPreloadItem.Visibility = _endfield.CanPreload ? Visibility.Visible : Visibility.Collapsed;
+            if (args.PropertyName is nameof(EndfieldMaintenanceViewModel.PlanText)
+                or nameof(EndfieldMaintenanceViewModel.StageText)
+                or nameof(EndfieldMaintenanceViewModel.SharingText)
+                or nameof(EndfieldMaintenanceViewModel.PreloadText))
+                DispatcherQueue.TryEnqueue(RefreshLaunchSurfaceLayout);
         };        _launcher.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(LauncherViewModel.SelectedEndfieldChannel))
@@ -105,6 +110,12 @@ public sealed partial class GameLibraryPage : Page
 #if DEBUG
             if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_EXPANDED") == "1")
                 DispatcherQueue.TryEnqueue(() => SetLaunchExpanded(true));
+            if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_CONTEXT") == "1")
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (GameList.ContainerFromItem(ViewModel.CurrentGame) is FrameworkElement item)
+                        item.ContextFlyout?.ShowAt(item);
+                });
 #endif
         }
         catch (Exception exception)
@@ -205,6 +216,7 @@ public sealed partial class GameLibraryPage : Page
         transition.Completed += (_, _) =>
         {
             if (revision != _contentRevision) return;
+            transition.Stop();
             outgoing.Visibility = Visibility.Collapsed;
             if (outgoing is Frame oldFrame) oldFrame.Content = null;
             outgoing.Opacity = 1;
@@ -236,17 +248,10 @@ public sealed partial class GameLibraryPage : Page
         if (changed && game.Id == BuiltInGameIds.Endfield) await _endfield.CheckVersionAsync();
     }
 
-    private async void OfficialChannel_OnClick(object sender, RoutedEventArgs e)
+    private async Task SelectChannelAsync(GameCardViewModel game, EndfieldChannel channel)
     {
-        await _launcher.SelectEndfieldChannelAsync(EndfieldChannel.Official);
-        UpdateEndfieldControls();
-        await _endfield.CheckVersionAsync();
-        await _endfield.ScanSharingAsync();
-    }
-
-    private async void BilibiliChannel_OnClick(object sender, RoutedEventArgs e)
-    {
-        await _launcher.SelectEndfieldChannelAsync(EndfieldChannel.Bilibili);
+        await SelectContextGameAsync(game);
+        await _launcher.SelectEndfieldChannelAsync(channel);
         UpdateEndfieldControls();
         await _endfield.CheckVersionAsync();
         await _endfield.ScanSharingAsync();
@@ -256,15 +261,120 @@ public sealed partial class GameLibraryPage : Page
     {
         var selected = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
         EndfieldPanel.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-        var accent = (Brush)Application.Current.Resources["ThemeAccentSoftBrush"];
-        OfficialChannelButton.Background = _launcher.SelectedEndfieldChannel == EndfieldChannel.Official
-            ? accent : new SolidColorBrush(Colors.Transparent);
-        BilibiliChannelButton.Background = _launcher.SelectedEndfieldChannel == EndfieldChannel.Bilibili
-            ? accent : new SolidColorBrush(Colors.Transparent);
-        if (_isLaunchExpanded && _launchTransition is null)
-            LaunchSurface.Height = GetExpandedLaunchHeight();
+        MaintenanceDivider.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+        MaintenanceColumn.Width = selected ? new GridLength(1.4, GridUnitType.Star) : new GridLength(0);
+        LaunchExpansionContent.ColumnSpacing = selected ? 24 : 0;
+        RefreshLaunchSurfaceLayout();
     }
 
+    private async Task SelectContextGameAsync(GameCardViewModel game)
+    {
+        if (!ReferenceEquals(game, ViewModel.CurrentGame))
+            await ViewModel.SelectGameAsync(game);
+        GameList.SelectedItem = game;
+        UpdateEndfieldControls();
+    }
+
+    private MenuFlyout CreateGameContextMenu(GameCardViewModel game)
+    {
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Resources["GameContextMenuStyle"] };
+        MenuFlyoutItem Add(string text, Func<Task> action, bool enabled = true)
+        {
+            var item = new MenuFlyoutItem { Text = text, IsEnabled = enabled };
+            item.Click += async (_, _) =>
+            {
+                try { await action(); }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Game context action failed");
+                    await ShowMessageAsync("操作未完成", "请查看日志，或重新选择游戏后重试。");
+                }
+            };
+            menu.Items.Add(item);
+            return item;
+        }
+        Add("打开游戏页面", async () => { await SelectContextGameAsync(game); ShowFeature("overview"); });
+        if (game.Id == BuiltInGameIds.Endfield)
+        {
+            var channels = new MenuFlyoutSubItem { Text = "服务器" };
+            foreach (var channel in new[] { EndfieldChannel.Official, EndfieldChannel.Bilibili })
+            {
+                var item = new ToggleMenuFlyoutItem
+                {
+                    Text = channel == EndfieldChannel.Official ? "官服" : "哔哩哔哩服",
+                    Tag = channel,
+                    IsChecked = _launcher.SelectedEndfieldChannel == channel
+                };
+                item.Click += async (_, _) =>
+                {
+                    try { await SelectChannelAsync(game, channel); }
+                    catch (Exception exception)
+                    {
+                        _logger.LogError(exception, "Channel selection failed");
+                        await ShowMessageAsync("切换未完成", "请重新选择服务器，详情见日志。");
+                    }
+                };
+                channels.Items.Add(item);
+            }
+            menu.Opening += (_, _) =>
+            {
+                foreach (var item in channels.Items.OfType<ToggleMenuFlyoutItem>())
+                    item.IsChecked = item.Tag is EndfieldChannel value && _launcher.SelectedEndfieldChannel == value;
+            };
+            menu.Items.Add(channels);
+            Add("检查游戏更新", async () => { await SelectContextGameAsync(game); await _endfield.CheckVersionAsync(); });
+        }
+        if (game.Id is BuiltInGameIds.Endfield or BuiltInGameIds.GenshinImpact
+            or BuiltInGameIds.HonkaiStarRail or BuiltInGameIds.ZenlessZoneZero)
+            Add("抽卡记录", async () => { await SelectContextGameAsync(game); ShowFeature("gacha"); });
+        Add("启动方案", async () => { await SelectContextGameAsync(game); ShowFeature("profiles"); });
+        menu.Items.Add(new MenuFlyoutSeparator());
+        var folder = Add("打开安装目录", async () =>
+        {
+            if (game.EffectiveExecutablePath is { } executable && Path.GetDirectoryName(executable) is { } directory)
+                await Launcher.LaunchFolderPathAsync(directory);
+        });
+        menu.Opening += (_, _) => folder.IsEnabled = game.EffectiveExecutablePath is { } executable
+            && Directory.Exists(Path.GetDirectoryName(executable));
+        Add("游戏设置", async () => { await SelectContextGameAsync(game); ShowFeature("game-settings"); });
+        var remove = new MenuFlyoutItem { Text = game.Adapter.Definition.IsCustom ? "移除游戏" : "隐藏游戏", Tag = game.Id };
+        remove.Click += RemoveGame_OnClick;
+        menu.Items.Add(remove);
+        return menu;
+
+    }
+
+    private void ShowChannelPicker(FrameworkElement anchor)
+    {
+        if (ViewModel.CurrentGame is not { } game) return;
+        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Resources["GameContextMenuStyle"] };
+        foreach (var channel in new[] { EndfieldChannel.Official, EndfieldChannel.Bilibili })
+        {
+            var item = new MenuFlyoutItem { Text = channel == EndfieldChannel.Official ? "官服" : "哔哩哔哩服" };
+            item.Click += async (_, _) =>
+            {
+                try { await SelectChannelAsync(game, channel); }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Channel selection failed");
+                    await ShowMessageAsync("切换未完成", "请重新选择服务器，详情见日志。");
+                }
+            };
+            menu.Items.Add(item);
+        }
+        menu.ShowAt(anchor);
+    }
+
+    private double GetExpandedLaunchWidth() =>
+        Math.Min(_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield ? 880 : 560,
+            Math.Max(234, HeroContent.ActualWidth - HeroContent.Padding.Left - HeroContent.Padding.Right));
+
+    private void RefreshLaunchSurfaceLayout()
+    {
+        if (!_isLaunchExpanded || _launchTransition is not null) return;
+        LaunchSurface.Width = GetExpandedLaunchWidth();
+        LaunchSurface.Height = GetExpandedLaunchHeight();
+    }
     private async void EndfieldChooseRoot_OnClick(object sender, RoutedEventArgs e)
     {
         var root = await _filePicker.PickGameDirectoryAsync(App.MainWindow);
@@ -320,9 +430,12 @@ public sealed partial class GameLibraryPage : Page
     {
         if (args.InRecycleQueue)
         {
+            args.ItemContainer.ContextFlyout = null;
             return;
         }
 
+        if (args.Item is GameCardViewModel game)
+            args.ItemContainer.ContextFlyout = CreateGameContextMenu(game);
         ApplyRailItemState(args.ItemContainer);
     }
 
@@ -371,7 +484,7 @@ public sealed partial class GameLibraryPage : Page
         }
         if (_isLaunchExpanded && _launchTransition is null)
         {
-            LaunchSurface.Width = Math.Min(560, Math.Max(234, HeroContent.ActualWidth - HeroContent.Padding.Left - HeroContent.Padding.Right));
+            LaunchSurface.Width = GetExpandedLaunchWidth();
             LaunchSurface.Height = GetExpandedLaunchHeight();
         }
         UpdateLibraryLayout();
@@ -392,11 +505,10 @@ public sealed partial class GameLibraryPage : Page
     {
         var available = HeroContent.ActualHeight - HeroContent.Padding.Top - HeroContent.Padding.Bottom
             - PlayTimeButton.Height - 10;
-        var desired = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield ? 470d
-            : HeroContent.ActualWidth < 900 ? 302d : 264d;
-        return Math.Max(230d, Math.Min(desired, available));
+        LaunchExpansionContent.Measure(new Windows.Foundation.Size(GetExpandedLaunchWidth() - 40, double.PositiveInfinity));
+        var desired = LaunchExpansionContent.DesiredSize.Height + 96;
+        return Math.Max(230, Math.Min(desired, available));
     }
-
     private async void Launch_OnClick(object sender, RoutedEventArgs e)
     {
         try
@@ -404,7 +516,15 @@ public sealed partial class GameLibraryPage : Page
             if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
             {
                 if (_endfield.IsPrimaryDownloading) { _endfield.Pause(); return; }
-                if (!_endfield.HasSelectedChannel) { SetLaunchExpanded(true); return; }
+                if (!_endfield.HasSelectedChannel)
+                {
+                    if (GameList.ContainerFromItem(ViewModel.CurrentGame) is ListViewItem item)
+                    {
+                        item.Focus(FocusState.Programmatic);
+                        ShowChannelPicker(item);
+                    }
+                    return;
+                }
                 if (_endfield.PrimaryStartsMaintenance) { await StartEndfieldSyncAsync(); return; }
             }
             var result = await ViewModel.LaunchAsync();
@@ -472,7 +592,7 @@ public sealed partial class GameLibraryPage : Page
         detailsTransform.Y = fromDetailsY;
         var targetHeight = expanded ? GetExpandedLaunchHeight() : 60d;
         var targetWidth = expanded
-            ? Math.Min(560, Math.Max(234, HeroContent.ActualWidth - HeroContent.Padding.Left - HeroContent.Padding.Right))
+            ? GetExpandedLaunchWidth()
             : 234d;
         LaunchExpansion.IsHitTestVisible = expanded;
         CommandDetails.IsHitTestVisible = expanded;
@@ -498,9 +618,11 @@ public sealed partial class GameLibraryPage : Page
         AddLaunchAnimation(_launchTransition, CommandDetails, "Opacity", fromDetailsOpacity, expanded ? 1 : 0, 190);
         AddLaunchAnimation(_launchTransition, expansionTransform, "Y", fromExpansionY, expanded ? 0 : 10, 230);
         AddLaunchAnimation(_launchTransition, detailsTransform, "Y", fromDetailsY, expanded ? 0 : 6, 230);
+        var transition = _launchTransition;
         _launchTransition.Completed += (_, _) =>
         {
             if (revision != _launchRevision) return;
+            transition.Stop();
             _launchTransition = null;
             LaunchSurface.Width = targetWidth;
             LaunchSurface.Height = targetHeight;
@@ -926,10 +1048,19 @@ public sealed partial class GameLibraryPage : Page
         Storyboard.SetTarget(translation, transform);
         Storyboard.SetTargetProperty(translation, "X");
 
-        _activeTransition = new Storyboard();
-        _activeTransition.Children.Add(opacity);
-        _activeTransition.Children.Add(translation);
-        _activeTransition.Begin();
+        var transition = new Storyboard();
+        transition.Children.Add(opacity);
+        transition.Children.Add(translation);
+        _activeTransition = transition;
+        transition.Completed += (_, _) =>
+        {
+            if (!ReferenceEquals(_activeTransition, transition)) return;
+            transition.Stop();
+            element.Opacity = 1;
+            element.RenderTransform = null;
+            _activeTransition = null;
+        };
+        transition.Begin();
     }
 
     private void SetSurfaceShades(bool visible)

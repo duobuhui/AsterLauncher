@@ -23,7 +23,7 @@ External processes use structured argument lists. Cleanup targets only process i
 
 Configuration, logs, records and artwork live in the configured data root. `LauncherDataPaths` resolves the installation-root location file, the development override, or installation-root `Data`. Game-library ordering, hidden games and launch profiles are persisted through `JsonConfigurationStore`.
 
-UIGF records and Endfield records use separate archive services. Import merges and deduplicates records. Authorization URLs, authkeys and tokens remain transient and are excluded from logs and archives.
+UIGF records and Endfield records use separate archive services. Import merges and deduplicates records. Star Rail incremental capture uses existing account-UID/warp-type/record-ID checkpoints, finishes the entire boundary page, and stops older pages only for that pool. Full capture bypasses checkpoints; accounts and pools without history are scanned normally. Authorization URLs, authkeys and tokens remain transient and are excluded from logs and archives.
 
 ## Artwork and tools
 

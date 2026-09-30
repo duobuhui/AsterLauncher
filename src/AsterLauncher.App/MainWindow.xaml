@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="AsterLauncher">
-    <Grid x:Name="RootGrid" Background="#101824" Loaded="RootGrid_OnLoaded">
+    <Grid x:Name="RootGrid" UseLayoutRounding="True" Background="#101824" Loaded="RootGrid_OnLoaded">
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
             <RowDefinition Height="*" />

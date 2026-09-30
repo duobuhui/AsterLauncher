@@ -6,7 +6,9 @@ param(
     [string]$OutputPath
 )
 
+$callerDataHome = $env:ASTERLAUNCHER_DATA_HOME
 . (Join-Path $PSScriptRoot 'set-env.ps1')
+$env:ASTERLAUNCHER_DATA_HOME = $callerDataHome
 Add-Type -AssemblyName System.Drawing
 $source = @"
 using System;

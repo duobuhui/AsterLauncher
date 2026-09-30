@@ -54,7 +54,7 @@
                     <SolidColorBrush x:Key="GlassTileBrush" Color="#36DDE8FF" />
                     <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#A0FFFFFF" Offset="0" /><GradientStop Color="#44D9E9FF" Offset="0.46" /><GradientStop Color="#1D9FB8E9" Offset="1" /></LinearGradientBrush>
                     <SolidColorBrush x:Key="GlassTextBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#E6EEF1F7" />
+                    <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#EEF1F7" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
             <SolidColorBrush x:Key="PageTitleBrush" Color="#C8BFFF" />
