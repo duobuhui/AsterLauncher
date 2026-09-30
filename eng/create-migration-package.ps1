@@ -50,6 +50,11 @@ try {
         $relative = $_.FullName.Substring($payload.Length+1).Replace('\','/')
         $files[$relative] = [ordered]@{ length = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
     }
+    # The companion is carried forward even by 0.1.3's migrator.
+    $companion = Join-Path $payload 'App\install-manifest.json'
+    [ordered]@{ format=1; version=$Version; files=$files } | ConvertTo-Json -Depth 6 -Compress |
+        Set-Content -LiteralPath $companion -Encoding UTF8
+    $files['App/install-manifest.json'] = [ordered]@{length=(Get-Item -LiteralPath $companion).Length;sha256=(Get-FileHash -LiteralPath $companion -Algorithm SHA256).Hash.ToLowerInvariant()}
     [ordered]@{ format=1; version=$Version; files=$files } | ConvertTo-Json -Depth 6 -Compress |
         Set-Content -LiteralPath (Join-Path $payload 'release-files.json') -Encoding UTF8
     Add-Type -AssemblyName System.IO.Compression.FileSystem

@@ -56,3 +56,5 @@ Predownload only populates content caches. A formal update fetches fresh patch m
 The package root contains `AsterLauncher.exe`, `release-files.json`, `App/` and `MigrationTools/`. User data stays outside update packages.
 
 0.1.2 requires a one-time standalone migration. Later multi-file updates use the format-2 manifest, full packages or exact-version file deltas. The migrator checks the outer ZIP hash, safe paths and per-file hashes, stages on the installation volume, commits with a recovery journal and preserves the previous files in `MigrationBackup`. Old and new update-manifest names remain separate to prevent incompatible packages reaching the old updater.
+
+The migrator commits and recovers the root file manifest together with the application. Packages also carry App/install-manifest.json; the new entry point verifies its target files and restores the root manifest when upgrading through the 0.1.3 migrator, which omitted that file. Legacy recovery receipts remain supported.

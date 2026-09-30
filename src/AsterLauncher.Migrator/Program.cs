@@ -12,6 +12,8 @@ internal static class Program
     private const string EntryName = "AsterLauncher.exe";
     private const string AppName = "App";
     private const string ToolsName = "MigrationTools";
+    private const string ManifestName = "release-files.json";
+    private const string CompanionManifest = "App/install-manifest.json";
     private const string DataPointerName = "asterlauncher.data-location.json";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true, WriteIndented = true };
 
@@ -25,6 +27,11 @@ internal static class Program
                 if (string.Equals(Path.GetFileName(Environment.ProcessPath), "AsterLauncher.Migrator.exe", StringComparison.OrdinalIgnoreCase))
                     RunInteractiveMigration();
                 else LaunchInstalledApp();
+                return 0;
+            }
+            if (args.Length == 2 && args[0] == "--sync-release")
+            {
+                SynchronizeReleaseManifest(Path.GetFullPath(args[1]));
                 return 0;
             }
             if (args.Length == 2 && args[0] == "--recover")
@@ -144,6 +151,7 @@ internal static class Program
     private static void LaunchInstalledApp()
     {
         var root = Path.GetDirectoryName(Environment.ProcessPath) ?? throw new InvalidOperationException("无法定位启动器目录。");
+        SynchronizeReleaseManifest(root);
         var app = Path.Combine(root, AppName, EntryName);
         if (!File.Exists(app)) throw new FileNotFoundException("App 文件夹中的启动器缺失，请从迁移备份恢复。", app);
         var info = new ProcessStartInfo(app)
@@ -155,6 +163,61 @@ internal static class Program
         Process.Start(info)?.Dispose();
     }
 
+    // 0.1.3 invokes its old migrator, which did not install the root manifest.
+    // The companion survives that migration; verify its files before restoring the manifest.
+    private static void SynchronizeReleaseManifest(string root)
+    {
+        var companion = Path.Combine(root, CompanionManifest);
+        if (!File.Exists(companion)) return; // Earlier packages have no companion.
+        var target = Path.Combine(root, ManifestName);
+        var cursor = companion;
+        while (cursor is not null)
+        {
+            if ((File.Exists(cursor) || Directory.Exists(cursor)) && IsReparse(cursor))
+                throw new InvalidDataException("发布清单路径包含文件系统链接。");
+            cursor = Path.GetDirectoryName(cursor);
+        }
+        if (File.Exists(target) && IsReparse(target)) throw new InvalidDataException("发布清单是文件链接。");
+        var manifest = JsonSerializer.Deserialize<ReleaseManifest>(File.ReadAllText(companion), JsonOptions)
+            ?? throw new InvalidDataException("安装清单无效。");
+        if (manifest.Format != 1 || string.IsNullOrWhiteSpace(manifest.Version) || manifest.Files is null
+            || manifest.Files.Count == 0 || manifest.Files.Count > 10000 || manifest.Files.ContainsKey(CompanionManifest)
+            || !manifest.Files.ContainsKey("App/AsterLauncher.exe") || !manifest.Files.ContainsKey(EntryName))
+            throw new InvalidDataException("安装清单不完整。");
+        var companionSpec = new FileSpecification(new FileInfo(companion).Length, HashFile(companion));
+        if (File.Exists(target))
+        {
+            try
+            {
+                var current = JsonSerializer.Deserialize<ReleaseManifest>(File.ReadAllText(target), JsonOptions);
+                if (current?.Version == manifest.Version && current.Files is not null
+                    && current.Files.TryGetValue(CompanionManifest, out var prior) && prior == companionSpec) return;
+            }
+            catch (JsonException) { /* Rebuild from the verified companion. */ }
+        }
+        foreach (var (name, specification) in manifest.Files)
+        {
+            if (!SafeEntry(name) || !(name.StartsWith("App/", StringComparison.Ordinal)
+                || name.StartsWith("MigrationTools/", StringComparison.Ordinal) || name == EntryName)
+                || specification is null || !IsSha256(specification.Sha256))
+                throw new InvalidDataException("安装清单路径无效。");
+            var file = Path.GetFullPath(Path.Combine(root, name.Replace('/', Path.DirectorySeparatorChar)));
+            for (var parent = file; parent is not null && IsWithin(root, parent); parent = Path.GetDirectoryName(parent))
+                if ((File.Exists(parent) || Directory.Exists(parent)) && IsReparse(parent))
+                    throw new InvalidDataException("安装文件路径包含文件系统链接。");
+            if (!File.Exists(file) || new FileInfo(file).Length != specification.Length
+                || !HashFile(file).Equals(specification.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("升级后文件校验失败：" + name);
+        }
+        manifest.Files.Add(CompanionManifest, companionSpec);
+        var temporary = Path.Combine(root, ".release-files-" + Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            File.WriteAllText(temporary, JsonSerializer.Serialize(manifest, JsonOptions));
+            File.Move(temporary, target, true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
     private static string ResolveDataDirectory(string root)
     {
         var pointer = Path.Combine(root, DataPointerName);
@@ -197,6 +260,8 @@ internal static class Program
         EnsureNotRunning(oldEntry, Path.Combine(root, AppName, EntryName));
         var existingApp = Path.Combine(root, AppName);
         var existingTools = Path.Combine(root, ToolsName);
+        var existingManifest = Path.Combine(root, ManifestName);
+        if (File.Exists(existingManifest) && IsReparse(existingManifest)) throw new InvalidOperationException("现有发布清单是文件链接，拒绝覆盖。");
         if (Directory.Exists(existingApp) && IsReparse(existingApp)) throw new InvalidOperationException("现有 App 是目录链接，拒绝覆盖。");
         if (Directory.Exists(existingTools) && IsReparse(existingTools)) throw new InvalidOperationException("现有 MigrationTools 是目录链接，拒绝覆盖。");
         var nonce = DateTime.UtcNow.ToString("yyyyMMddHHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
@@ -205,6 +270,7 @@ internal static class Program
         var backupEntry = Path.Combine(backupRoot, "AsterLauncher-" + nonce + ".exe");
         var backupApp = Path.Combine(backupRoot, "App-" + nonce);
         var backupTools = Path.Combine(backupRoot, "MigrationTools-" + nonce);
+        var backupManifest = Path.Combine(backupRoot, "release-files-" + nonce + ".json");
         var candidate = Path.Combine(stage, EntryName);
         var journal = Path.Combine(root, ".aster-migration.json");
         if (File.Exists(journal)) throw new InvalidOperationException("发现未完成的迁移记录。请先检查 .aster-migration.json 和 MigrationBackup，勿覆盖旧版文件。");
@@ -215,7 +281,7 @@ internal static class Program
             ExtractAndVerify(package, stage);
             if (!File.Exists(candidate)) throw new InvalidDataException("发布包缺少顶层入口。");
             Directory.CreateDirectory(backupRoot);
-            var record = new MigrationRecord(nonce, backupEntry, backupApp, backupTools, stage, HashFile(candidate), expectedHash.ToLowerInvariant(), Directory.Exists(existingApp), Directory.Exists(existingTools));
+            var record = new MigrationRecord(nonce, backupEntry, backupApp, backupTools, stage, HashFile(candidate), expectedHash.ToLowerInvariant(), Directory.Exists(existingApp), Directory.Exists(existingTools), HashFile(Path.Combine(stage, ManifestName)), File.Exists(existingManifest));
             File.WriteAllText(journal, JsonSerializer.Serialize(record, JsonOptions));
             var appMoved = false;
             var oldMoved = false;
@@ -223,6 +289,8 @@ internal static class Program
             var newToolsMoved = false;
             var newAppMoved = false;
             var shimMoved = false;
+            var manifestMoved = false;
+            var newManifestMoved = false;
             try
             {
                 if (Directory.Exists(existingApp)) { Directory.Move(existingApp, backupApp); appMoved = true; }
@@ -231,6 +299,8 @@ internal static class Program
                 Directory.Move(Path.Combine(stage, ToolsName), existingTools); newToolsMoved = true;
                 File.Move(oldEntry, backupEntry); oldMoved = true;
                 File.Move(candidate, oldEntry); shimMoved = true;
+                if (File.Exists(existingManifest)) { File.Move(existingManifest, backupManifest); manifestMoved = true; }
+                File.Move(Path.Combine(stage, ManifestName), existingManifest); newManifestMoved = true;
                 File.WriteAllText(Path.Combine(backupRoot, "migration-" + nonce + ".json"),
                     JsonSerializer.Serialize(record, JsonOptions));
                 File.Delete(journal);
@@ -244,6 +314,8 @@ internal static class Program
             }
             catch
             {
+                if (newManifestMoved && File.Exists(existingManifest)) File.Move(existingManifest, Path.Combine(stage, "FailedManifest.json"));
+                if (manifestMoved && !File.Exists(existingManifest)) File.Move(backupManifest, existingManifest);
                 if (shimMoved && File.Exists(oldEntry) && HashFile(oldEntry).Equals(record.ShimSha256, StringComparison.OrdinalIgnoreCase))
                     File.Delete(oldEntry);
                 if (oldMoved && !File.Exists(oldEntry)) File.Move(backupEntry, oldEntry);
@@ -291,6 +363,18 @@ internal static class Program
         var entry = Path.Combine(root, EntryName);
         var app = Path.Combine(root, AppName);
         var tools = Path.Combine(root, ToolsName);
+        var manifest = Path.Combine(root, ManifestName);
+        var backupManifest = Path.Combine(backupRoot, "release-files-" + record.Id + ".json");
+        if (record.ManifestSha256 is not null)
+        {
+            if (!IsSha256(record.ManifestSha256)
+                || (File.Exists(manifest) && IsReparse(manifest))
+                || (File.Exists(backupManifest) && IsReparse(backupManifest)))
+                throw new InvalidDataException("恢复清单路径或哈希无效。");
+            if (File.Exists(manifest) && (File.Exists(backupManifest) || !record.HadManifest)
+                && !HashFile(manifest).Equals(record.ManifestSha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("发布清单已被修改，拒绝自动覆盖。");
+        }
         foreach (var path in new[] { entry, app, tools, backupEntry, backupApp, backupTools, stage })
             if ((File.Exists(path) || Directory.Exists(path)) && IsReparse(path))
                 throw new InvalidOperationException("恢复路径包含链接，拒绝操作：" + path);
@@ -307,6 +391,16 @@ internal static class Program
         }
         RecoverDirectory(app, backupApp, Path.Combine(stage, AppName), record.HadApp, stage, "RecoveredApp");
         RecoverDirectory(tools, backupTools, Path.Combine(stage, ToolsName), record.HadTools, stage, "RecoveredTools");
+        if (record.ManifestSha256 is not null && (File.Exists(backupManifest)
+            || (!record.HadManifest && !File.Exists(Path.Combine(stage, ManifestName)))))
+        {
+            if (File.Exists(manifest))
+            {
+                Directory.CreateDirectory(stage);
+                File.Move(manifest, Path.Combine(stage, "RecoveredManifest.json"));
+            }
+            if (File.Exists(backupManifest)) File.Move(backupManifest, manifest);
+        }
         File.Delete(journal);
         File.WriteAllText(Path.Combine(root, "migration-recovery.log"), "已恢复旧版启动入口；暂存的新文件保留在 " + stage);
     }
@@ -360,6 +454,7 @@ internal static class Program
             throw new InvalidDataException("发布包解压总量超过 4 GiB 限制。");
         if (new DriveInfo(Path.GetPathRoot(stage)!).AvailableFreeSpace < requiredBytes + 64L * 1024 * 1024)
             throw new IOException("安装卷空间不足，无法完整暂存发布包。");
+        manifestEntry.ExtractToFile(Path.Combine(stage, ManifestName));
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, specification) in manifest.Files)
         {
@@ -429,5 +524,5 @@ internal static class Program
     private sealed record ReleaseManifest(int Format, string Version, Dictionary<string, FileSpecification> Files);
     private sealed record FileSpecification(long Length, string Sha256);
     private sealed record MigrationRecord(string Id, string OldExeBackup, string OldAppBackup, string OldToolsBackup, string Stage,
-        string ShimSha256, string PackageSha256, bool HadApp, bool HadTools);
+        string ShimSha256, string PackageSha256, bool HadApp, bool HadTools, string? ManifestSha256 = null, bool HadManifest = false);
 }

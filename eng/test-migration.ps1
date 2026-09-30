@@ -60,6 +60,7 @@ if ((Get-Content -LiteralPath $oldExe -Raw) -ne 'new-root-shim' -or
     (Get-ChildItem -LiteralPath (Join-Path $old 'MigrationBackup') -Filter 'AsterLauncher-*.exe').Count -ne 1) {
     throw '迁移结果、备份或数据不符合预期。'
 }
+if ((Get-Content -LiteralPath (Join-Path $old 'release-files.json') -Raw | ConvertFrom-Json).version -ne '0.1.3-beta') { throw '迁移未安装版本清单。' }
 $receipt = Get-ChildItem -LiteralPath (Join-Path $old 'MigrationBackup') -Filter 'migration-*.json' | Select-Object -First 1
 Copy-Item -LiteralPath $receipt.FullName -Destination (Join-Path $old '.aster-migration.json')
 if ((Invoke-Migration @('--recover',$old)) -ne 0) {
@@ -71,4 +72,21 @@ if ((Get-FileHash -LiteralPath $oldExe -Algorithm SHA256).Hash -ne $oldHash -or
     (Get-Content -LiteralPath (Join-Path $old 'Data\keep.txt') -Raw) -ne 'keep-user-data') {
     throw '恢复后旧版 EXE、App、工具或数据不符合预期。'
 }
+if (Test-Path -LiteralPath (Join-Path $old 'release-files.json')) { throw '单文件旧版恢复后残留新版清单。' }
+# A multi-file source must get its original manifest back on recovery.
+$originalManifest = '{"format":1,"version":"old-version","files":{}}'
+[IO.File]::WriteAllText((Join-Path $old 'release-files.json'), $originalManifest)
+if ((Invoke-Migration @('--migrate',$old,'--package',$zip,'--sha256',$sha,'--no-launch')) -ne 0) { throw '已有清单迁移失败。' }
+$receipt = Get-ChildItem -LiteralPath (Join-Path $old 'MigrationBackup') -Filter 'migration-*.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+Copy-Item -LiteralPath $receipt.FullName -Destination (Join-Path $old '.aster-migration.json')
+if ((Invoke-Migration @('--recover',$old)) -ne 0 -or
+    (Get-Content -LiteralPath (Join-Path $old 'release-files.json') -Raw) -ne $originalManifest) { throw '旧清单恢复失败。' }
+# Older receipts omitted manifest fields; the new tool must still recover them.
+if ((Invoke-Migration @('--migrate',$old,'--package',$zip,'--sha256',$sha,'--no-launch')) -ne 0) { throw '兼容恢复准备失败。' }
+$receipt = Get-ChildItem -LiteralPath (Join-Path $old 'MigrationBackup') -Filter 'migration-*.json' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$legacy = Get-Content -LiteralPath $receipt.FullName -Raw | ConvertFrom-Json
+$legacy.PSObject.Properties.Remove('ManifestSha256')
+$legacy.PSObject.Properties.Remove('HadManifest')
+$legacy | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $old '.aster-migration.json') -Encoding UTF8
+if ((Invoke-Migration @('--recover',$old)) -ne 0 -or (Get-FileHash -LiteralPath $oldExe).Hash -ne $oldHash) { throw '旧迁移记录恢复失败。' }
 Write-Output "PASS: bad hash, traversal, inner hash, migration, backup, data preservation, recovery ($testRoot)"

@@ -61,10 +61,25 @@ jobs:
           . .\eng\set-env.ps1
           $version = (Select-Xml Directory.Build.props -XPath '//Version').Node.InnerText
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and source version differ.' }
-          & .\eng\package-release.ps1
+          $previousVersion = (Select-Xml Directory.Build.props -XPath '//ReleaseBaseVersion').Node.InnerText
+          $previousPackage = $null
+          if ($previousVersion) {
+            $headers = @{Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28';'User-Agent'='AsterLauncher release'}
+            $previousRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/v$previousVersion" -Headers $headers
+            if ($previousRelease.draft -or $previousRelease.tag_name -ne "v$previousVersion") { throw 'Base release is not published.' }
+            $asset = $previousRelease.assets | Where-Object name -eq "AsterLauncher-v$previousVersion-win-x64.zip" | Select-Object -First 1
+            if (-not $asset -or $asset.digest -notmatch '^sha256:[a-f0-9]{64}$') { throw 'Base package or trusted digest missing.' }
+            $previousPackage = Join-Path $env:TEMP $asset.name
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $previousPackage -TimeoutSec 1800
+            if ("sha256:$((Get-FileHash -LiteralPath $previousPackage -Algorithm SHA256).Hash.ToLowerInvariant())" -ne $asset.digest) { throw 'Base package checksum differs from published asset.' }
+            & .\eng\package-release.ps1 -PreviousPackage $previousPackage -PreviousVersion $previousVersion
+          } else {
+            & .\eng\package-release.ps1
+          }
           $out = Join-Path $env:ASTER_CI_ROOT ".artifacts\release\v$version"
           & .\eng\test-migration.ps1 -MigratorExe (Join-Path $out 'migration-publish\AsterLauncher.Migrator.exe')
-          & .\eng\test-multifile-update.ps1 -Package (Join-Path $out "AsterLauncher-v$version-win-x64.zip")
+          $deltaPackage = if ($previousPackage) { Join-Path $out "AsterLauncher-$previousVersion-to-$version-files-delta.zip" } else { $null }
+          & .\eng\test-multifile-update.ps1 -Package (Join-Path $out "AsterLauncher-v$version-win-x64.zip") -BasePackage $previousPackage -DeltaPackage $deltaPackage
           & .\eng\create-migration-tools-package.ps1 -FullPackage (Join-Path $out "AsterLauncher-v$version-win-x64.zip") -OutputZip (Join-Path $out "AsterLauncher-v$version-migration-tools.zip")
           "ASTER_RELEASE_OUTPUT=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Publish verified assets
@@ -75,7 +90,7 @@ jobs:
           . .\eng\set-env.ps1
           $headers = @{Authorization="Bearer $env:ASTER_RELEASE_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
           $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases"
-          $body = @{tag_name=$env:GITHUB_REF_NAME;name="AsterLauncher $env:GITHUB_REF_NAME";body=(Get-Content .\docs\RELEASE_0.1.3.md -Raw);draft=$true;prerelease=$true} | ConvertTo-Json
+          $body = @{tag_name=$env:GITHUB_REF_NAME;name="AsterLauncher $env:GITHUB_REF_NAME";body=(Get-Content (".\docs\RELEASE_" + $env:GITHUB_REF_NAME.TrimStart("v").Split("-")[0] + ".md") -Raw);draft=$true;prerelease=$true} | ConvertTo-Json
           $release = Invoke-RestMethod -Uri $api -Method Post -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body))
           $assets = @(Get-ChildItem -LiteralPath $env:ASTER_RELEASE_OUTPUT -File | Where-Object {$_.Name -match '\.zip$|\.zip\.sha256$|^aster-update-v2\.json$'})
           foreach ($asset in $assets) {
@@ -83,7 +98,7 @@ jobs:
             $uploaded = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -ContentType 'application/octet-stream' -InFile $asset.FullName -TimeoutSec 1800
             if ($uploaded.size -ne $asset.Length) { throw 'Uploaded asset size differs.' }
             $local = (Get-FileHash -LiteralPath $asset.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($uploaded.digest -and $uploaded.digest -ne "sha256:$local") { throw 'Uploaded asset digest differs.' }
+            if ($uploaded.digest -ne "sha256:$local") { throw 'Uploaded asset digest differs.' }
             Write-Output "$($uploaded.name): $($uploaded.size) bytes, SHA-256 verified"
           }
           Invoke-RestMethod -Uri "$api/$($release.id)" -Method Patch -Headers $headers -ContentType 'application/json' -Body '{"draft":false}' | Select-Object html_url,tag_name,prerelease

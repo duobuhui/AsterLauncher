@@ -52,7 +52,9 @@ if ($PreviousPackage) {
         } finally { $patch.Dispose() }
     } finally { $previous.Dispose();$new.Dispose() }
     if ((Get-Item -LiteralPath $patchPath).Length -lt (Get-Item -LiteralPath $full).Length) {
-        $manifest.patch=[ordered]@{from=$PreviousVersion;asset=$patchName;sha256=(Get-FileHash -LiteralPath $patchPath -Algorithm SHA256).Hash.ToLowerInvariant();targetSha256=$entryHash}
+        $patchHash=(Get-FileHash -LiteralPath $patchPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $manifest.patch=[ordered]@{from=$PreviousVersion;asset=$patchName;sha256=$patchHash;targetSha256=$entryHash}
+        Set-Content -LiteralPath ($patchPath+'.sha256') -Value $patchHash -Encoding ASCII
     } else { Remove-Item -LiteralPath $patchPath -Force }
 }
 $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $output 'aster-update-v2.json') -Encoding UTF8
