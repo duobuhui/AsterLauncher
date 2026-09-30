@@ -138,6 +138,9 @@
                                     <Border Visibility="{x:Bind IconFallbackVisibility, Mode=OneWay}" Width="42" Height="42" CornerRadius="12" Background="{ThemeResource ThemeAccentSoftBrush}" HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock Text="{x:Bind IconGlyph, Mode=OneWay}" FontSize="19" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
+                                    <Border Visibility="{x:Bind ChannelBadgeVisibility, Mode=OneWay}" Width="18" Height="18" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource ThemeAccentBrush}" CornerRadius="7" BorderBrush="#CFFFFFFF" BorderThickness="1">
+                                        <TextBlock Text="{x:Bind ChannelBadgeText, Mode=OneWay}" FontSize="10" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
                                 </Grid>
                                 <StackPanel x:Name="GameDetails" Grid.Column="1" VerticalAlignment="Center" Spacing="4">
                                     <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" FontSize="14" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" MaxLines="1" />
@@ -190,8 +193,7 @@
                 <Grid x:Name="OverviewPanel" Background="Transparent">
                         <Grid x:Name="HeroContent" Padding="40,24,40,24">
                             <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-
-                            <StackPanel Grid.Row="1" VerticalAlignment="Bottom" Spacing="10">
+<StackPanel Grid.Row="1" VerticalAlignment="Bottom" Spacing="10">
                                 <Button x:Name="PlayTimeButton" HorizontalAlignment="Right" MinWidth="112" Height="36" Padding="10,4" Background="{ThemeResource HeroGlassBrush}" Foreground="White" BorderBrush="#48FFFFFF" BorderThickness="1" CornerRadius="12" ToolTipService.ToolTip="查看游玩时间" AutomationProperties.Name="查看游玩时间详情">
                                     <Button.Flyout>
                                         <Flyout Placement="BottomEdgeAlignedRight">
@@ -216,14 +218,60 @@
                                         <ScrollViewer x:Name="LaunchExpansion" Margin="16,14,16,72" Opacity="0" IsHitTestVisible="False" VerticalScrollMode="Auto" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                             <ScrollViewer.RenderTransform><TranslateTransform Y="10" /></ScrollViewer.RenderTransform>
                                             <Grid Padding="4,4,4,12" RowSpacing="12" ColumnSpacing="16">
-                                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                                <StackPanel Spacing="3"><Border Background="{ThemeResource ThemeTextBackingBrush}" CornerRadius="6" Padding="6,2" HorizontalAlignment="Left"><TextBlock Text="启动选项" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /></Border><TextBlock Text="{Binding ProfileSummary}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding LaunchStatusText}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding LaunchStatusText}" /></StackPanel>
-                                                <TextBlock Grid.Column="1" Text="{Binding Launcher.CompanionSummary}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                                <ComboBox Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" ItemsSource="{Binding CurrentProfiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" DisplayMemberPath="Name" AutomationProperties.Name="选择启动方案或客户端">
+                                                <StackPanel x:Name="EndfieldPanel" Grid.Row="0" Grid.ColumnSpan="2" Visibility="Collapsed" Spacing="8">
+                                                        <Grid ColumnSpacing="8">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                            <StackPanel Spacing="2">
+                                                                <Border Background="{ThemeResource ThemeTextBackingBrush}" CornerRadius="6" Padding="6,2" HorizontalAlignment="Left"><TextBlock Text="终末地 · 安装与修复" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /></Border>
+                                                                <TextBlock Text="{Binding ChannelText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                            </StackPanel>
+                                                            <Border Grid.Column="1" Grid.ColumnSpan="2" Padding="3" Background="{ThemeResource ThemeTextBackingBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="12">
+                                                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                                                    <Button x:Name="OfficialChannelButton" Width="64" Height="30" Padding="4,0" Content="官服" Style="{StaticResource FloatingButtonStyle}" BorderThickness="0" CornerRadius="9" Click="OfficialChannel_OnClick" AutomationProperties.Name="选择终末地官服" />
+                                                                    <Button x:Name="BilibiliChannelButton" Width="64" Height="30" Padding="4,0" Content="B 服" Style="{StaticResource FloatingButtonStyle}" BorderThickness="0" CornerRadius="9" Click="BilibiliChannel_OnClick" AutomationProperties.Name="选择终末地哔哩哔哩服" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </Grid>
+                                                        <Grid ColumnSpacing="8">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{Binding InstallRoot}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTipService.ToolTip="{Binding InstallRoot}" />
+                                                            <Button Grid.Column="1" Content="选择独立目录" Style="{StaticResource FloatingButtonStyle}" IsEnabled="{Binding CanSetRoot}" Click="EndfieldChooseRoot_OnClick" />
+                                                        </Grid>
+                                                        <Grid ColumnSpacing="8">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                            <StackPanel Orientation="Horizontal" Spacing="5"><TextBlock Text="本地" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" /><TextBlock Text="{Binding LocalVersion}" FontSize="12" Foreground="White" /></StackPanel>
+                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5"><TextBlock Text="最新" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" /><TextBlock Text="{Binding RemoteVersion}" FontSize="12" Foreground="White" /></StackPanel>
+                                                        </Grid>
+                                                        <TextBlock Text="{Binding PlanText}" FontSize="11" Foreground="White" TextWrapping="Wrap" />
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <Button Content="检查" Style="{StaticResource FloatingButtonStyle}" IsEnabled="{Binding HasSelectedChannel}" Click="EndfieldCheck_OnClick" />
+                                                            <Button Content="修复" Style="{StaticResource FloatingButtonStyle}" IsEnabled="{Binding CanRepair}" Click="EndfieldRepair_OnClick" />
+                                                            <Button Content="暂停" Style="{StaticResource FloatingButtonStyle}" IsEnabled="{Binding IsBusy}" Click="EndfieldPause_OnClick" />
+                                                            <Button Content="更多" Style="{StaticResource FloatingButtonStyle}" AutomationProperties.Name="更多终末地维护操作">
+                                                                <Button.Flyout>
+                                                                    <MenuFlyout>
+                                                                        <MenuFlyoutItem Text="检查预下载" Click="EndfieldCheckPreload_OnClick" />
+                                                                        <MenuFlyoutItem x:Name="EndfieldPreloadItem" Text="下载预下载包" Visibility="Collapsed" Click="EndfieldPreload_OnClick" />
+                                                                        <MenuFlyoutSeparator />
+                                                                        <MenuFlyoutItem Text="优化存储 / 共享相同资源" Click="EndfieldOptimize_OnClick" />
+                                                                        <MenuFlyoutItem Text="解除当前服共享" Click="EndfieldUnshare_OnClick" />
+                                                                    </MenuFlyout>
+                                                                </Button.Flyout>
+                                                            </Button>
+                                                        </StackPanel>
+                                                        <ProgressBar Value="{Binding Progress}" Maximum="100" Height="3" />
+                                                        <TextBlock Text="{Binding StageText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding StageText}" />
+                                                        <TextBlock Text="{Binding SharingText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding SharingText}" />
+                                                        <TextBlock Text="{Binding PreloadText}" FontSize="11" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding PreloadText}" />
+                                                    </StackPanel>
+                                                <StackPanel Grid.Row="1" Spacing="3"><Border Background="{ThemeResource ThemeTextBackingBrush}" CornerRadius="6" Padding="6,2" HorizontalAlignment="Left"><TextBlock Text="启动选项" FontSize="18" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /></Border><TextBlock Text="{Binding ProfileSummary}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding LaunchStatusText}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{Binding LaunchStatusText}" /></StackPanel>
+                                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Launcher.CompanionSummary}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <ComboBox Grid.Row="2" Grid.ColumnSpan="2" HorizontalAlignment="Stretch" ItemsSource="{Binding CurrentProfiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" DisplayMemberPath="Name" AutomationProperties.Name="选择启动方案或客户端">
                                                     <ComboBox.Header><TextBlock Text="启动方案 / 客户端" Foreground="White" /></ComboBox.Header>
                                                 </ComboBox>
-                                                <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8">
+                                                <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8">
                                                     <Button Tag="profiles" Content="启动方案" Click="NavigateMenu_OnClick" />
                                                     <Button Tag="tools" Content="辅助工具" Click="NavigateMenu_OnClick" />
                                                     <Button Content="自动查找" Click="Scan_OnClick" />
@@ -243,7 +291,7 @@
                                             </StackPanel>
                                             <Grid HorizontalAlignment="Right" VerticalAlignment="Bottom" ColumnSpacing="0">
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                                <Button Width="184" Height="60" Padding="12,8" Background="{ThemeResource LaunchButtonBrush}" Foreground="{ThemeResource LaunchButtonTextBrush}" BorderThickness="0" CornerRadius="14,0,0,14" Click="Launch_OnClick" AutomationProperties.Name="启动当前游戏"><StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE768;" FontSize="18" /><TextBlock Text="{Binding LaunchButtonText}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="130" /></StackPanel></Button>
+                                                <Button Width="184" Height="60" Padding="12,8" Background="{ThemeResource LaunchButtonBrush}" Foreground="{ThemeResource LaunchButtonTextBrush}" BorderThickness="0" CornerRadius="14,0,0,14" Click="Launch_OnClick" AutomationProperties.Name="启动或维护当前游戏"><Grid Width="160" Height="44"><StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><FontIcon Glyph="{Binding PrimaryActionGlyph}" FontSize="18" /><TextBlock Text="{Binding LaunchButtonText}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="130" /></StackPanel><ProgressBar VerticalAlignment="Bottom" Height="3" Maximum="100" Value="{Binding PrimaryProgress}" Visibility="{Binding PrimaryProgressVisibility}" /></Grid></Button>
                                                 <Button x:Name="LaunchOptionsButton" Grid.Column="1" Width="50" Height="60" Padding="0" Background="{ThemeResource LaunchButtonBrush}" Foreground="{ThemeResource LaunchButtonTextBrush}" BorderThickness="0" CornerRadius="0,14,14,0" Click="LaunchOptionsButton_OnClick" ToolTipService.ToolTip="展开启动选项" AutomationProperties.Name="展开启动选项"><FontIcon x:Name="LaunchOptionsGlyph" Glyph="&#xE70D;" FontSize="16" /></Button>
                                             </Grid>
                                         </Grid>
@@ -285,6 +333,7 @@
                                                     <Grid Grid.Column="1" Width="36" Height="36">
                                                         <Border Visibility="{x:Bind IconImageVisibility, Mode=OneWay}" CornerRadius="9"><Border.Background><ImageBrush ImageSource="{x:Bind IconImage, Mode=OneWay}" Stretch="Uniform" /></Border.Background></Border>
                                                         <Border Visibility="{x:Bind IconFallbackVisibility, Mode=OneWay}" CornerRadius="9" Background="{ThemeResource ThemeAccentSoftBrush}"><TextBlock Text="{x:Bind IconGlyph, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                                        <Border Visibility="{x:Bind ChannelBadgeVisibility, Mode=OneWay}" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource ThemeAccentBrush}" CornerRadius="5" BorderBrush="#CFFFFFFF" BorderThickness="1"><TextBlock Text="{x:Bind ChannelBadgeText, Mode=OneWay}" FontSize="8" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
                                                     </Grid>
                                                     <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
                                                         <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1" />
@@ -311,6 +360,7 @@
                                                         <Grid Grid.Column="1" Width="36" Height="36">
                                                             <Border Visibility="{x:Bind IconImageVisibility, Mode=OneWay}" CornerRadius="9"><Border.Background><ImageBrush ImageSource="{x:Bind IconImage, Mode=OneWay}" Stretch="Uniform" /></Border.Background></Border>
                                                             <Border Visibility="{x:Bind IconFallbackVisibility, Mode=OneWay}" CornerRadius="9" Background="{ThemeResource ThemeAccentSoftBrush}"><TextBlock Text="{x:Bind IconGlyph, Mode=OneWay}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                                        <Border Visibility="{x:Bind ChannelBadgeVisibility, Mode=OneWay}" Width="14" Height="14" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource ThemeAccentBrush}" CornerRadius="5" BorderBrush="#CFFFFFFF" BorderThickness="1"><TextBlock Text="{x:Bind ChannelBadgeText, Mode=OneWay}" FontSize="8" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
                                                         </Grid>
                                                         <TextBlock Grid.Column="2" Text="{x:Bind DisplayName, Mode=OneWay}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxLines="1" />
                                                         <Button Grid.Column="3" Tag="{x:Bind Id}" Content="加入左栏" Padding="8,4" Click="RestoreGame_OnClick" />

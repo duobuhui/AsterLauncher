@@ -10,15 +10,28 @@ public static class LauncherDataPaths
     public static string ExecutableDirectory => Path.GetDirectoryName(Environment.ProcessPath)
         ?? AppContext.BaseDirectory;
 
-    public static string DefaultDataDirectory => Path.Combine(ExecutableDirectory, "Data");
+    public static string InstallationDirectory => ResolveInstallationDirectory(ExecutableDirectory);
 
-    public static string SelectionFilePath => Path.Combine(ExecutableDirectory, LocationFileName);
+    public static string ResolveInstallationDirectory(string executableDirectory)
+    {
+        var directory = Path.GetFullPath(executableDirectory);
+        var parent = Directory.GetParent(directory)?.FullName;
+        return Path.GetFileName(directory).Equals("App", StringComparison.OrdinalIgnoreCase)
+               && parent is not null
+               && File.Exists(Path.Combine(parent, "AsterLauncher.exe"))
+               && File.Exists(Path.Combine(parent, "MigrationTools", "AsterLauncher.Migrator.dll"))
+            ? parent : directory;
+    }
+    public static string DefaultDataDirectory => Path.Combine(InstallationDirectory, "Data");
+
+    public static string SelectionFilePath => Path.Combine(InstallationDirectory, LocationFileName);
 
     public static string ResolveDataDirectory() => ResolveDataDirectory(
-        ExecutableDirectory, Environment.GetEnvironmentVariable(EnvironmentVariableName));
+        InstallationDirectory, Environment.GetEnvironmentVariable(EnvironmentVariableName));
 
     public static string ResolveDataDirectory(string executableDirectory, string? environmentOverride)
     {
+        executableDirectory = ResolveInstallationDirectory(executableDirectory);
         var selectionFile = Path.Combine(executableDirectory, LocationFileName);
         if (File.Exists(selectionFile))
         {
@@ -45,7 +58,7 @@ public static class LauncherDataPaths
 
     public static bool MigrateLegacyBundleDataIfNeeded(string? executableDirectory = null, string? temporaryDirectory = null)
     {
-        var appDirectory = executableDirectory ?? ExecutableDirectory;
+        var appDirectory = ResolveInstallationDirectory(executableDirectory ?? ExecutableDirectory);
         if (File.Exists(Path.Combine(appDirectory, LocationFileName))
             || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(EnvironmentVariableName))) return false;
 
@@ -77,7 +90,7 @@ public static class LauncherDataPaths
 
         var target = Path.GetFullPath(selectedDirectory.Trim());
         var source = sourceDirectory ?? ResolveDataDirectory();
-        var appDirectory = executableDirectory ?? ExecutableDirectory;
+        var appDirectory = ResolveInstallationDirectory(executableDirectory ?? ExecutableDirectory);
         if (string.Equals(source.TrimEnd(Path.DirectorySeparatorChar),
                 target.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)) return false;
         if (IsInside(target, source) || IsInside(source, target))

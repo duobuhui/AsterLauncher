@@ -133,3 +133,18 @@
 - Replaced large banner cards with visible five-star progress rows, compact rarity and average statistics, and a secondary exact-banner-ID expander. Character history fills two row columns when room allows; the other categories stack beside it. Rows reserve portrait space and fill a 90/80 reference bar; high counts turn dark red.
 - A missing banner-name/featured-item catalog means UP win/loss and next-featured guarantees remain unclassified. The first locally observed interval is a lower bound. The page does not change Star Rail capture behavior; the user's real-time sync failure needs separate validation.
 - Tested analysis with independent accounts/categories and an across-banner five-star interval. Previewed the WinUI page from an isolated copy of an existing 1,118-record UIGF archive; actual in-game sync and multi-account UI remain unverified.
+
+## 0.1.3-beta gate: Endfield two-channel maintenance
+
+Development work has connected channel-specific state and UI, publisher manifest parsing, per-file resume/repair, guarded file commits, and an NTFS hard-link candidate engine. E-drive fixture tests and WinUI screenshot checks cover the implemented paths. A 0.1.3-beta release is not ready: the official multipart installation format and formal patch application are unfinished, the app HttpClient could not complete a new publisher TLS request, while an independent Python TLS probe confirmed both current manifests and one 528-byte verified file per channel on 2026-09-29; neither a full game install nor launch was exercised. The requested multi-file app distribution also needs an OTA migration path from the currently released single-EXE updater. A 2026-09-29 Release publish with PublishSingleFile=false launched successfully in an isolated E-drive data directory, but its publish root contained 381 files and 100 directories. The current ApplyUpdate.ps1 rejects any full ZIP entry except AsterLauncher.exe, so merely uploading that publish directory would fail existing-client updates and violate the requested tidy EXE directory. Do not tag, publish, or claim game-download support until these gates pass.
+
+### Multi-file migration checkpoint (2026-09-29)
+
+A standalone migrator, tidy root apphost, file-hashed multi-file package builder and E-drive fixture regression script now exist. The real 0.1.2 ZIP was migrated in an isolated directory; the old EXE hash was retained in `MigrationBackup`, the new root entry launched the WinUI app, and a custom data directory remained active. The migration script covers bad outer/inner hashes, ZIP traversal, backup and recovery. This removes the local layout and one-time manual-migration prototype gap. It does not make the existing 0.1.2 single-file updater understand a multi-file package, and the Endfield install/patch/TLS and real game acceptance gates above still prevent a 0.1.3-beta release.
+## 0.1.3-beta 发布验收
+
+- 代码：终末地一个页面承载两渠道；官方逐文件安装/更新/修复、内容续传缓存、预下载及正式更新缓存复用、真实 NTFS 共享/扫描/解除共享、安全文件提交和未完成任务恢复。维护区接入启动按钮展开位置并沿用原样式。
+- 交付：多文件 ZIP、独立迁移工具、文件差量更新和数据位置兼容。旧单 EXE 更新器需一次迁移，不发布不兼容的旧版 OTA 清单。版本标签由 CI 构建并上传核验过的 beta 附件。
+- 自动化：硬链接卷/File ID 与单侧替换/删除、修复同大小损坏、下载 Range/签名/缓存、旧配置、预下载转正式更新、分卷/加密 ZIP、失败恢复、迁移和多文件完整/差量更新均在隔离目录覆盖。
+- 实际运行：WinUI 打开维护展开区、两服切换标识/路径/实时版本并截图检查；启动器实际传输服务取得两服官方清单及小文件，校验 MD5。
+- 仍需实机：两服完整下载后的游戏启动、真实预下载窗口、正式 HDiff/VFS 增量样本、游戏自身及官方启动器对 .chk 的写入行为。当前增量输出回退为目标文件同步；未把模拟验收记作真实游戏启动。

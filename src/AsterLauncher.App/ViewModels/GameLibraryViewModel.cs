@@ -14,6 +14,7 @@ public sealed class GameLibraryViewModel : ObservableObject
     private static readonly Brush Neutral = CreateBrush(160, 169, 191);
 
     private readonly LauncherViewModel _launcher;
+    private readonly EndfieldMaintenanceViewModel _endfield;
     private readonly IUigfArchiveService _uigfArchive;
     private readonly HashSet<GameCardViewModel> _observedGames = [];
     private string _searchText = string.Empty;
@@ -22,9 +23,24 @@ public sealed class GameLibraryViewModel : ObservableObject
     private bool _runningOnly;
     private UigfArchiveSummary _gachaSummary = new("v4.2", 0, 0, 0, null);
 
-    public GameLibraryViewModel(LauncherViewModel launcher, IUigfArchiveService uigfArchive)
+    public GameLibraryViewModel(LauncherViewModel launcher, IUigfArchiveService uigfArchive,
+        EndfieldMaintenanceViewModel endfield)
     {
         _launcher = launcher;
+        _endfield = endfield;
+        _endfield.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is nameof(EndfieldMaintenanceViewModel.PrimaryActionText)
+                or nameof(EndfieldMaintenanceViewModel.PrimaryProgress)
+                or nameof(EndfieldMaintenanceViewModel.IsPrimaryDownloading)
+                or nameof(EndfieldMaintenanceViewModel.PrimaryActionGlyph))
+            {
+                OnPropertyChanged(nameof(LaunchButtonText));
+                OnPropertyChanged(nameof(PrimaryProgress));
+                OnPropertyChanged(nameof(PrimaryProgressVisibility));
+                OnPropertyChanged(nameof(PrimaryActionGlyph));
+            }
+        };
         _uigfArchive = uigfArchive;
         _launcher.GamesChanged += (_, _) => Refresh();
         _launcher.PropertyChanged += LauncherOnPropertyChanged;
@@ -115,6 +131,13 @@ public sealed class GameLibraryViewModel : ObservableObject
 
     public string ProfileSummary => _launcher.LaunchOrderText;
 
+    public string EndfieldChannelText => _launcher.SelectedEndfieldChannel switch
+    {
+        EndfieldChannel.Official => "官服",
+        EndfieldChannel.Bilibili => "哔哩哔哩服",
+        _ => "渠道待确认"
+    };
+
     public string PathText => CurrentGame?.ExecutablePath ?? "尚未指定";
 
     public string VersionText => CurrentGame?.VersionText ?? "暂无数据";
@@ -133,7 +156,12 @@ public sealed class GameLibraryViewModel : ObservableObject
 
     public bool CanLaunch => _launcher.CanLaunch;
 
-    public string LaunchButtonText => _launcher.LaunchButtonText;
+    public string LaunchButtonText => _endfield.PrimaryActionText;
+    public double PrimaryProgress => _endfield.PrimaryProgress;
+    public string PrimaryActionGlyph => _endfield.PrimaryActionGlyph;
+    public Microsoft.UI.Xaml.Visibility PrimaryProgressVisibility =>
+        CurrentGame?.Id == BuiltInGameIds.Endfield && _endfield.IsPrimaryDownloading
+            ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
     public string LaunchStatusText => _launcher.StatusText;
 
@@ -212,7 +240,8 @@ public sealed class GameLibraryViewModel : ObservableObject
 
     private void LauncherOnPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName is nameof(LauncherViewModel.CurrentGame))
+        if (args.PropertyName is nameof(LauncherViewModel.CurrentGame)
+            or nameof(LauncherViewModel.SelectedEndfieldChannel))
         {
             OnPropertyChanged(nameof(CurrentGame));
             OnPropertyChanged(nameof(SelectedProfile));
@@ -258,6 +287,7 @@ public sealed class GameLibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedProfile));
         OnPropertyChanged(nameof(ProfileSummary));
         OnPropertyChanged(nameof(PathText));
+        OnPropertyChanged(nameof(EndfieldChannelText));
         OnPropertyChanged(nameof(VersionText));
         OnPropertyChanged(nameof(PublisherText));
         OnPropertyChanged(nameof(LastPlayedText));

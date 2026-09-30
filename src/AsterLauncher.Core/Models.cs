@@ -101,6 +101,7 @@ public sealed record InstallScanResult(
 
 public sealed class LaunchProfile
 {
+    public Guid? EndfieldInstallationId { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public string GameId { get; set; } = string.Empty;
@@ -232,7 +233,7 @@ public sealed class GamePlaySession
 
 public sealed class LauncherConfiguration
 {
-    public int SchemaVersion { get; set; } = 3;
+    public int SchemaVersion { get; set; } = 4;
 
     public LauncherThemePreference ThemePreference { get; set; } = LauncherThemePreference.System;
 
@@ -244,6 +245,11 @@ public sealed class LauncherConfiguration
     public string? GameDownloadDirectory { get; set; }
 
     public string SelectedGameId { get; set; } = BuiltInGameIds.Endfield;
+
+    // Legacy Endfield paths stay in Games with an unknown channel until the owner assigns them.
+    public EndfieldChannel SelectedEndfieldChannel { get; set; } = EndfieldChannel.Unknown;
+
+    public List<EndfieldInstallation> EndfieldInstallations { get; set; } = [];
 
     public Guid? SelectedProfileId { get; set; }
 

@@ -87,6 +87,8 @@ public sealed class LauncherViewModel : ObservableObject
             if (SetProperty(ref _selectedProfile, value))
             {
                 _configuration.SelectedProfileId = value?.Id;
+                if (CurrentGame?.Id == BuiltInGameIds.Endfield && SelectedEndfieldInstallation is { } installation)
+                    installation.SelectedLaunchProfileId = value?.Id;
                 RefreshLaunchSequence();
                 OnPropertyChanged(nameof(CompanionSummary));
                 OnPropertyChanged(nameof(CanLaunch));
@@ -94,13 +96,25 @@ public sealed class LauncherViewModel : ObservableObject
         }
     }
 
-    public bool IsLaunching => CurrentGame is not null && _activeLaunchGameIds.Contains(CurrentGame.Id);
+    public EndfieldChannel SelectedEndfieldChannel => _configuration.SelectedEndfieldChannel;
+
+    public EndfieldInstallation? SelectedEndfieldInstallation => _configuration.EndfieldInstallations
+        .FirstOrDefault(item => item.Channel == SelectedEndfieldChannel);
+
+    public EndfieldInstallation? OtherEndfieldInstallation => _configuration.EndfieldInstallations
+        .FirstOrDefault(item => item.Channel is EndfieldChannel.Official or EndfieldChannel.Bilibili
+            && item.Channel != SelectedEndfieldChannel);
+
+    public bool IsLaunching => CurrentGame is not null && _activeLaunchGameIds.Contains(CurrentLaunchKey);
+
+    private string CurrentLaunchKey => CurrentGame?.Id == BuiltInGameIds.Endfield
+        ? $"endfield:{SelectedEndfieldChannel}" : CurrentGame?.Id ?? string.Empty;
 
     private void SetLaunching(string gameId, bool launching)
     {
         if (launching ? _activeLaunchGameIds.Add(gameId) : _activeLaunchGameIds.Remove(gameId))
         {
-            if (string.Equals(CurrentGame?.Id, gameId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(CurrentLaunchKey, gameId, StringComparison.OrdinalIgnoreCase))
             {
                 OnPropertyChanged(nameof(IsLaunching));
                 OnPropertyChanged(nameof(CanLaunch));
@@ -133,7 +147,8 @@ public sealed class LauncherViewModel : ObservableObject
         private set => SetProperty(ref _scanStatus, value);
     }
 
-    public bool CanLaunch => CurrentGame?.IsInstalled == true && SelectedProfile is not null && !IsLaunching;
+    public bool CanLaunch => CurrentGame?.IsInstalled == true && SelectedProfile is not null && !IsLaunching
+        && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldInstallation?.MaintenanceInProgress != true);
 
     public string LaunchButtonText => IsLaunching ? "运行中…" : "启动游戏";
 
@@ -174,11 +189,16 @@ public sealed class LauncherViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         _configuration = await _configurationStore.LoadAsync();
-        _configuration.SchemaVersion = 3;
+        _configuration.SchemaVersion = 4;
+        _configuration.EndfieldInstallations ??= [];
         _configuration.HiddenGameIds ??= [];
         _configuration.GameOrder ??= [];
         EnsureBuiltInStates();
         RebuildGames();
+        await RestoreEndfieldIdentityAsync();
+        if (SelectedEndfieldChannel is EndfieldChannel.Official or EndfieldChannel.Bilibili)
+            GetOrCreateEndfieldInstallation(SelectedEndfieldChannel);
+        ApplyEndfieldSelection();
 
         CompanionTools.Clear();
         foreach (var tool in _configuration.CompanionTools)
@@ -277,6 +297,8 @@ public sealed class LauncherViewModel : ObservableObject
         }
 
         var found = results.FirstOrDefault(result => result.Kind == ScanResultKind.Found && result.Installation is not null);
+        if (game.Id == BuiltInGameIds.Endfield && SelectedEndfieldChannel != EndfieldChannel.Unknown)
+            return results; // Generic discovery does not prove the selected server.
         if (found?.Installation is not null)
         {
             game.State.ExecutablePath = found.Installation.ExecutablePath;
@@ -339,8 +361,24 @@ public sealed class LauncherViewModel : ObservableObject
         ScanStatus = result.Message;
         if (result.Kind == ScanResultKind.Found && result.Installation is not null)
         {
-            CurrentGame.State.ExecutablePath = result.Installation.ExecutablePath;
-            UpdateSavedPath(CurrentGame);
+            if (CurrentGame.Id == BuiltInGameIds.Endfield && SelectedEndfieldChannel == EndfieldChannel.Unknown)
+            {
+                return new InstallScanResult(ScanResultKind.Error, "手动选择",
+                    "请先在启动按钮箭头中明确选择官服或 B 服；旧路径仍保留。");
+            }
+            if (CurrentGame.Id == BuiltInGameIds.Endfield)
+            {
+                try { await AssignEndfieldRootAsync(result.Installation.InstallDirectory); }
+                catch (Exception exception) when (exception is InvalidOperationException or DirectoryNotFoundException or InvalidDataException)
+                {
+                    return new InstallScanResult(ScanResultKind.InvalidPath, "手动选择", exception.Message);
+                }
+            }
+            else
+            {
+                CurrentGame.State.ExecutablePath = result.Installation.ExecutablePath;
+                UpdateSavedPath(CurrentGame);
+            }
             CurrentGame.Refresh();
             RefreshLaunchSequence();
             OnPropertyChanged(nameof(CanLaunch));
@@ -373,6 +411,12 @@ public sealed class LauncherViewModel : ObservableObject
             var result = builtIn.Adapter.ValidateManualExecutable(executablePath);
             if (result.Kind != ScanResultKind.Found || result.Installation is null) return result;
             builtIn.State.ExecutablePath = result.Installation.ExecutablePath;
+            if (builtIn.Id == BuiltInGameIds.Endfield)
+            {
+                _configuration.SelectedEndfieldChannel = EndfieldChannel.Unknown;
+                ApplyEndfieldSelection();
+                OnPropertyChanged(nameof(SelectedEndfieldChannel));
+            }
             if (!string.IsNullOrWhiteSpace(artworkPath)) builtIn.State.ArtworkPath = artworkPath;
             UpdateSavedPath(builtIn);
             builtIn.Refresh();
@@ -539,10 +583,15 @@ public sealed class LauncherViewModel : ObservableObject
             StatusText = "请先选择游戏。";
             return null;
         }
+        if (CurrentGame.Id == BuiltInGameIds.Endfield && SelectedEndfieldInstallation?.MaintenanceInProgress == true)
+        {
+            StatusText = "当前渠道的维护任务尚未完成，请继续更新或修复。";
+            return null;
+        }
         if (!CurrentGame.IsInstalled)
         {
             StatusText = "游戏路径无效，请先手动指定游戏 EXE。";
-            _logger.LogWarning("Launch rejected: executable is missing for {GameId}: {Path}", CurrentGame.Id, CurrentGame.State.ExecutablePath);
+            _logger.LogWarning("Launch rejected: executable is missing for {GameId}: {Path}", CurrentGame.Id, CurrentGame.EffectiveExecutablePath);
             return null;
         }
         if (SelectedProfile is null)
@@ -554,24 +603,25 @@ public sealed class LauncherViewModel : ObservableObject
 
         var selectedGame = CurrentGame;
         var selectedProfile = SelectedProfile;
-        SetLaunching(selectedGame.Id, true);
+        var launchKey = CurrentLaunchKey;
+        SetLaunching(launchKey, true);
         StatusText = "正在执行启动方案…";
         _logger.LogInformation("Launch button accepted for {GameId} with profile {ProfileId}", selectedGame.Id, selectedProfile.Id);
         var request = new GameLaunchRequest(
             selectedGame.Adapter.Definition,
-            selectedGame.State.ExecutablePath!,
+            selectedGame.EffectiveExecutablePath!,
             selectedProfile,
             selectedGame.Adapter.ProcessDetector);
         var progress = new Progress<LaunchProgress>(item =>
         {
-            if (string.Equals(CurrentGame?.Id, selectedGame.Id, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(CurrentLaunchKey, launchKey, StringComparison.OrdinalIgnoreCase))
                 StatusText = item.Message;
         });
 
         try
         {
             var result = await _orchestrator.LaunchAsync(request, progress);
-            if (string.Equals(CurrentGame?.Id, selectedGame.Id, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(CurrentLaunchKey, launchKey, StringComparison.OrdinalIgnoreCase))
                 StatusText = result.Message;
             if (result.Status == LaunchSessionStatus.Completed)
             {
@@ -597,7 +647,7 @@ public sealed class LauncherViewModel : ObservableObject
         }
         finally
         {
-            SetLaunching(selectedGame.Id, false);
+            SetLaunching(launchKey, false);
             await RefreshRunningStateAsync();
         }
     }
@@ -636,6 +686,7 @@ public sealed class LauncherViewModel : ObservableObject
         var profile = new LaunchProfile
         {
             GameId = CurrentGame.Id,
+            EndfieldInstallationId = CurrentGame.Id == BuiltInGameIds.Endfield ? SelectedEndfieldInstallation?.InstallationId : null,
             Name = $"新方案 {index}",
             IsDefault = false
         };
@@ -840,12 +891,16 @@ public sealed class LauncherViewModel : ObservableObject
             return;
         }
 
-        foreach (var profile in _configuration.LaunchProfiles.Where(profile => profile.GameId == CurrentGame.Id))
+        foreach (var profile in _configuration.LaunchProfiles.Where(profile => profile.GameId == CurrentGame.Id
+            && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldChannel == EndfieldChannel.Unknown
+                ? profile.EndfieldInstallationId is null : profile.EndfieldInstallationId == SelectedEndfieldInstallation?.InstallationId)))
         {
             CurrentProfiles.Add(profile);
         }
 
-        SelectedProfile = CurrentProfiles.FirstOrDefault(profile => profile.Id == _configuration.SelectedProfileId)
+        var profileId = CurrentGame.Id == BuiltInGameIds.Endfield && SelectedEndfieldChannel != EndfieldChannel.Unknown
+            ? SelectedEndfieldInstallation?.SelectedLaunchProfileId : _configuration.SelectedProfileId;
+        SelectedProfile = CurrentProfiles.FirstOrDefault(profile => profile.Id == profileId)
             ?? CurrentProfiles.FirstOrDefault(profile => profile.IsDefault)
             ?? CurrentProfiles.FirstOrDefault();
     }
@@ -863,7 +918,7 @@ public sealed class LauncherViewModel : ObservableObject
             {
                 var running = game.IsInstalled && await game.Adapter.ProcessDetector.IsRunningAsync(
                     game.Adapter.Definition,
-                    game.State.ExecutablePath);
+                    game.EffectiveExecutablePath);
                 game.SetRunning(running);
             }
             catch (Exception exception)
@@ -874,6 +929,140 @@ public sealed class LauncherViewModel : ObservableObject
         }
 
         IsRunning = CurrentGame?.IsRunning == true;
+    }
+
+    private async Task RestoreEndfieldIdentityAsync()
+    {
+        var legacy = _configuration.Games.FirstOrDefault(g => g.GameId == BuiltInGameIds.Endfield)?.ExecutablePath;
+        if (_configuration.EndfieldInstallations.Count == 0 && !string.IsNullOrWhiteSpace(legacy) && File.Exists(legacy))
+        {
+            try
+            {
+                var root=Path.GetDirectoryName(legacy)!;
+                var info=await EndfieldInstallationInfo.ReadAsync(root);
+                if (info is { } found)
+                {
+                    var installation=GetOrCreateEndfieldInstallation(found.Channel);
+                    installation.InstallRoot=root; installation.ExecutablePath=legacy; installation.InstalledVersion=found.Version;
+                    _configuration.SelectedEndfieldChannel=found.Channel;
+                }
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { }
+        }
+        foreach (var installation in _configuration.EndfieldInstallations)
+        {
+            if (installation.Channel is not (EndfieldChannel.Official or EndfieldChannel.Bilibili)) continue;
+            EndfieldInstallationProfiles.Ensure(_configuration, installation);
+            if (string.IsNullOrWhiteSpace(installation.InstallRoot)) continue;
+            try
+            {
+                var journal=SafeGamePath.Resolve(installation.InstallRoot,".aster-maintenance.json");
+                if (File.Exists(journal)) { installation.MaintenanceInProgress=true; continue; }
+                var info=await EndfieldInstallationInfo.ReadAsync(installation.InstallRoot);
+                if (info is { } found && found.Channel==installation.Channel)
+                { installation.InstalledVersion=found.Version; installation.MaintenanceInProgress=false; }
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { }
+        }
+    }
+    public EndfieldInstallation GetOrCreateEndfieldInstallation(EndfieldChannel channel)
+    {
+        if (channel is not (EndfieldChannel.Official or EndfieldChannel.Bilibili))
+            throw new ArgumentOutOfRangeException(nameof(channel));
+        var installation = _configuration.EndfieldInstallations.FirstOrDefault(item => item.Channel == channel);
+        if (installation is not null)
+        { EndfieldInstallationProfiles.Ensure(_configuration, installation); return installation; }
+        installation = new EndfieldInstallation { Channel = channel };
+        _configuration.EndfieldInstallations.Add(installation);
+        EndfieldInstallationProfiles.Ensure(_configuration, installation);
+        return installation;
+    }
+
+    public async Task SelectEndfieldChannelAsync(EndfieldChannel channel)
+    {
+        if (channel is not (EndfieldChannel.Unknown or EndfieldChannel.Official or EndfieldChannel.Bilibili))
+            throw new ArgumentOutOfRangeException(nameof(channel));
+        if (channel != EndfieldChannel.Unknown) GetOrCreateEndfieldInstallation(channel);
+        _configuration.SelectedEndfieldChannel = channel;
+        ApplyEndfieldSelection();
+        RefreshProfiles();
+        OnPropertyChanged(nameof(SelectedEndfieldChannel));
+        OnPropertyChanged(nameof(SelectedEndfieldInstallation));
+        OnPropertyChanged(nameof(OtherEndfieldInstallation));
+        OnPropertyChanged(nameof(IsLaunching));
+        OnPropertyChanged(nameof(CanLaunch));
+        OnPropertyChanged(nameof(LaunchButtonText));
+        await RefreshRunningStateAsync();
+        await _configurationStore.SaveAsync(_configuration);
+    }
+
+    public async Task<string> EnsureEndfieldDefaultRootAsync()
+    {
+        var channel = SelectedEndfieldChannel;
+        if (channel is not (EndfieldChannel.Official or EndfieldChannel.Bilibili))
+            throw new InvalidOperationException("请先选择终末地官服或 B 服。");
+        var existing = SelectedEndfieldInstallation?.InstallRoot;
+        if (!string.IsNullOrWhiteSpace(existing) && Directory.Exists(existing))
+            return existing;
+        if (string.IsNullOrWhiteSpace(existing) && string.IsNullOrWhiteSpace(GameDownloadDirectory))
+            throw new InvalidOperationException("请先在设置中指定有效的游戏默认安装目录。");
+
+        var relative = channel == EndfieldChannel.Official
+            ? "AsterLauncher/Endfield/Official" : "AsterLauncher/Endfield/Bilibili";
+        var root = string.IsNullOrWhiteSpace(existing)
+            ? SafeGamePath.Resolve(GameDownloadDirectory, relative)
+            : Path.GetFullPath(existing);
+SafeGamePath.Resolve(root, "Endfield.exe");
+        var otherRoot = OtherEndfieldInstallation?.InstallRoot;
+        if (!string.IsNullOrWhiteSpace(otherRoot)
+            && (root.Equals(Path.GetFullPath(otherRoot), StringComparison.OrdinalIgnoreCase)
+                || root.StartsWith(Path.GetFullPath(otherRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || Path.GetFullPath(otherRoot).StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("两服安装目录不能重叠。");
+        Directory.CreateDirectory(root);
+        await AssignEndfieldRootAsync(root);
+        return root;
+    }
+    public async Task AssignEndfieldRootAsync(string root)
+    {
+        var channel = SelectedEndfieldChannel;
+        var installation = GetOrCreateEndfieldInstallation(channel);
+        var full = Path.GetFullPath(root);
+        if (!Directory.Exists(full)) throw new DirectoryNotFoundException("请选择已存在的安装目录。");
+        var other = OtherEndfieldInstallation?.InstallRoot;
+        if (other is not null && (full.Equals(Path.GetFullPath(other), StringComparison.OrdinalIgnoreCase)
+            || full.StartsWith(Path.GetFullPath(other).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase)
+            || Path.GetFullPath(other).StartsWith(full.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("两服必须使用互不包含的独立目录。");
+        var info = await EndfieldInstallationInfo.ReadAsync(full);
+        if (info is { } found && found.Channel != channel)
+            throw new InvalidOperationException("所选目录中的可信安装信息属于另一服务器，请选择该服务器或其他独立目录。");
+        installation.InstallRoot = full;
+        var exe = SafeGamePath.Resolve(full, "Endfield.exe");
+        installation.ExecutablePath = File.Exists(exe) ? exe : null;
+        installation.InstalledVersion = info?.Version; // An EXE alone does not establish channel or version.
+        installation.MaintenanceInProgress = File.Exists(SafeGamePath.Resolve(full, ".aster-maintenance.json"));
+        ApplyEndfieldSelection();
+        await _configurationStore.SaveAsync(_configuration);
+        await RefreshRunningStateAsync();
+    }
+
+    public async Task PersistEndfieldInstallationAsync()
+    {
+        ApplyEndfieldSelection();
+        OnPropertyChanged(nameof(SelectedEndfieldInstallation));
+        OnPropertyChanged(nameof(CanLaunch));
+        await _configurationStore.SaveAsync(_configuration);
+        await RefreshRunningStateAsync();
+    }
+
+    private void ApplyEndfieldSelection()
+    {
+        var endfield = _allGames.FirstOrDefault(game => game.Id == BuiltInGameIds.Endfield);
+        endfield?.SetEndfieldInstallation(SelectedEndfieldChannel, SelectedEndfieldInstallation);
+        OnPropertyChanged(nameof(CanLaunch));
     }
 
     private static string GetScanLabel(ScanResultKind kind) => kind switch

@@ -75,3 +75,10 @@ For later versions or additional assets, review the scope of permission again. S
 ## Star Rail history preview (2026-09-28)
 
 - Five-star character rows use the bundled official portraits listed above; light cones and unmatched names retain the project-authored XAML glyph. The user-supplied Starward screenshot is a density reference only and is not bundled. Cards use existing theme brushes. UIGF record data and official rule notices are factual references, not artwork sources.
+
+## Endfield channel controls in the development tree
+
+The official/Bilibili channel indicator is an original text badge drawn over the existing, previously attributed Endfield icon. The maintenance panel and launch-button glyphs use existing project theme resources and Windows system glyphs. No new bitmap, publisher image, third-party icon, or downloaded game resource is bundled by this work. Runtime game package files and signed CDN URLs are user-cache/install data, not AsterLauncher release assets.
+## 0.1.3 channel markers
+
+The Endfield server selector and icon markers are original AsterLauncher text overlays (“官” and “B”) on the already attributed packaged game icon. The overview, sidebar and library consume observable channel state. No separate publisher/bilibili logo or other launcher asset was added. Node.js and 7-Zip are executable dependencies, not media; their notices and corresponding source distribution are recorded in THIRD_PARTY_NOTICES.md.

@@ -1,0 +1,81 @@
+name: Publish beta
+on:
+  push:
+    tags: ['v*-beta', 'v*-beta.*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Prepare isolated E workspace
+        run: |
+          if (-not (Test-Path E:\)) {
+            $backing = Join-Path $env:RUNNER_TEMP 'aster-e-volume'
+            New-Item -ItemType Directory -Force $backing | Out-Null
+            subst E: $backing
+          }
+          $root = 'E:\AsterLauncherCI'
+          git clone --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" $root
+          if ($LASTEXITCODE -ne 0) { throw 'Clone failed.' }
+          git -C $root checkout --detach $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Tag checkout failed.' }
+          "ASTER_CI_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Prepare portable SDK and maintenance runtime
+        run: |
+          Set-Location $env:ASTER_CI_ROOT
+          . .\eng\set-env.ps1
+          $installer = Join-Path $env:TEMP 'dotnet-install.ps1'
+          Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile $installer
+          & $installer -Version 10.0.401 -InstallDir $env:DOTNET_ROOT -NoPath
+          if ($LASTEXITCODE -ne 0) { throw 'Portable SDK preparation failed.' }
+          $node = Join-Path $env:TEMP 'node-v24.19.0.exe'
+          Invoke-WebRequest https://nodejs.org/dist/v24.19.0/win-x64/node.exe -OutFile $node
+          & .\eng\prepare-maintenance-runtime.ps1 -NodeSource $node
+          & .artifacts\vendor\node-v24.19.0\node.exe --check .\src\AsterLauncher.App\NetworkRuntime\endfield-https.js
+          if ($LASTEXITCODE -ne 0) { throw 'HTTPS helper syntax validation failed.' }
+      - name: Build and test
+        run: |
+          Set-Location $env:ASTER_CI_ROOT
+          . .\eng\set-env.ps1
+          dotnet restore AsterLauncher.sln -p:NuGetAudit=false
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+          dotnet build AsterLauncher.sln --configuration Debug --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+          dotnet test .\tests\AsterLauncher.Core.Tests\AsterLauncher.Core.Tests.csproj --no-build --configuration Debug --logger 'console;verbosity=minimal'
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+      - name: Create multi-file release and verify migration
+        run: |
+          Set-Location $env:ASTER_CI_ROOT
+          . .\eng\set-env.ps1
+          $version = (Select-Xml Directory.Build.props -XPath '//Version').Node.InnerText
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and source version differ.' }
+          & .\eng\package-release.ps1
+          $out = Join-Path $env:ASTER_CI_ROOT ".artifacts\release\v$version"
+          & .\eng\test-migration.ps1 -MigratorExe (Join-Path $out 'migration-publish\AsterLauncher.Migrator.exe')
+          & .\eng\test-multifile-update.ps1 -Package (Join-Path $out "AsterLauncher-v$version-win-x64.zip")
+          & .\eng\create-migration-tools-package.ps1 -FullPackage (Join-Path $out "AsterLauncher-v$version-win-x64.zip") -OutputZip (Join-Path $out "AsterLauncher-v$version-migration-tools.zip")
+          "ASTER_RELEASE_OUTPUT=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Publish verified assets
+        env:
+          ASTER_RELEASE_TOKEN: ${{ github.token }}
+        run: |
+          Set-Location $env:ASTER_CI_ROOT
+          . .\eng\set-env.ps1
+          $headers = @{Authorization="Bearer $env:ASTER_RELEASE_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+          $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases"
+          $body = @{tag_name=$env:GITHUB_REF_NAME;name="AsterLauncher $env:GITHUB_REF_NAME";body=(Get-Content .\docs\RELEASE_0.1.3.md -Raw);draft=$true;prerelease=$true} | ConvertTo-Json
+          $release = Invoke-RestMethod -Uri $api -Method Post -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body))
+          $assets = @(Get-ChildItem -LiteralPath $env:ASTER_RELEASE_OUTPUT -File | Where-Object {$_.Name -match '\.zip$|\.zip\.sha256$|^aster-update-v2\.json$'})
+          foreach ($asset in $assets) {
+            $url = $release.upload_url.Split('{')[0] + '?name=' + [Uri]::EscapeDataString($asset.Name)
+            $uploaded = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -ContentType 'application/octet-stream' -InFile $asset.FullName -TimeoutSec 1800
+            if ($uploaded.size -ne $asset.Length) { throw 'Uploaded asset size differs.' }
+            $local = (Get-FileHash -LiteralPath $asset.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($uploaded.digest -and $uploaded.digest -ne "sha256:$local") { throw 'Uploaded asset digest differs.' }
+            Write-Output "$($uploaded.name): $($uploaded.size) bytes, SHA-256 verified"
+          }
+          Invoke-RestMethod -Uri "$api/$($release.id)" -Method Patch -Headers $headers -ContentType 'application/json' -Body '{"draft":false}' | Select-Object html_url,tag_name,prerelease

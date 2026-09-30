@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -38,7 +39,7 @@ public sealed class LauncherUpdateService
                 continue;
             }
 
-            var manifestAsset = FindAsset(release, "aster-update.json");
+            var manifestAsset = FindAsset(release, "aster-update-v2.json");
             if (manifestAsset is null) continue;
 
             using var manifestResponse = await Client.GetAsync(manifestAsset, cancellationToken);
@@ -51,6 +52,8 @@ public sealed class LauncherUpdateService
                 throw new InvalidDataException("GitHub Release 与更新清单的版本不一致。");
             }
 
+            if (!root.TryGetProperty("format", out var format) || format.GetInt32() != 2)
+                throw new InvalidDataException("更新清单不是多文件发布格式。");
             var full = ReadPackage(release, root.GetProperty("full"));
             UpdatePackage chosen = full;
             if (root.TryGetProperty("patch", out var patch)
@@ -62,7 +65,7 @@ public sealed class LauncherUpdateService
 
             newestKey = releaseKey;
             newest = new LauncherUpdate(root.GetProperty("version").GetString()!, chosen,
-                chosen == full ? "完整包" : "差量更新");
+                chosen == full ? "完整包" : "差量更新", full);
         }
 
         return newest;
@@ -75,28 +78,19 @@ public sealed class LauncherUpdateService
             throw new InvalidOperationException("请从正式发布包运行启动器后再安装更新。");
         }
         var dataRoot = LauncherDataPaths.ResolveDataDirectory();
-        var stage = Path.Combine(dataRoot, "updates", Guid.NewGuid().ToString("N"));
+        var installRoot = LauncherDataPaths.InstallationDirectory;
+        if (!File.Exists(Path.Combine(installRoot, "MigrationTools", "AsterLauncher.Migrator.exe")))
+            throw new InvalidOperationException("请从完整解压的多文件发布包运行启动器后再更新。");
+        var stage = SafeGamePath.Resolve(installRoot, ".aster-update-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
         var packagePath = Path.Combine(stage, "package.zip");
-        using (var response = await Client.GetAsync(update.Package.Url,
-                   HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        await DownloadPackageAsync(update.Package, packagePath, cancellationToken);
+        if (update.Package.IsPatch && !await CanApplyFileDeltaAsync(packagePath, installRoot, cancellationToken))
         {
-            response.EnsureSuccessStatusCode();
-            await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-            await using var destination = File.Create(packagePath);
-            await source.CopyToAsync(destination, cancellationToken);
+            var full = update.FullPackage ?? throw new InvalidDataException("差量与本地文件不匹配，发布清单缺少完整包。");
+            update = update with { Package = full, Method = "完整包" };
+            await DownloadPackageAsync(full, packagePath, cancellationToken);
         }
-
-        await using (var stream = File.OpenRead(packagePath))
-        {
-            var actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
-            if (!actual.Equals(update.Package.Sha256, StringComparison.OrdinalIgnoreCase))
-            {
-                File.Delete(packagePath);
-                throw new InvalidDataException("更新包校验失败，未安装。 ");
-            }
-        }
-
         var scriptPath = Path.Combine(stage, "apply-update.ps1");
         await using (var resource = typeof(LauncherUpdateService).Assembly
                          .GetManifestResourceStream("AsterLauncher.ApplyUpdate.ps1")
@@ -106,8 +100,7 @@ public sealed class LauncherUpdateService
             await resource.CopyToAsync(destination, cancellationToken);
         }
 
-        var executable = Environment.ProcessPath
-            ?? throw new InvalidOperationException("无法定位当前启动器。 ");
+        var executable = Path.Combine(installRoot, "AsterLauncher.exe");
         var start = new ProcessStartInfo("powershell.exe")
         {
             UseShellExecute = false,
@@ -118,7 +111,7 @@ public sealed class LauncherUpdateService
                  {
                      "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath,
                      "-Package", packagePath, "-TargetExe", executable,
-                     "-Mode", update.Package.IsPatch ? "Patch" : "Full",
+                     "-Mode", update.Package.IsPatch ? "MultiPatch" : "MultiFull",
                      "-ProcessId", Environment.ProcessId.ToString(),
                      "-ExpectedHash", update.Package.TargetSha256
                  })
@@ -131,6 +124,57 @@ public sealed class LauncherUpdateService
         Microsoft.UI.Xaml.Application.Current.Exit();
     }
 
+    private static async Task DownloadPackageAsync(UpdatePackage package, string path, CancellationToken token)
+    {
+        using (var response = await Client.GetAsync(package.Url, HttpCompletionOption.ResponseHeadersRead, token))
+        {
+            response.EnsureSuccessStatusCode();
+            await using var source = await response.Content.ReadAsStreamAsync(token);
+            await using var destination = File.Create(path);
+            var buffer = new byte[128 * 1024];
+            long count = 0;
+            int read;
+            while ((read = await source.ReadAsync(buffer, token)) > 0)
+            {
+                count += read;
+                if (count > 1024L * 1024 * 1024) throw new InvalidDataException("启动器更新包过大。");
+                await destination.WriteAsync(buffer.AsMemory(0, read), token);
+            }
+        }
+        await using var stream = File.OpenRead(path);
+        var actual = Convert.ToHexString(await SHA256.HashDataAsync(stream, token));
+        if (!actual.Equals(package.Sha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("更新包校验失败，未安装。");
+    }
+    private async Task<bool> CanApplyFileDeltaAsync(string path, string root, CancellationToken token)
+    {
+        try
+        {
+            using var zip = ZipFile.OpenRead(path);
+            var entry = zip.GetEntry("file-delta.json");
+            if (entry is null || entry.Length > 16 * 1024 * 1024) return false;
+            using var stream = entry.Open();
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: token);
+            var plan = document.RootElement;
+            if (plan.GetProperty("format").GetInt32() != 2 || plan.GetProperty("from").GetString() != CurrentVersion) return false;
+            foreach (var file in plan.GetProperty("target").GetProperty("files").EnumerateObject())
+            {
+                token.ThrowIfCancellationRequested();
+                if (!(file.Name.StartsWith("App/", StringComparison.Ordinal)
+                    || file.Name.StartsWith("MigrationTools/", StringComparison.Ordinal)
+                    || file.Name == "AsterLauncher.exe")) return false;
+                if (zip.GetEntry(file.Name) is not null) continue;
+                var local = SafeGamePath.Resolve(root, file.Name);
+                if (!File.Exists(local) || new FileInfo(local).Length != file.Value.GetProperty("length").GetInt64()) return false;
+                await using var content = new FileStream(local, FileMode.Open, FileAccess.Read, FileShare.Read);
+                var hash = Convert.ToHexString(await SHA256.HashDataAsync(content, token));
+                if (!hash.Equals(file.Value.GetProperty("sha256").GetString(), StringComparison.OrdinalIgnoreCase)) return false;
+            }
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or JsonException or KeyNotFoundException)
+        { return false; }
+    }
     private static UpdatePackage ReadPackage(JsonElement release, JsonElement package)
     {
         var name = package.GetProperty("asset").GetString();
@@ -195,5 +239,5 @@ public sealed class LauncherUpdateService
     }
 }
 
-public sealed record LauncherUpdate(string Version, UpdatePackage Package, string Method);
+public sealed record LauncherUpdate(string Version, UpdatePackage Package, string Method, UpdatePackage? FullPackage = null);
 public sealed record UpdatePackage(Uri Url, string Sha256, string TargetSha256, bool IsPatch);

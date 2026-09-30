@@ -13,6 +13,8 @@ public sealed class GameCardViewModel : ObservableObject
     private static readonly Dictionary<string, CachedImage> ImageCache = new(StringComparer.OrdinalIgnoreCase);
     private sealed record CachedImage(DateTime LastWriteUtc, long Length, BitmapImage Image);
     private bool _isRunning;
+    private EndfieldInstallation? _endfieldInstallation;
+    private EndfieldChannel _endfieldChannel;
     private ImageSource? _backgroundImage;
     private ImageSource? _iconImage;
 
@@ -74,7 +76,20 @@ public sealed class GameCardViewModel : ObservableObject
         ? "暂无官方下载信息。"
         : Adapter.Definition.DownloadDescription;
 
-    public bool IsInstalled => State.IsInstalled;
+    public string? EffectiveExecutablePath => Id == BuiltInGameIds.Endfield
+        ? _endfieldChannel == EndfieldChannel.Unknown ? null : _endfieldInstallation?.ExecutablePath
+        : State.ExecutablePath;
+
+    public string ChannelBadgeText => Id != BuiltInGameIds.Endfield ? string.Empty : _endfieldChannel switch
+    {
+        EndfieldChannel.Official => "官",
+        EndfieldChannel.Bilibili => "B",
+        _ => "?"
+    };
+
+    public Visibility ChannelBadgeVisibility => Id == BuiltInGameIds.Endfield ? Visibility.Visible : Visibility.Collapsed;
+
+    public bool IsInstalled => !string.IsNullOrWhiteSpace(EffectiveExecutablePath) && File.Exists(EffectiveExecutablePath);
 
     public string InstallStatus => IsInstalled ? "已安装" : "未找到";
 
@@ -97,7 +112,7 @@ public sealed class GameCardViewModel : ObservableObject
 
     public Brush StatusBrush => new SolidColorBrush(IsRunning ? ColorHelper.FromArgb(255, 85, 214, 160) : ColorHelper.FromArgb(255, 145, 154, 177));
 
-    public string ExecutablePath => string.IsNullOrWhiteSpace(State.ExecutablePath) ? "尚未指定" : State.ExecutablePath;
+    public string ExecutablePath => string.IsNullOrWhiteSpace(EffectiveExecutablePath) ? "尚未指定" : EffectiveExecutablePath;
 
     public string LastPlayedText => State.LastPlayedAt is null
         ? "从未启动"
@@ -140,7 +155,7 @@ public sealed class GameCardViewModel : ObservableObject
 
             try
             {
-                var info = FileVersionInfo.GetVersionInfo(State.ExecutablePath!);
+                var info = FileVersionInfo.GetVersionInfo(EffectiveExecutablePath!);
                 return string.IsNullOrWhiteSpace(info.ProductVersion)
                     ? string.IsNullOrWhiteSpace(info.FileVersion) ? "暂无数据" : info.FileVersion
                     : info.ProductVersion;
@@ -150,6 +165,15 @@ public sealed class GameCardViewModel : ObservableObject
                 return "暂无数据";
             }
         }
+    }
+
+    public void SetEndfieldInstallation(EndfieldChannel channel, EndfieldInstallation? installation)
+    {
+        _endfieldChannel = channel;
+        _endfieldInstallation = installation;
+        OnPropertyChanged(nameof(ChannelBadgeText));
+        OnPropertyChanged(nameof(ChannelBadgeVisibility));
+        Refresh();
     }
 
     public void SetRunning(bool isRunning) => IsRunning = isRunning;

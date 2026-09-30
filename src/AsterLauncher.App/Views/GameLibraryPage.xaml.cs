@@ -18,6 +18,7 @@ namespace AsterLauncher.App.Views;
 public sealed partial class GameLibraryPage : Page
 {
     private readonly LauncherViewModel _launcher;
+    private readonly EndfieldMaintenanceViewModel _endfield;
     private readonly IFilePickerService _filePicker;
     private readonly IServiceProvider _services;
     private readonly ILogger<GameLibraryPage> _logger;
@@ -49,9 +50,20 @@ public sealed partial class GameLibraryPage : Page
         _launcher = launcher;
         _filePicker = filePicker;
         _services = services;
+        _endfield = services.GetRequiredService<EndfieldMaintenanceViewModel>();
         _logger = logger;
         InitializeComponent();
         DataContext = ViewModel;
+        EndfieldPanel.DataContext = _endfield;
+        _endfield.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(EndfieldMaintenanceViewModel.CanPreload))
+                EndfieldPreloadItem.Visibility = _endfield.CanPreload ? Visibility.Visible : Visibility.Collapsed;
+        };        _launcher.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(LauncherViewModel.SelectedEndfieldChannel))
+                UpdateEndfieldControls();
+        };
     }
 
     public GameLibraryViewModel ViewModel { get; }
@@ -84,6 +96,16 @@ public sealed partial class GameLibraryPage : Page
             SetRailCompact(false, false);
             UpdateLibraryLayout();
             ShowFeature("overview");
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                await _endfield.ScanSharingAsync();
+                if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
+                    await _endfield.CheckVersionAsync();
+            });
+#if DEBUG
+            if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_EXPANDED") == "1")
+                DispatcherQueue.TryEnqueue(() => SetLaunchExpanded(true));
+#endif
         }
         catch (Exception exception)
         {
@@ -98,6 +120,9 @@ public sealed partial class GameLibraryPage : Page
         UpdateNavigationState(tag);
         var isOverview = tag is "library" or "home" or "overview";
         var nextTag = isOverview ? "overview" : tag;
+        if (isOverview && _activeFeatureTag != "overview"
+            && _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
+            _ = _endfield.CheckVersionAsync();
         if (_activeFeatureTag == nextTag && _activeSurface is not null && AddGamePanel.Visibility == Visibility.Collapsed)
         {
             return;
@@ -205,10 +230,92 @@ public sealed partial class GameLibraryPage : Page
             await ViewModel.SelectGameAsync(game);
         }
 
+        UpdateEndfieldControls();
         if (!changed && _activeFeatureTag == "add") return;
         ShowFeature("overview");
+        if (changed && game.Id == BuiltInGameIds.Endfield) await _endfield.CheckVersionAsync();
     }
 
+    private async void OfficialChannel_OnClick(object sender, RoutedEventArgs e)
+    {
+        await _launcher.SelectEndfieldChannelAsync(EndfieldChannel.Official);
+        UpdateEndfieldControls();
+        await _endfield.CheckVersionAsync();
+        await _endfield.ScanSharingAsync();
+    }
+
+    private async void BilibiliChannel_OnClick(object sender, RoutedEventArgs e)
+    {
+        await _launcher.SelectEndfieldChannelAsync(EndfieldChannel.Bilibili);
+        UpdateEndfieldControls();
+        await _endfield.CheckVersionAsync();
+        await _endfield.ScanSharingAsync();
+    }
+
+    private void UpdateEndfieldControls()
+    {
+        var selected = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
+        EndfieldPanel.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+        var accent = (Brush)Application.Current.Resources["ThemeAccentSoftBrush"];
+        OfficialChannelButton.Background = _launcher.SelectedEndfieldChannel == EndfieldChannel.Official
+            ? accent : new SolidColorBrush(Colors.Transparent);
+        BilibiliChannelButton.Background = _launcher.SelectedEndfieldChannel == EndfieldChannel.Bilibili
+            ? accent : new SolidColorBrush(Colors.Transparent);
+        if (_isLaunchExpanded && _launchTransition is null)
+            LaunchSurface.Height = GetExpandedLaunchHeight();
+    }
+
+    private async void EndfieldChooseRoot_OnClick(object sender, RoutedEventArgs e)
+    {
+        var root = await _filePicker.PickGameDirectoryAsync(App.MainWindow);
+        if (root is null) return;
+        try { await _endfield.SetRootAsync(root); await _endfield.ScanSharingAsync(); }
+        catch (Exception exception)
+        {
+            await new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "安装目录不可用",
+                Content = exception.Message,
+                CloseButtonText = "知道了"
+            }.ShowAsync();
+        }
+    }
+
+    private async void EndfieldCheck_OnClick(object sender, RoutedEventArgs e) => await _endfield.CheckAsync();
+
+    private async void EndfieldSync_OnClick(object sender, RoutedEventArgs e) => await StartEndfieldSyncAsync();
+
+    private async Task StartEndfieldSyncAsync()
+    {
+        try { await _launcher.EnsureEndfieldDefaultRootAsync(); }
+        catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException)
+        {
+            await ShowMessageAsync("安装目录不可用", exception.Message);
+            return;
+        }
+        var channel = _endfield.Channel;
+        await _endfield.CheckAsync();
+        if (_endfield.Channel != channel || !_endfield.HasTrustedPlan) return;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "安装或更新当前渠道？",
+            Content = _endfield.PlanText + "\n将只修改当前渠道的独立目录。大文件下载可能持续较久。",
+            PrimaryButtonText = "开始",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            await _endfield.SyncAsync(false);
+    }
+
+    private async void EndfieldRepair_OnClick(object sender, RoutedEventArgs e) => await _endfield.SyncAsync(true);
+    private void EndfieldPause_OnClick(object sender, RoutedEventArgs e) => _endfield.Pause();
+    private async void EndfieldCheckPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.CheckPreloadAsync();
+    private async void EndfieldPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.PreloadAsync();
+    private async void EndfieldOptimize_OnClick(object sender, RoutedEventArgs e) => await _endfield.OptimizeAsync();
+    private async void EndfieldUnshare_OnClick(object sender, RoutedEventArgs e) => await _endfield.UnshareAsync();
     private void GameList_OnContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
         if (args.InRecycleQueue)
@@ -285,13 +392,21 @@ public sealed partial class GameLibraryPage : Page
     {
         var available = HeroContent.ActualHeight - HeroContent.Padding.Top - HeroContent.Padding.Bottom
             - PlayTimeButton.Height - 10;
-        return Math.Max(230d, Math.Min(HeroContent.ActualWidth < 900 ? 302d : 264d, available));
+        var desired = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield ? 470d
+            : HeroContent.ActualWidth < 900 ? 302d : 264d;
+        return Math.Max(230d, Math.Min(desired, available));
     }
 
     private async void Launch_OnClick(object sender, RoutedEventArgs e)
     {
         try
         {
+            if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
+            {
+                if (_endfield.IsPrimaryDownloading) { _endfield.Pause(); return; }
+                if (!_endfield.HasSelectedChannel) { SetLaunchExpanded(true); return; }
+                if (_endfield.PrimaryStartsMaintenance) { await StartEndfieldSyncAsync(); return; }
+            }
             var result = await ViewModel.LaunchAsync();
             if (result is null)
             {

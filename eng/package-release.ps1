@@ -1,130 +1,60 @@
 [CmdletBinding()]
-param(
-    [string]$PreviousPackage,
-    [string]$PreviousVersion
-)
-
+param([string]$PreviousPackage,[string]$PreviousVersion)
+$ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'set-env.ps1')
-$root = Split-Path -Parent $PSScriptRoot
-$version = (Select-Xml -Path (Join-Path $root 'Directory.Build.props') -XPath '//Version').Node.InnerText
-$output = Join-Path $root ".artifacts\release\v$version"
-$publish = Join-Path $output 'publish'
-$payload = Join-Path $output 'payload'
-$fullName = "AsterLauncher-v$version-win-x64.zip"
-$fullPath = Join-Path $output $fullName
-function Reset-ReleaseTemporaryDirectory([string]$directory) {
-    $absolute = [System.IO.Path]::GetFullPath($directory)
-    $safePrefix = [System.IO.Path]::GetFullPath($output).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
-    if (-not $absolute.StartsWith($safePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Temporary release path escaped the release directory: $absolute"
-    }
-    if (Test-Path -LiteralPath $absolute) {
-        Remove-Item -LiteralPath $absolute -Recurse -Force
-    }
-    New-Item -ItemType Directory -Force -Path $absolute | Out-Null
-}
-New-Item -ItemType Directory -Force -Path $output, $publish, $payload | Out-Null
-Get-ChildItem -LiteralPath $output -Filter '*-delta.zip' -File -ErrorAction SilentlyContinue |
-    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
-
+$root=Split-Path -Parent $PSScriptRoot
+$version=(Select-Xml -Path (Join-Path $root 'Directory.Build.props') -XPath '//Version').Node.InnerText
+$output=Join-Path $root ".artifacts\release\v$version"
+$app=Join-Path $output 'publish'; $tools=Join-Path $output 'migration-publish'
+New-Item -ItemType Directory -Force -Path $output | Out-Null
 Push-Location $root
 try {
-    & dotnet publish .\src\AsterLauncher.App\AsterLauncher.App.csproj --configuration Release `
-        --runtime win-x64 --self-contained true --no-restore `
-        -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-        -p:EnableMsixTooling=true -o $publish
-    if ($LASTEXITCODE -ne 0) { throw 'Release publish failed.' }
-} finally {
-    Pop-Location
-}
-
-$target = Join-Path $payload 'AsterLauncher.exe'
-Copy-Item -LiteralPath (Join-Path $publish 'AsterLauncher.exe') -Destination $target -Force
-$targetHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+    & dotnet publish .\src\AsterLauncher.App\AsterLauncher.App.csproj --configuration Release --runtime win-x64 --self-contained true --no-restore -p:PublishSingleFile=false -p:EnableMsixTooling=true -o $app
+    if ($LASTEXITCODE -ne 0) { throw 'Application publish failed.' }
+    & dotnet publish .\src\AsterLauncher.Migrator\AsterLauncher.Migrator.csproj --configuration Release --runtime win-x64 --self-contained true --no-restore -p:PublishSingleFile=false -o $tools
+    if ($LASTEXITCODE -ne 0) { throw 'Migration tool publish failed.' }
+} finally { Pop-Location }
+$name="AsterLauncher-v$version-win-x64.zip"; $full=Join-Path $output $name
+& (Join-Path $PSScriptRoot 'create-migration-package.ps1') -AppPublish $app -MigratorPublish $tools -OutputZip $full -Version $version
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-if (Test-Path -LiteralPath $fullPath) { Remove-Item -LiteralPath $fullPath -Force }
-[System.IO.Compression.ZipFile]::CreateFromDirectory($payload, $fullPath,
-    [System.IO.Compression.CompressionLevel]::Optimal, $false)
-$manifest = [ordered]@{
-    version = $version
-    full = [ordered]@{
-        asset = $fullName
-        sha256 = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        targetSha256 = $targetHash
-    }
-}
-
+$zip=[IO.Compression.ZipFile]::OpenRead($full)
+try {
+    $reader=[IO.StreamReader]::new($zip.GetEntry('release-files.json').Open())
+    try { $target=$reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+} finally { $zip.Dispose() }
+$entryHash=$target.files.'AsterLauncher.exe'.sha256
+$manifest=[ordered]@{format=2;version=$version;full=[ordered]@{asset=$name;sha256=(Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant();targetSha256=$entryHash}}
 if ($PreviousPackage) {
-    if (-not $PreviousVersion -or $PreviousVersion -notmatch '^\d+\.\d+\.\d+-(?:beta(?:\.\d+)?)$') {
-        throw 'PreviousVersion must be a beta semantic version.'
-    }
-    $previousRoot = Join-Path $output 'previous'
-    Reset-ReleaseTemporaryDirectory $previousRoot
-    [System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path -LiteralPath $PreviousPackage).Path,
-        $previousRoot)
-    $previousExe = Join-Path $previousRoot 'AsterLauncher.exe'
-    if (-not (Test-Path -LiteralPath $previousExe -PathType Leaf)) { throw 'Previous package has no AsterLauncher.exe.' }
-
-    $deltaRoot = Join-Path $output 'delta'
-    Reset-ReleaseTemporaryDirectory $deltaRoot
-    $blockSize = 1048576
-    $changed = [System.Collections.Generic.List[int]]::new()
-    $old = [System.IO.File]::OpenRead($previousExe)
-    $new = [System.IO.File]::OpenRead($target)
+    if (-not $PreviousVersion) { throw 'PreviousVersion is required.' }
+    $previous=[IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($PreviousPackage))
+    $new=[IO.Compression.ZipFile]::OpenRead($full)
+    $patchName="AsterLauncher-$PreviousVersion-to-$version-files-delta.zip"
+    $patchPath=Join-Path $output $patchName
+    if (Test-Path -LiteralPath $patchPath) { throw 'Delta asset exists; review it before rebuilding.' }
     try {
-        $count = [int][math]::Ceiling($new.Length / $blockSize)
-        for ($index = 0; $index -lt $count; $index++) {
-            $length = [int][math]::Min($blockSize, $new.Length - ($index * $blockSize))
-            $newBytes = New-Object byte[] $length
-            if ($new.Read($newBytes, 0, $length) -ne $length) { throw 'Could not read new executable.' }
-            $isSame = $old.Position + $length -le $old.Length
-            if ($isSame) {
-                $oldBytes = New-Object byte[] $length
-                $isSame = $old.Read($oldBytes, 0, $length) -eq $length
-                if ($isSame) {
-                    $newHash = [System.Security.Cryptography.SHA256]::Create()
-                    try {
-                        $isSame = [Convert]::ToBase64String($newHash.ComputeHash($newBytes)) -eq
-                            [Convert]::ToBase64String($newHash.ComputeHash($oldBytes))
-                    } finally { $newHash.Dispose() }
-                }
-            } else {
-                $old.Position = [math]::Min($old.Length, ([long]$index + 1) * $blockSize)
+        $oldEntry=$previous.GetEntry('release-files.json')
+        if ($null -eq $oldEntry) { throw 'A single-exe package needs manual migration, not a file delta.' }
+        $reader=[IO.StreamReader]::new($oldEntry.Open())
+        try { $base=$reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+        if ($base.version -ne $PreviousVersion) { throw 'Previous package version mismatch.' }
+        $patch=[IO.Compression.ZipFile]::Open($patchPath,[IO.Compression.ZipArchiveMode]::Create)
+        try {
+            $plan=$patch.CreateEntry('file-delta.json');$writer=[IO.StreamWriter]::new($plan.Open(),[Text.UTF8Encoding]::new($false))
+            try { $writer.Write(([ordered]@{format=2;from=$PreviousVersion;target=$target} | ConvertTo-Json -Depth 8 -Compress)) } finally { $writer.Dispose() }
+            foreach ($property in $target.files.PSObject.Properties) {
+                $key=$property.Name; $record=$property.Value
+                $prior=$base.files.PSObject.Properties[$key]
+                if ($null -ne $prior -and $prior.Value.sha256 -eq $record.sha256 -and $prior.Value.length -eq $record.length) { continue }
+                $source=$new.GetEntry($key);$entry=$patch.CreateEntry($key,[IO.Compression.CompressionLevel]::Optimal)
+                $input=$source.Open();$out=$entry.Open()
+                try { $input.CopyTo($out) } finally { $input.Dispose();$out.Dispose() }
             }
-            if (-not $isSame) {
-                $changed.Add($index)
-                [System.IO.File]::WriteAllBytes((Join-Path $deltaRoot ('block-{0:D6}.bin' -f $index)), $newBytes)
-            }
-        }
-    } finally {
-        $old.Dispose()
-        $new.Dispose()
-    }
-    [ordered]@{
-        baseSha256 = (Get-FileHash -LiteralPath $previousExe -Algorithm SHA256).Hash.ToLowerInvariant()
-        targetSha256 = $targetHash
-        targetLength = (Get-Item -LiteralPath $target).Length
-        blockSize = $blockSize
-        changedBlocks = @($changed.ToArray())
-    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $deltaRoot 'patch.json') -Encoding UTF8
-
-    $patchName = "AsterLauncher-$PreviousVersion-to-$version-delta.zip"
-    $patchPath = Join-Path $output $patchName
-    if (Test-Path -LiteralPath $patchPath) { Remove-Item -LiteralPath $patchPath -Force }
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($deltaRoot, $patchPath,
-        [System.IO.Compression.CompressionLevel]::Optimal, $false)
-    if ((Get-Item -LiteralPath $patchPath).Length -lt (Get-Item -LiteralPath $fullPath).Length) {
-        $manifest.patch = [ordered]@{
-            from = $PreviousVersion
-            asset = $patchName
-            sha256 = (Get-FileHash -LiteralPath $patchPath -Algorithm SHA256).Hash.ToLowerInvariant()
-            targetSha256 = $targetHash
-        }
-    } else {
-        Remove-Item -LiteralPath $patchPath -Force
-    }
+        } finally { $patch.Dispose() }
+    } finally { $previous.Dispose();$new.Dispose() }
+    if ((Get-Item -LiteralPath $patchPath).Length -lt (Get-Item -LiteralPath $full).Length) {
+        $manifest.patch=[ordered]@{from=$PreviousVersion;asset=$patchName;sha256=(Get-FileHash -LiteralPath $patchPath -Algorithm SHA256).Hash.ToLowerInvariant();targetSha256=$entryHash}
+    } else { Remove-Item -LiteralPath $patchPath -Force }
 }
-
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'aster-update.json') -Encoding UTF8
+$manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $output 'aster-update-v2.json') -Encoding UTF8
 Write-Output "Release assets: $output"
-Write-Output "Package root: AsterLauncher.exe"
+Write-Output 'Root: AsterLauncher.exe, App/, MigrationTools/, release-files.json. Data is excluded.'

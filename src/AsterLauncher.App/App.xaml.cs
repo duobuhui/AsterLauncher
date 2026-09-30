@@ -86,6 +86,22 @@ public partial class App : Application
         services.AddSingleton<IUigfArchiveService, UigfArchiveService>();
         services.AddSingleton<IEndfieldGachaArchiveService, EndfieldGachaArchiveService>();
         services.AddSingleton<LauncherUpdateService>();
+        var endfieldNetworkRuntime = Path.Combine(AppContext.BaseDirectory, "NetworkRuntime");
+        services.AddSingleton<IEndfieldDistributionProvider>(provider =>
+            new EndfieldDistributionProvider(new HttpClient(new EndfieldNodeHttpHandler(endfieldNetworkRuntime))
+            { Timeout = TimeSpan.FromMinutes(3) }));
+        services.AddSingleton(provider => new EndfieldDownloadService(
+            new HttpClient(new EndfieldNodeHttpHandler(endfieldNetworkRuntime))
+            { Timeout = TimeSpan.FromMinutes(30) },
+            LauncherDataPaths.ResolveDataDirectory()));
+        services.AddSingleton<EndfieldSharingService>();
+        services.AddSingleton(provider => new EndfieldMaintenanceService(
+            provider.GetRequiredService<IEndfieldDistributionProvider>(),
+            provider.GetRequiredService<EndfieldDownloadService>(),
+            provider.GetRequiredService<EndfieldSharingService>(),
+            LauncherDataPaths.ResolveDataDirectory(),
+            new EndfieldArchiveService(Path.Combine(AppContext.BaseDirectory, "MaintenanceTools", "7za.exe"))));
+        services.AddSingleton<EndfieldMaintenanceViewModel>();
         services.AddSingleton(provider => new WallpaperUpdateService(
             new HttpClient(new HttpClientHandler
             {

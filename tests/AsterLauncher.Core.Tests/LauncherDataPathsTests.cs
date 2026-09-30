@@ -55,6 +55,29 @@ public sealed class LauncherDataPathsTests : IDisposable
             Path.Combine(_root, "temp")));
     }
 
+    [Fact]
+    public async Task NestedMultiFileApp_UsesRootDataAndKeepsRelocationPointerOutsideApp()
+    {
+        var release = Path.Combine(_root, "release");
+        var app = Path.Combine(release, "App");
+        var tools = Path.Combine(release, "MigrationTools");
+        var target = Path.Combine(_root, "chosen");
+        Directory.CreateDirectory(app);
+        Directory.CreateDirectory(tools);
+        Directory.CreateDirectory(target);
+        await File.WriteAllTextAsync(Path.Combine(release, "AsterLauncher.exe"), "shim");
+        await File.WriteAllTextAsync(Path.Combine(tools, "AsterLauncher.Migrator.dll"), "tool");
+        var source = Path.Combine(release, "Data");
+        Directory.CreateDirectory(source);
+        await File.WriteAllTextAsync(Path.Combine(source, "launcher.settings.json"), "{}");
+
+        Assert.Equal(source, LauncherDataPaths.ResolveDataDirectory(app, null));
+        Assert.True(await LauncherDataPaths.RelocateAsync(target, executableDirectory: app,
+            sourceDirectory: source));
+        Assert.Equal(target, LauncherDataPaths.ResolveDataDirectory(app, null));
+        Assert.True(File.Exists(Path.Combine(release, "asterlauncher.data-location.json")));
+        Assert.False(File.Exists(Path.Combine(app, "asterlauncher.data-location.json")));
+    }
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME", _originalDataHome);
