@@ -92,6 +92,7 @@ public interface IUigfArchiveService
     Task<UigfArchiveSummary> GetSummaryAsync(CancellationToken cancellationToken = default);
 
     Task<StarRailGachaAnalysis> GetStarRailAnalysisAsync(CancellationToken cancellationToken = default);
+    Task<UigfGachaAnalysis> GetAnalysisAsync(string gameId, CancellationToken cancellationToken = default);
 
     Task<GachaImportResult> ImportAsync(string sourcePath, CancellationToken cancellationToken = default);
 

@@ -23,7 +23,11 @@ External processes use structured argument lists. Cleanup targets only process i
 
 Configuration, logs, records and artwork live in the configured data root. `LauncherDataPaths` resolves the installation-root location file, the development override, or installation-root `Data`. Game-library ordering, hidden games and launch profiles are persisted through `JsonConfigurationStore`.
 
-UIGF records and Endfield records use separate archive services. Import merges and deduplicates records. Star Rail incremental capture uses existing account-UID/warp-type/record-ID checkpoints, finishes the entire boundary page, and stops older pages only for that pool. Full capture bypasses checkpoints; accounts and pools without history are scanned normally. Authorization URLs, authkeys and tokens remain transient and are excluded from logs and archives.
+UIGF records and Endfield records use separate archive services. Import merges and deduplicates records. Genshin Impact, Star Rail and Zenless Zone Zero incremental capture use game-scoped account-UID/pool-type/record-ID checkpoints, finishes the entire boundary page, and stops older pages only for that pool. Full capture bypasses checkpoints; accounts and pools without history are scanned normally. Genshin raw types 301/400 share a checkpoint; other types stay independent. String and integer UIGF UIDs identify the same account. Authorization URLs, authkeys and tokens remain transient and are excluded from logs and archives.
+
+`UigfGachaAnalyzer` produces per-game, per-account sections for the shared analysis page. Genshin/Star Rail ranks 5/4/3 and Zenless ranks 4/3/2 use different labels. First high-rarity intervals are local lower bounds; averages use only complete intervals. Banner breakdowns use actual gacha_id values, not guessed periods. Unrecognized and unverified special pool types remain visible without a fabricated pity maximum. The legacy Star Rail analysis API delegates to this engine.
+
+`PortraitImageConverter` resolves a game/name key through the packaged index only. It uses original local images, supports source-listed aliases, and retains a glyph for unmatched names. Asset collection runs during development through `eng/update-uigf-artwork.cjs`, never while opening a record page.
 
 ## Artwork and tools
 

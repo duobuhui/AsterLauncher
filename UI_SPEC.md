@@ -49,3 +49,9 @@ Inspect the actual running window at 1280×800 and narrower equivalent viewports
 - Home and Game Library launch controls reflect the selected game only. Switching to another game while a launch session remains active restores that game's independent button and running indicator; each game can have its own active session.
 
 The game rail supports mouse and keyboard context menus with game-page, records, profiles, install-folder, settings and hide/remove actions. Endfield adds a checked server submenu and an update check. Tooltips are reserved for icon-only actions, abbreviated paths and statistics that need explanation; they do not repeat complete visible text. Small secondary text, including gacha timestamps, uses at least 12 DIPs with opaque foregrounds in both theme dictionaries. Single-letter channel badges are icon labels and remain compact.
+
+## Shared UIGF analysis
+
+Genshin Impact, Star Rail and Zenless Zone Zero reuse one compact record layout. The header shows the current game and masked account, with incremental and full sync actions. An account selector appears only when needed. Local pity tiles follow each game's categories; unknown rules show the local count without an invented cap. Role sections occupy the wider column, other pools the narrower column; small windows stack all sections.
+
+High-rarity rows show a bundled character or equipment icon, name, interval bar and date. Genshin/Star Rail use star labels; Zenless uses S/A/B. The first interval is explicitly a local lower bound, and the mean excludes it. Explanations use normal page text rather than repeated hover tooltips. Imports retain the existing UIGF archive layout.

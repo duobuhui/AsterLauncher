@@ -74,7 +74,7 @@ For later versions or additional assets, review the scope of permission again. S
 
 ## Star Rail history preview (2026-09-28)
 
-- Five-star character rows use the bundled official portraits listed above; light cones and unmatched names retain the project-authored XAML glyph. The user-supplied Starward screenshot is a density reference only and is not bundled. Cards use existing theme brushes. UIGF record data and official rule notices are factual references, not artwork sources.
+- Five-star character rows use the bundled official portraits listed above; light cones now use the bundled catalog icons described below; unmatched names retain the project-authored XAML glyph. The user-supplied Starward screenshot is a density reference only and is not bundled. Cards use existing theme brushes. UIGF record data and official rule notices are factual references, not artwork sources.
 
 ## Endfield channel controls in the development tree
 
@@ -82,3 +82,17 @@ The official/Bilibili channel indicator is an original text badge drawn over the
 ## 0.1.3 channel markers
 
 The Endfield server selector and icon markers are original AsterLauncher text overlays (“官” and “B”) on the already attributed packaged game icon. The overview, sidebar and library consume observable channel state. No separate publisher/bilibili logo or other launcher asset was added. Node.js and 7-Zip are executable dependencies, not media; their notices and corresponding source distribution are recorded in THIRD_PARTY_NOTICES.md.
+
+## Bundled UIGF character and equipment icons (2026-09-30)
+
+Original images are obtained from the public catalogs hosted by miHoYo/miHoYo community Wiki. The catalogs include editor uploads; hosting and a source link are provenance, not an open-source image license. Publisher artwork remains the respective publisher's property. These additional bundled images are included at the project owner's explicit request in this maintenance session. No other launcher's assets or repository image license is used.
+
+| Game | Bundled catalog images used by the index | Catalog |
+| --- | --- | --- |
+| Genshin Impact | 129 character icons, 252 weapon icons | [public catalog](https://api-static.mihoyo.com/common/blackboard/ys_obc/v1/home/content/list?app_sn=ys_obc&channel_id=189) |
+| Honkai: Star Rail | 9 additional character icons, 170 light-cone icons; existing official-site character portraits take precedence | [public catalog](https://api-static.mihoyo.com/common/blackboard/sr_wiki/v1/home/content/list?app_sn=sr_wiki&channel_id=17) |
+| Zenless Zone Zero | 62 agent icons, 100 W-engine icons, 41 Bangboo icons | [public catalog](https://api-static.mihoyo.com/common/blackboard/zzz_wiki/v1/home/content/list?app_sn=zzz_wiki&channel_id=2) |
+
+The original PNG/JPEG bytes are kept under `Assets/Games/Gacha/Portraits/` in game-specific folders. `portrait-index.json` records the original catalog title, exact source page, CDN URL, catalog endpoint, SHA-256 and size for every new mapping. Source-listed aliases and whitespace variants of Chinese names map to the same file; unmatched names use the project glyph. No image request is made by the record view, so these images remain available offline.
+
+`eng/update-uigf-artwork.cjs` independently collects public catalog entries, restricts HTTPS hosts, checks image signatures, validates cached hashes and updates the index after successful collection. Duplicate unused catalog images are excluded. Existing first-party portrait collection preserves these catalog mappings.

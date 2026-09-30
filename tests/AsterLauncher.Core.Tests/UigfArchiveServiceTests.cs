@@ -21,6 +21,22 @@ public sealed class UigfArchiveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Import_NumericUidAndStringUid_MergeWithoutDuplicatingAccount()
+    {
+        var input = Path.Combine(_root, "numeric-uid.json");
+        using var service = new UigfArchiveService(NullLogger<UigfArchiveService>.Instance);
+        await File.WriteAllTextAsync(input, """{"info":{"version":"v4.2"},"hk4e":[{"uid":100000001,"list":[{"id":"1","gacha_type":"301","rank_type":"5","name":"迪卢克"}]}]}""");
+        Assert.True((await service.ImportAsync(input)).Success);
+        await File.WriteAllTextAsync(input, """{"info":{"version":"v4.2"},"hk4e":[{"uid":"100000001","list":[{"id":"1","gacha_type":"301","rank_type":"5","name":"迪卢克"},{"id":"2","gacha_type":"400","rank_type":"3"}]}]}""");
+        var merged = await service.ImportAsync(input);
+        Assert.True(merged.Success, merged.Message);
+        Assert.Equal(1, merged.ImportedCount);
+        var account = Assert.Single((await service.GetAnalysisAsync("genshin-impact")).Accounts);
+        Assert.Equal("100000001", account.Uid);
+        Assert.Equal(2, account.RecordCount);
+        Assert.Single(account.Sections);
+    }
+    [Fact]
     public async Task ImportAndExport_UigfV4_PreservesAllSupportedGames()
     {
         var input = Path.Combine(_root, "input.json");

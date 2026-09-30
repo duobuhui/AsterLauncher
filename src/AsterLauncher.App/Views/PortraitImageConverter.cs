@@ -12,12 +12,12 @@ public sealed class PortraitImageConverter : IValueConverter
 
     public object Convert(object value, Type targetType, object parameter, string language)
     {
-        if (value is not string name || parameter is not string gameId)
+        if (value is not string name)
         {
             return null!;
         }
 
-        var key = gameId + "\u001F" + name;
+        var key = parameter is string gameId ? gameId + "\u001F" + name : name;
         if (!Paths.Value.TryGetValue(key, out var relativePath))
         {
             return null!;

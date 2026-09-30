@@ -17,8 +17,9 @@ public sealed partial class GachaPage : Page
     private readonly IEndfieldGachaArchiveService _endfieldArchive;
     private readonly IFilePickerService _filePicker;
     private int _poolCardCount;
-    private StarRailGachaAnalysis _starRailAnalysis = StarRailGachaAnalysis.Empty;
-    private bool _settingStarRailAccounts;
+    private UigfGachaAnalysis _analysis = UigfGachaAnalysis.Empty;
+    private bool _settingAccounts;
+    private int _refreshRevision;
 
     public GachaPage(LauncherViewModel launcher, IUigfArchiveService archive, IEndfieldGachaArchiveService endfieldArchive, IFilePickerService filePicker)
     {
@@ -30,8 +31,8 @@ public sealed partial class GachaPage : Page
         HistoryPoolItems.ItemTemplate = PoolItems.ItemTemplate;
         PoolLeftItems.ItemTemplate = PoolItems.ItemTemplate;
         PoolRightItems.ItemTemplate = PoolItems.ItemTemplate;
-        StarRailRoleSections.ItemTemplate = StarRailSections.ItemTemplate;
-        StarRailOtherSections.ItemTemplate = StarRailSections.ItemTemplate;
+        UigfRoleSections.ItemTemplate = UigfSections.ItemTemplate;
+        UigfOtherSections.ItemTemplate = UigfSections.ItemTemplate;
     }
 
     private async void Page_OnLoaded(object sender, RoutedEventArgs e)
@@ -42,27 +43,34 @@ public sealed partial class GachaPage : Page
 
     private async Task RefreshAsync()
     {
-        var isEndfield = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
-        var isStarRail = _launcher.CurrentGame?.Id == BuiltInGameIds.HonkaiStarRail;
-        var supportsUigfCapture = _launcher.CurrentGame?.Id is BuiltInGameIds.GenshinImpact
+        var revision = ++_refreshRevision;
+        var gameId = _launcher.CurrentGame?.Id ?? "";
+        var gameName = _launcher.CurrentGame?.DisplayName ?? "未选择游戏";
+        var previousUid = UigfAccountSelector.SelectedIndex is var selected && selected >= 0 && selected < _analysis.Accounts.Count
+            ? _analysis.Accounts[selected].Uid : null;
+        bool IsCurrent() => revision == _refreshRevision && _launcher.CurrentGame?.Id == gameId;
+        var isEndfield = gameId == BuiltInGameIds.Endfield;
+
+        var supportsUigfCapture = gameId is BuiltInGameIds.GenshinImpact
             or BuiltInGameIds.HonkaiStarRail
             or BuiltInGameIds.ZenlessZoneZero;
         CaptureButton.Visibility = isEndfield || supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
-        CaptureButton.Content = isEndfield || isStarRail ? "增量同步" : "同步记录";
-        FullCaptureButton.Visibility = isEndfield || isStarRail ? Visibility.Visible : Visibility.Collapsed;
+        CaptureButton.Content = "增量同步";
+        FullCaptureButton.Visibility = isEndfield || supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
         ImportButton.Content = isEndfield ? "导入终末地 JSON" : "导入 UIGF v4 JSON";
         ExportButton.Content = isEndfield ? "导出终末地 JSON" : "导出 UIGF v4.2 JSON";
         ExportCsvButton.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
         EndfieldAnalysisPanel.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
         EndfieldPityStrip.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
-        StarRailAnalysisPanel.Visibility = isStarRail ? Visibility.Visible : Visibility.Collapsed;
-        StarRailPityStrip.Visibility = isStarRail ? Visibility.Visible : Visibility.Collapsed;
+        UigfAnalysisPanel.Visibility = supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
+        UigfPityStrip.Visibility = supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
 
         if (isEndfield)
         {
             var endfieldSummary = await _endfieldArchive.GetSummaryAsync();
             var analysis = await _endfieldArchive.GetAnalysisAsync();
-            CurrentGameText.Text = _launcher.CurrentGame?.DisplayName ?? "明日方舟：终末地";
+            if (!IsCurrent()) return;
+            CurrentGameText.Text = gameName;
             ArchiveSummaryText.Text = $"{endfieldSummary.TotalCount} 条 · {analysis.CharacterDrawCount} 抽 · 六星 {analysis.SixStarCount}（免费 {analysis.FreeSixStarCount}）";
             ToolTipService.SetToolTip(ArchiveSummaryText, _endfieldArchive.ArchivePath);
             StandardPityText.Text = analysis.Pity.StandardText;
@@ -95,80 +103,76 @@ public sealed partial class GachaPage : Page
         PoolItems.ItemsSource = null;
         PoolLeftItems.ItemsSource = null;
         PoolRightItems.ItemsSource = null;
-        if (isStarRail)
+        if (supportsUigfCapture)
         {
-            _starRailAnalysis = await _archive.GetStarRailAnalysisAsync();
-            CurrentGameText.Text = _launcher.CurrentGame?.DisplayName ?? "崩坏：星穹铁道";
-            ToolTipService.SetToolTip(ArchiveSummaryText, _archive.ArchivePath);
-            _settingStarRailAccounts = true;
-            StarRailAccountSelector.ItemsSource = _starRailAnalysis.Accounts.Select(account => account.AccountLabel).ToArray();
-            StarRailAccountSelector.Visibility = _starRailAnalysis.Accounts.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
-            StarRailAccountSelector.SelectedIndex = _starRailAnalysis.Accounts.Count > 0 ? 0 : -1;
-            _settingStarRailAccounts = false;
-            ShowStarRailAccount(0);
+            var analysis = await _archive.GetAnalysisAsync(gameId);
+            if (!IsCurrent()) return;
+            _analysis = analysis;
+            CurrentGameText.Text = gameName;
+            UigfRulesText.Text = gameId switch
+            {
+                BuiltInGameIds.GenshinImpact => "角色活动祈愿 301 / 400 共用计数，武器、常驻和集录分别统计；不推断定轨或 UP。",
+                BuiltInGameIds.ZenlessZoneZero => "各调频类别分别统计 S / A / B 级；特殊类别保底规则待核对，不推断 UP。",
+                _ => "同类跃迁共用五星计数；特殊类别保留原始记录，不推断 UP。"
+            };
+            UigfEmptyText.Text = $"暂无{gameName}记录；同步或导入 UIGF 后显示。";
+            _settingAccounts = true;
+            UigfAccountSelector.ItemsSource = analysis.Accounts.Select(account => account.AccountLabel).ToArray();
+            UigfAccountSelector.Visibility = analysis.Accounts.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+            var index = previousUid is null ? -1 : analysis.Accounts.ToList().FindIndex(account => account.Uid == previousUid);
+            UigfAccountSelector.SelectedIndex = analysis.Accounts.Count == 0 ? -1 : Math.Max(0, index);
+            _settingAccounts = false;
+            ShowUigfAccount(UigfAccountSelector.SelectedIndex);
             return;
         }
 
-        StarRailSections.ItemsSource = null;
-        StarRailRoleSections.ItemsSource = null;
-        StarRailOtherSections.ItemsSource = null;
+        UigfSections.ItemsSource = null;
+        UigfRoleSections.ItemsSource = null;
+        UigfOtherSections.ItemsSource = null;
         var summary = await _archive.GetSummaryAsync();
-        CurrentGameText.Text = _launcher.CurrentGame?.DisplayName ?? "未选择游戏";
+        if (!IsCurrent()) return;
+        CurrentGameText.Text = gameName;
         ArchiveSummaryText.Text = $"本地档案 · 原神 {summary.GenshinCount} · 星穹铁道 {summary.StarRailCount} · 绝区零 {summary.ZenlessCount} · 共 {summary.TotalCount} 条";
-        ToolTipService.SetToolTip(ArchiveSummaryText, _archive.ArchivePath);
     }
 
-    private void StarRailAccountSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void UigfAccountSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_settingStarRailAccounts)
+        if (!_settingAccounts) ShowUigfAccount(UigfAccountSelector.SelectedIndex);
+    }
+
+    private void ShowUigfAccount(int index)
+    {
+        var account = index >= 0 && index < _analysis.Accounts.Count ? _analysis.Accounts[index] : null;
+        UigfSections.ItemsSource = account?.Sections;
+        UigfRoleSections.ItemsSource = account?.Sections.Where(section => section.IsFeaturedCharacter).ToArray();
+        UigfOtherSections.ItemsSource = account?.Sections.Where(section => !section.IsFeaturedCharacter).ToArray();
+        UpdateUigfLayout(GachaScrollViewer.ActualWidth, account);
+        UigfEmptyText.Visibility = account?.RecordCount > 0 ? Visibility.Collapsed : Visibility.Visible;
+        ArchiveSummaryText.Text = account is null ? "本地档案 · 0 条"
+            : $"{account.AccountLabel} · {account.RecordCount} 条 · {_analysis.HighRarityLabel} {account.Sections.Sum(section => section.HighRarityCount)}";
+        var displayed = _analysis.Categories.Where(category => category.PityMaximum is not null &&
+            (!IsOptionalCategory(category.Type) || account?.Sections.Any(section => section.Type == category.Type) == true)).ToList();
+        displayed.AddRange(account?.Sections.Where(section => displayed.All(c => c.Type != section.Type))
+            .Select(section => new UigfPoolDefinition(section.Type, section.Title, section.PityMaximum)) ?? []);
+        UigfPityStrip.ItemsSource = displayed.Select(category =>
         {
-            ShowStarRailAccount(StarRailAccountSelector.SelectedIndex);
-        }
+            var section = account?.Sections.FirstOrDefault(section => section.Type == category.Type);
+            return new UigfPityIndicator(category.Title, section?.PityCount, category.PityMaximum, section?.HighRarityCount > 0);
+        }).ToArray();
     }
 
-    private void ShowStarRailAccount(int index)
+    private bool IsOptionalCategory(string type) => _analysis.GameId switch
     {
-        if (index < 0 || index >= _starRailAnalysis.Accounts.Count)
-        {
-            StarRailSections.ItemsSource = null;
-        StarRailRoleSections.ItemsSource = null;
-        StarRailOtherSections.ItemsSource = null;
-            StarRailEmptyText.Visibility = Visibility.Visible;
-            ArchiveSummaryText.Text = "本地档案 · 0 条";
-            UpdateStarRailPity(null, StarRailRolePityText, StarRailRolePityBar, 90);
-            UpdateStarRailPity(null, StarRailConePityText, StarRailConePityBar, 80);
-            UpdateStarRailPity(null, StarRailStandardPityText, StarRailStandardPityBar, 90);
-            return;
-        }
+        BuiltInGameIds.GenshinImpact => type == "500",
+        BuiltInGameIds.ZenlessZoneZero => type is "102" or "103",
+        _ => false
+    };
 
-        var account = _starRailAnalysis.Accounts[index];
-        StarRailSections.ItemsSource = account.Sections;
-        StarRailRoleSections.ItemsSource = account.Sections.Where(section => section.Type == "11").ToArray();
-        StarRailOtherSections.ItemsSource = account.Sections.Where(section => section.Type != "11").ToArray();
-        UpdateStarRailLayout(GachaScrollViewer.ActualWidth, account);
-        StarRailEmptyText.Visibility = account.RecordCount > 0 ? Visibility.Collapsed : Visibility.Visible;
-        ArchiveSummaryText.Text = $"{account.AccountLabel} · {account.RecordCount} 条 · 五星 {account.Sections.Sum(section => section.FiveStarCount)}";
-        UpdateStarRailPity(account.Sections.FirstOrDefault(section => section.Type == "11"),
-            StarRailRolePityText, StarRailRolePityBar, 90);
-        UpdateStarRailPity(account.Sections.FirstOrDefault(section => section.Type == "12"),
-            StarRailConePityText, StarRailConePityBar, 80);
-        UpdateStarRailPity(account.Sections.FirstOrDefault(section => section.Type == "1"),
-            StarRailStandardPityText, StarRailStandardPityBar, 90);
-    }
-
-    private static void UpdateStarRailPity(StarRailWarpSection? section, TextBlock text, ProgressBar bar, int maximum)
+    private void UigfAnalysisPanel_OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        text.Text = section is null ? "—" : $"{section.PityCount} / {maximum}";
-        bar.Value = section?.PityPercent ?? 0;
-        bar.Foreground = section?.PityCount > maximum - 15
-            ? HighCountBrush : (Brush)Application.Current.Resources["PageTitleBrush"];
-    }
-    private void StarRailAnalysisPanel_OnSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        var index = StarRailAccountSelector.SelectedIndex;
-        var account = index >= 0 && index < _starRailAnalysis.Accounts.Count
-            ? _starRailAnalysis.Accounts[index] : null;
-        UpdateStarRailLayout(e.NewSize.Width, account);
+        var index = UigfAccountSelector.SelectedIndex;
+        var account = index >= 0 && index < _analysis.Accounts.Count ? _analysis.Accounts[index] : null;
+        UpdateUigfLayout(e.NewSize.Width, account);
     }
 
     private void GachaScrollViewer_OnSizeChanged(object sender, SizeChangedEventArgs e) =>
@@ -176,35 +180,29 @@ public sealed partial class GachaPage : Page
 
     private void UpdatePoolLayout(double width)
     {
-        // A lone series uses the full width; two columns need room for compact pull rows.
         var useTwoColumns = _poolCardCount > 1 && width - 48 >= 740;
         PoolColumns.Visibility = useTwoColumns ? Visibility.Visible : Visibility.Collapsed;
         PoolItems.Visibility = useTwoColumns ? Visibility.Collapsed : Visibility.Visible;
-        if (_launcher.CurrentGame?.Id == BuiltInGameIds.HonkaiStarRail)
-        {
-            var index = StarRailAccountSelector.SelectedIndex;
-            var account = index >= 0 && index < _starRailAnalysis.Accounts.Count
-                ? _starRailAnalysis.Accounts[index] : null;
-            UpdateStarRailLayout(width, account);
-        }
+        var index = UigfAccountSelector.SelectedIndex;
+        var account = index >= 0 && index < _analysis.Accounts.Count ? _analysis.Accounts[index] : null;
+        UpdateUigfLayout(width, account);
     }
 
-    private void UpdateStarRailLayout(double width, StarRailAccountAnalysis? account)
+    private void UpdateUigfLayout(double width, UigfAccountAnalysis? account)
     {
-        var hasRole = account?.Sections.Any(section => section.Type == "11") == true;
-        var hasOther = account?.Sections.Any(section => section.Type != "11") == true;
+        var hasRole = account?.Sections.Any(section => section.IsFeaturedCharacter) == true;
+        var hasOther = account?.Sections.Any(section => !section.IsFeaturedCharacter) == true;
         var useColumns = width >= 650 && hasRole && hasOther;
-        StarRailColumns.Visibility = useColumns ? Visibility.Visible : Visibility.Collapsed;
-        StarRailSections.Visibility = useColumns ? Visibility.Collapsed : Visibility.Visible;
+        UigfColumns.Visibility = useColumns ? Visibility.Visible : Visibility.Collapsed;
+        UigfSections.Visibility = useColumns ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void StarRailFill_OnLoaded(object sender, RoutedEventArgs e)
+    private void UigfFill_OnLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is Border fill)
         {
             var high = fill.Tag is true;
-            fill.Background = high ? HighCountBrush :
-                (Brush)Application.Current.Resources["PageTitleBrush"];
+            fill.Background = high ? HighCountBrush : (Brush)Application.Current.Resources["PageTitleBrush"];
             fill.Opacity = high ? 0.84 : 0.62;
         }
     }

@@ -18,7 +18,7 @@
 
 ### 抽卡记录
 
-终末地、原神、星穹铁道、绝区零可在抽卡记录页面同步、导入和导出记录。终末地和星穹铁道默认增量同步，遇到已有记录后停止读取更早页面；全量同步用于补齐历史。同步需要游戏产生有效的本地授权缓存；保底和统计根据本地记录计算，历史记录缺失时可能不完整。
+终末地、原神、星穹铁道、绝区零可在抽卡记录页面同步、导入和导出记录。这四款游戏默认增量同步，遇到已有记录后停止读取更早页面；全量同步用于补齐历史。同步需要先在游戏内打开记录页面，产生有效的本地授权缓存。原神、星穹铁道、绝区零按账号和卡池显示稀有度统计、出货间隔及本地保底计数，角色和装备图片随包内置。原神两种角色活动祈愿合并计数，其他卡池各自统计；历史记录缺失时计数可能不完整，特殊卡池不推断未知规则或 UP。
 
 ### 终末地（Beta）
 
@@ -76,6 +76,7 @@ dotnet test .\tests\AsterLauncher.Core.Tests\AsterLauncher.Core.Tests.csproj --n
 
 - [Starward](https://github.com/Scighost/Starward)：游戏启动器的产品方向与功能参考。
 - [UIGF](https://uigf.org/)：抽卡记录交换格式。
+- [米游社图鉴](https://bbs.mihoyo.com/ys/obc/)及编辑者：角色与装备图片目录和名称资料。
 - [Hi3Helper.Plugin.Hypergryph](https://github.com/misaka10843/Hi3Helper.Plugin.Hypergryph)、[ake-tracker](https://github.com/mmgfrcs/ake-tracker)：终末地公开协议与记录格式参考。
 - [MAA](https://github.com/MaaAssistantArknights/MaaAssistantArknights)、[maa-cli](https://github.com/MaaAssistantArknights/maa-cli)、[MaaEnd](https://github.com/MaaEnd/MaaEnd)、[BetterGI](https://github.com/babalae/better-genshin-impact)、[March7thAssistant](https://github.com/moesnow/March7thAssistant)：伴随工具预设所对应的项目，工具需自行安装。
 - [.NET](https://github.com/dotnet/runtime)、[WinUI](https://github.com/microsoft/microsoft-ui-xaml)、[Windows App SDK](https://github.com/microsoft/WindowsAppSDK)：应用框架。

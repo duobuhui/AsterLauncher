@@ -107,6 +107,20 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
             return StarRailGachaAnalysis.Empty;
         }
     }
+    public async Task<UigfGachaAnalysis> GetAnalysisAsync(string gameId, CancellationToken cancellationToken = default)
+    {
+        if (!CaptureDefinitions.ContainsKey(gameId)) return UigfGachaAnalysis.Empty;
+        try
+        {
+            var root = File.Exists(ArchivePath) ? await ReadRootAsync(ArchivePath, cancellationToken).ConfigureAwait(false) : NewRoot();
+            return UigfGachaAnalyzer.Analyze(root, gameId);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException)
+        {
+            _logger.LogWarning("Could not analyze UIGF archive; error type {ErrorType}", exception.GetType().Name);
+            return UigfGachaAnalysis.Empty;
+        }
+    }
     public async Task<GachaImportResult> ImportAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         try
@@ -194,17 +208,17 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
                 ? await ReadRootAsync(ArchivePath, cancellationToken).ConfigureAwait(false)
                 : NewRoot();
             var knownRecords = new HashSet<(string Uid, string Type, string Id)>();
-            if (definition.UigfKey == "hkrpg" && !fullRefresh)
+            if (!fullRefresh)
             {
-                foreach (var user in (existing["hkrpg"] as JsonArray ?? []).OfType<JsonObject>())
+                foreach (var user in (existing[definition.UigfKey] as JsonArray ?? []).OfType<JsonObject>())
                 {
-                    var uid = user["uid"]?.GetValue<string>() ?? string.Empty;
+                    var uid = user["uid"]?.ToString() ?? string.Empty;
                     foreach (var record in (user["list"] as JsonArray ?? []).OfType<JsonObject>())
                     {
                         var type = record["gacha_type"]?.GetValue<string>() ?? string.Empty;
                         var id = record["id"]?.GetValue<string>() ?? string.Empty;
                         if (uid.Length > 0 && type.Length > 0 && id.Length > 0)
-                            knownRecords.Add((uid, type, id));
+                            knownRecords.Add((uid, definition.UigfKey == "hk4e" && type == "400" ? "301" : type, id));
                     }
                 }
             }
@@ -313,8 +327,9 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
 
                     result.Add(node);
                     nextEndId = node["id"]?.GetValue<string>();
-                    var uid = node["uid"]?.GetValue<string>() ?? string.Empty;
+                    var uid = node["uid"]?.ToString() ?? string.Empty;
                     var type = node["gacha_type"]?.GetValue<string>() ?? gachaType;
+                    if (definition.UigfKey == "hk4e" && type == "400") type = "301";
                     if (!string.IsNullOrWhiteSpace(nextEndId) && type == gachaType
                         && knownRecords.Contains((uid, type, nextEndId)))
                         reachedKnownRecord = true;
@@ -419,8 +434,8 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
     {
         var root = NewRoot();
         var grouped = records
-            .Where(item => !string.IsNullOrWhiteSpace(item["uid"]?.GetValue<string>()))
-            .GroupBy(item => item["uid"]!.GetValue<string>());
+            .Where(item => !string.IsNullOrWhiteSpace(item["uid"]?.ToString()))
+            .GroupBy(item => item["uid"]!.ToString());
         var users = (JsonArray)root[key]!;
         foreach (var group in grouped)
         {
@@ -452,9 +467,9 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
                     continue;
                 }
 
-                var uid = incomingUser["uid"]?.GetValue<string>() ?? string.Empty;
+                var uid = incomingUser["uid"]?.ToString() ?? string.Empty;
                 var targetUser = targetUsers.OfType<JsonObject>()
-                    .FirstOrDefault(user => string.Equals(user["uid"]?.GetValue<string>(), uid, StringComparison.Ordinal));
+                    .FirstOrDefault(user => string.Equals(user["uid"]?.ToString(), uid, StringComparison.Ordinal));
                 if (targetUser is null)
                 {
                     targetUsers.Add(incomingUser.DeepClone());

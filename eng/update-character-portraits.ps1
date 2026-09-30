@@ -89,6 +89,15 @@ foreach ($operator in $operators) {
 }
 
 $manifestPath = Join-Path $assetRoot 'portrait-index.json'
+if (Test-Path -LiteralPath $manifestPath) {
+    $known = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $entries) { [void]$known.Add($entry.GameId + ':' + $entry.Name) }
+    foreach ($entry in (Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json)) {
+        if ($entry.CatalogUrl -and $known.Add($entry.GameId + ':' + $entry.Name)) {
+            $entries.Add($entry)
+        }
+    }
+}
 $json = ConvertTo-Json -InputObject @($entries) -Depth 5
 [IO.File]::WriteAllText($manifestPath, $json, [Text.UTF8Encoding]::new($false))
 Write-Output "Saved $($entries.Count) official portraits to $assetRoot."

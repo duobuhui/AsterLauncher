@@ -16,7 +16,7 @@
                 <Border Width="34" Height="34" CornerRadius="7" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1">
                     <Grid>
                         <TextBlock Text="✦" FontSize="13" Foreground="{ThemeResource PageTitleBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        <Image Source="{x:Bind OperatorName, Converter={StaticResource PortraitImageConverter}, ConverterParameter=endfield}" Stretch="UniformToFill" />
+                        <Image Source="{x:Bind OperatorName, Converter={StaticResource PortraitImageConverter}, ConverterParameter=endfield}" Stretch="Uniform" />
                     </Grid>
                 </Border>
                 <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Stretch">
@@ -32,18 +32,18 @@
                 </StackPanel>
             </Grid>
         </DataTemplate>
-        <DataTemplate x:Key="StarRailPullTemplate" x:DataType="core:StarRailFiveStarPull">
+        <DataTemplate x:Key="UigfPullTemplate" x:DataType="core:UigfHighRarityPull">
             <Grid ColumnSpacing="5" MinHeight="32" Padding="0,1">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="27" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                 <Border Width="25" Height="25" CornerRadius="5" Background="#38475868" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1">
                     <Grid>
                         <TextBlock Text="★" FontSize="12" Foreground="{ThemeResource PageTitleBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        <Image Source="{x:Bind Name, Converter={StaticResource PortraitImageConverter}, ConverterParameter=honkai-star-rail}" Stretch="UniformToFill" />
+                        <Image Source="{x:Bind PortraitKey, Converter={StaticResource PortraitImageConverter}}" Stretch="Uniform" />
                     </Grid>
                 </Border>
                 <Grid Grid.Column="1" Height="24">
                     <Border Background="#70404D5B" CornerRadius="4" />
-                    <Border Background="{ThemeResource PageTitleBrush}" CornerRadius="4" Opacity="0.6" Tag="{x:Bind IsHighCount}" Loaded="StarRailFill_OnLoaded" RenderTransformOrigin="0,0.5">
+                    <Border Background="{ThemeResource PageTitleBrush}" CornerRadius="4" Opacity="0.6" Tag="{x:Bind IsHighCount}" Loaded="UigfFill_OnLoaded" RenderTransformOrigin="0,0.5">
                         <Border.RenderTransform><ScaleTransform ScaleX="{x:Bind BarFraction}" /></Border.RenderTransform>
                     </Border>
                     <TextBlock Text="{x:Bind Name}" FontSize="12" FontWeight="SemiBold" Margin="7,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -53,7 +53,7 @@
                     <TextBlock Text="{x:Bind TimeText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Right" />
                 </StackPanel>
             </Grid>
-        </DataTemplate>        <DataTemplate x:Key="StarRailBannerTemplate" x:DataType="core:StarRailWarpBanner">
+        </DataTemplate>        <DataTemplate x:Key="UigfBannerTemplate" x:DataType="core:UigfBannerAnalysis">
             <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" ToolTipService.ToolTip="{x:Bind PoolTooltip}">
                 <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                     <Expander.Header>
@@ -68,7 +68,7 @@
                     </Expander.Header>
                     <StackPanel Padding="11,0,11,9" Spacing="5">
                         <TextBlock Text="{x:Bind DateText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                        <ItemsControl ItemsSource="{x:Bind FiveStars}" ItemTemplate="{StaticResource StarRailPullTemplate}" />
+                        <ItemsControl ItemsSource="{x:Bind HighRarityPulls}" ItemTemplate="{StaticResource UigfPullTemplate}" />
                     </StackPanel>
                 </Expander>
             </Border>
@@ -201,39 +201,32 @@
                 </Grid>
             </StackPanel>
 
-            <Grid x:Name="StarRailPityStrip" ColumnSpacing="8" Visibility="Collapsed" ToolTipService.ToolTip="本地 UIGF 档案估算；历史缺失会影响水位。角色、光锥、常驻分别计算。">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
-                    <StackPanel Spacing="2"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <TextBlock Text="角色活动" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                        <TextBlock x:Name="StarRailRolePityText" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
-                    </Grid><ProgressBar x:Name="StarRailRolePityBar" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
-                </Border>
-                <Border Grid.Column="1" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
-                    <StackPanel Spacing="2"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <TextBlock Text="光锥活动" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                        <TextBlock x:Name="StarRailConePityText" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
-                    </Grid><ProgressBar x:Name="StarRailConePityBar" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
-                </Border>
-                <Border Grid.Column="2" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
-                    <StackPanel Spacing="2"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <TextBlock Text="常驻" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                        <TextBlock x:Name="StarRailStandardPityText" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
-                    </Grid><ProgressBar x:Name="StarRailStandardPityBar" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
-                </Border>
-            </Grid>
-            <StackPanel x:Name="StarRailAnalysisPanel" Visibility="Collapsed" Spacing="7" SizeChanged="StarRailAnalysisPanel_OnSizeChanged">
+            <ItemsRepeater x:Name="UigfPityStrip" Visibility="Collapsed">
+                <ItemsRepeater.Layout><UniformGridLayout MinItemWidth="155" MinColumnSpacing="8" MinRowSpacing="5" ItemsStretch="Fill" /></ItemsRepeater.Layout>
+                <ItemsRepeater.ItemTemplate>
+                    <DataTemplate x:DataType="core:UigfPityIndicator">
+                        <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
+                            <StackPanel Spacing="2"><Grid ColumnSpacing="6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind Title}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind Text}" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                            </Grid><ProgressBar Value="{x:Bind Percent}" Tag="{x:Bind IsHighCount}" Loaded="SixStarBar_OnLoaded" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsRepeater.ItemTemplate>
+            </ItemsRepeater>
+            <StackPanel x:Name="UigfAnalysisPanel" Visibility="Collapsed" Spacing="7" SizeChanged="UigfAnalysisPanel_OnSizeChanged">
                 <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                    <TextBlock Text="本地记录 · 同类卡池共用五星计数 · UP 未判定" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
-                    <ComboBox x:Name="StarRailAccountSelector" Grid.Column="1" MinWidth="150" Visibility="Collapsed" SelectionChanged="StarRailAccountSelector_SelectionChanged" />
+                    <TextBlock x:Name="UigfRulesText" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
+                    <ComboBox x:Name="UigfAccountSelector" Grid.Column="1" MinWidth="150" Visibility="Collapsed" SelectionChanged="UigfAccountSelector_SelectionChanged" />
                 </Grid>
-                <TextBlock x:Name="StarRailEmptyText" Text="暂无星穹铁道记录；同步或导入 UIGF 后显示。" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" Visibility="Collapsed" />
-                <ItemsRepeater x:Name="StarRailSections">
+                <TextBlock x:Name="UigfEmptyText" Text="暂无星穹铁道记录；同步或导入 UIGF 后显示。" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" Visibility="Collapsed" />
+                <ItemsRepeater x:Name="UigfSections">
                     <ItemsRepeater.Layout><StackLayout Spacing="8" /></ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="core:StarRailWarpSection">
-                            <Border x:Name="StarRailSectionBorder" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="11,8">
+                        <DataTemplate x:DataType="core:UigfPoolSection">
+                            <Border x:Name="UigfSectionBorder" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="11,8">
                                 <StackPanel Spacing="5">
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -244,19 +237,19 @@
                                     <Grid ColumnSpacing="12" RowSpacing="1">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                        <TextBlock Text="{x:Bind FiveStarStat}" FontSize="12" Foreground="#FFFFBA49" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="1" Text="{x:Bind FourStarStat}" FontSize="12" Foreground="#FFE29AF4" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Row="1" Text="{x:Bind ThreeStarStat}" FontSize="12" Foreground="#FF8FC9F8" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind HighRarityStat}" FontSize="12" Foreground="#FFFFBA49" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind MiddleRarityStat}" FontSize="12" Foreground="#FFE29AF4" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Row="1" Text="{x:Bind LowRarityStat}" FontSize="12" Foreground="#FF8FC9F8" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind AverageText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                     </Grid>
-                                    <ItemsRepeater ItemsSource="{x:Bind FiveStars}" ItemTemplate="{StaticResource StarRailPullTemplate}">
+                                    <ItemsRepeater ItemsSource="{x:Bind HighRarityPulls}" ItemTemplate="{StaticResource UigfPullTemplate}">
                                         <ItemsRepeater.Layout>
                                             <UniformGridLayout MinItemWidth="210" MinColumnSpacing="9" MinRowSpacing="3" ItemsStretch="Fill" />
                                         </ItemsRepeater.Layout>
                                     </ItemsRepeater>
                                     <Expander Background="Transparent" Visibility="{x:Bind PreviousBannerCount, Converter={StaticResource HistoryCountVisibilityConverter}}" HorizontalContentAlignment="Stretch">
-                                        <Expander.Header><Grid Width="{Binding ActualWidth, ElementName=StarRailSectionBorder, Converter={StaticResource SectionHeaderWidthConverter}}"><TextBlock Text="{x:Bind BreakdownLabel}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></Grid></Expander.Header>
-                                        <ItemsControl ItemsSource="{x:Bind Banners}" ItemTemplate="{StaticResource StarRailBannerTemplate}" HorizontalContentAlignment="Stretch">
+                                        <Expander.Header><Grid Width="{Binding ActualWidth, ElementName=UigfSectionBorder, Converter={StaticResource SectionHeaderWidthConverter}}"><TextBlock Text="{x:Bind BreakdownLabel}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></Grid></Expander.Header>
+                                        <ItemsControl ItemsSource="{x:Bind Banners}" ItemTemplate="{StaticResource UigfBannerTemplate}" HorizontalContentAlignment="Stretch">
                                             <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="6" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                         </ItemsControl>
                                     </Expander>
@@ -265,12 +258,12 @@
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
-                <Grid x:Name="StarRailColumns" ColumnSpacing="8" Visibility="Collapsed">
+                <Grid x:Name="UigfColumns" ColumnSpacing="8" Visibility="Collapsed">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <ItemsRepeater x:Name="StarRailRoleSections">
+                    <ItemsRepeater x:Name="UigfRoleSections">
                         <ItemsRepeater.Layout><StackLayout Spacing="8" /></ItemsRepeater.Layout>
                     </ItemsRepeater>
-                    <ItemsRepeater x:Name="StarRailOtherSections" Grid.Column="1">
+                    <ItemsRepeater x:Name="UigfOtherSections" Grid.Column="1">
                         <ItemsRepeater.Layout><StackLayout Spacing="8" /></ItemsRepeater.Layout>
                     </ItemsRepeater>
                 </Grid>
