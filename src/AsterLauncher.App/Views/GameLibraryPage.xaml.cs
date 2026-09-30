@@ -576,8 +576,10 @@ public sealed partial class GameLibraryPage : Page
         var fromExpansionOpacity = LaunchExpansion.Opacity;
         var fromDetailsOpacity = CommandDetails.Opacity;
         var fromGlassOpacity = LaunchGlass.Opacity;
-        var expansionTransform = (TranslateTransform)LaunchExpansion.RenderTransform;
-        var detailsTransform = (TranslateTransform)CommandDetails.RenderTransform;
+        var expansionTransform = LaunchExpansion.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        var detailsTransform = CommandDetails.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        LaunchExpansion.RenderTransform = expansionTransform;
+        CommandDetails.RenderTransform = detailsTransform;
         var fromExpansionY = expansionTransform.Y;
         var fromDetailsY = detailsTransform.Y;
         _launchTransition?.Stop();
@@ -606,6 +608,8 @@ public sealed partial class GameLibraryPage : Page
             CommandDetails.Opacity = expanded ? 1 : 0;
             expansionTransform.Y = expanded ? 0 : 10;
             detailsTransform.Y = expanded ? 0 : 6;
+            LaunchExpansion.RenderTransform = expanded ? null : expansionTransform;
+            CommandDetails.RenderTransform = expanded ? null : detailsTransform;
             return;
         }
 
@@ -632,6 +636,8 @@ public sealed partial class GameLibraryPage : Page
             CommandDetails.Opacity = expanded ? 1 : 0;
             expansionTransform.Y = expanded ? 0 : 10;
             detailsTransform.Y = expanded ? 0 : 6;
+            LaunchExpansion.RenderTransform = expanded ? null : expansionTransform;
+            CommandDetails.RenderTransform = expanded ? null : detailsTransform;
         };
         _launchTransition.Begin();
     }
@@ -697,9 +703,11 @@ public sealed partial class GameLibraryPage : Page
 
         _railTransition = new Storyboard();
         _railTransition.Children.Add(widthAnimation);
+        var transition = _railTransition;
         _railTransition.Completed += (_, _) =>
         {
             if (revision != _railRevision) return;
+            transition.Stop();
             _railTransition = null;
             CompleteRailTransition(compact);
             AnimateRailOpacity(1, 85);
@@ -722,9 +730,13 @@ public sealed partial class GameLibraryPage : Page
         Storyboard.SetTargetProperty(animation, "Opacity");
         _railFadeTransition = new Storyboard();
         _railFadeTransition.Children.Add(animation);
+        var transition = _railFadeTransition;
         _railFadeTransition.Completed += (_, _) =>
         {
-            if (revision == _railFadeRevision) RailInner.Opacity = target;
+            if (revision != _railFadeRevision) return;
+            transition.Stop();
+            RailInner.Opacity = target;
+            _railFadeTransition = null;
         };
         _railFadeTransition.Begin();
     }

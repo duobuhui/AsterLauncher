@@ -50,7 +50,7 @@
                 </Grid>
                 <StackPanel Grid.Column="2" MinWidth="50" Spacing="0" HorizontalAlignment="Right">
                     <TextBlock Text="{x:Bind PullCountText}" FontSize="12" HorizontalAlignment="Right" />
-                    <TextBlock Text="{x:Bind TimeText}" FontSize="9" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Right" />
+                    <TextBlock Text="{x:Bind TimeText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Right" />
                 </StackPanel>
             </Grid>
         </DataTemplate>        <DataTemplate x:Key="StarRailBannerTemplate" x:DataType="core:StarRailWarpBanner">
