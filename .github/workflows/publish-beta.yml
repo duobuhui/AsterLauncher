@@ -26,17 +26,22 @@ jobs:
           "ASTER_CI_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Prepare portable SDK and maintenance runtime
         run: |
-          Set-Location $env:ASTER_CI_ROOT
-          . .\eng\set-env.ps1
-          $installer = Join-Path $env:TEMP 'dotnet-install.ps1'
-          Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile $installer
-          & $installer -Version 10.0.401 -InstallDir $env:DOTNET_ROOT -NoPath
-          if ($LASTEXITCODE -ne 0) { throw 'Portable SDK preparation failed.' }
-          $node = Join-Path $env:TEMP 'node-v24.19.0.exe'
-          Invoke-WebRequest https://nodejs.org/dist/v24.19.0/win-x64/node.exe -OutFile $node
-          & .\eng\prepare-maintenance-runtime.ps1 -NodeSource $node
-          & .artifacts\vendor\node-v24.19.0\node.exe --check .\src\AsterLauncher.App\NetworkRuntime\endfield-https.js
-          if ($LASTEXITCODE -ne 0) { throw 'HTTPS helper syntax validation failed.' }
+          try {
+            Set-Location $env:ASTER_CI_ROOT
+            . .\eng\set-env.ps1
+            $installer = Join-Path $env:TEMP 'dotnet-install.ps1'
+            Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile $installer
+            & $installer -Version 10.0.401 -InstallDir $env:DOTNET_ROOT -NoPath
+            if ($LASTEXITCODE -ne 0) { throw 'Portable SDK preparation failed.' }
+            $node = Join-Path $env:TEMP 'node-v24.19.0.exe'
+            Invoke-WebRequest https://nodejs.org/dist/v24.19.0/win-x64/node.exe -OutFile $node
+            & .\eng\prepare-maintenance-runtime.ps1 -NodeSource $node
+            & .artifacts\vendor\node-v24.19.0\node.exe --check .\src\AsterLauncher.App\NetworkRuntime\endfield-https.js
+            if ($LASTEXITCODE -ne 0) { throw 'HTTPS helper syntax validation failed.' }
+          } catch {
+            Write-Output ("::error::" + $_.Exception.Message.Replace([char]13,' ').Replace([char]10,' '))
+            throw
+          }
       - name: Build and test
         run: |
           Set-Location $env:ASTER_CI_ROOT
