@@ -70,6 +70,19 @@ dotnet test .\tests\AsterLauncher.Core.Tests\AsterLauncher.Core.Tests.csproj --n
 
 打包使用 `eng/package-release.ps1`。工具、缓存和临时文件保存在项目目录，不修改全局环境变量。
 
+## 鸣谢
+
+感谢以下项目和社区：
+
+- [Starward](https://github.com/Scighost/Starward)：游戏启动器的产品方向与功能参考。
+- [UIGF](https://uigf.org/)：抽卡记录交换格式。
+- [Hi3Helper.Plugin.Hypergryph](https://github.com/misaka10843/Hi3Helper.Plugin.Hypergryph)、[ake-tracker](https://github.com/mmgfrcs/ake-tracker)：终末地公开协议与记录格式参考。
+- [MAA](https://github.com/MaaAssistantArknights/MaaAssistantArknights)、[maa-cli](https://github.com/MaaAssistantArknights/maa-cli)、[MaaEnd](https://github.com/MaaEnd/MaaEnd)、[BetterGI](https://github.com/babalae/better-genshin-impact)、[March7thAssistant](https://github.com/moesnow/March7thAssistant)：伴随工具预设所对应的项目，工具需自行安装。
+- [.NET](https://github.com/dotnet/runtime)、[WinUI](https://github.com/microsoft/microsoft-ui-xaml)、[Windows App SDK](https://github.com/microsoft/WindowsAppSDK)：应用框架。
+- [Node.js](https://nodejs.org/)、[7-Zip](https://www.7-zip.org/)：公开资源传输与压缩包处理的运行依赖。
+
+也感谢提交问题、建议和 Pull Request 的贡献者。
+
 ## 来源与许可
 
 游戏素材权利归发行商，来源见 [ASSET_SOURCES.md](ASSET_SOURCES.md)。依赖许可与产品参考见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目独立实现，源码许可尚未单独声明。
