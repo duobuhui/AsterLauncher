@@ -182,7 +182,7 @@ public sealed class EndfieldDistributionProvider : IEndfieldDistributionProvider
 /// <summary>Small independent decoder for the publisher's public integrity list.</summary>
 public static class EndfieldManifestDecoder
 {
-    // The publicly documented game_files AES-256-CBC key and IV; see ENDFIELD_DOWNLOAD_RESEARCH.md.
+    // The publicly documented game_files AES-256-CBC key and IV; protocol sources are listed in THIRD_PARTY_NOTICES.md.
     private static readonly byte[] Key =
     [
         0xC0, 0xF3, 0x0E, 0x1C, 0xE7, 0x63, 0xBB, 0xC2, 0x1C, 0xC3, 0x55, 0xA3, 0x43, 0x03, 0xAC, 0x50,

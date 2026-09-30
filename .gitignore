@@ -11,3 +11,9 @@ obj/
 *.user
 *.suo
 TestResults/
+
+# Local research and development records
+/ENDFIELD_DOWNLOAD_RESEARCH.md
+/MILESTONES.md
+/docs/VALIDATION_*.md
+/docs/RESEARCH_*.md
