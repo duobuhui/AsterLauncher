@@ -20,3 +20,13 @@ E 盘 NTFS 隔离样本中，先生成两份 1,048,577 字节随机资源。共�
 两服完整官方下载后的最终安装和游戏启动、真实预下载窗口、正式 HDiff/VFS 增量样本，以及客户端或官方启动器维护共享候选资源时的行为。增量不适用时实现按最新完整目标清单同步，不冒充原生 HDiff 增量应用完成。
 
 公开发布资产由 GitHub Actions 再构建、测试并校验上传哈希；本地预发布包的哈希不能代替公开资产哈希。
+
+## 公开发布包复核
+
+GitHub Actions 运行 36678085585 全部通过，v0.1.3-beta 已公开（源代码标签 ae3a956）。完整包 246,875,561 字节，SHA-256 为 7bb8615f3aa661817f289a91a81423137f4e0d0cbb4d086f513b7de6be26b4d9；独立迁移工具包 58,184,805 字节，SHA-256 为 2fc04e503b9f4f2ed051f02e88f50b0e771de7c219c8513203bc400d24e91ac5。五项公开资产均实际回下载并核对 GitHub 摘要，两个 SHA 侧车文件与包内容相符。新更新清单的完整包哈希相同。
+
+公开完整包解压后，1,038 个发布文件逐项大小与 SHA-256 校验通过。实际从顶层 AsterLauncher.exe 启动了 App/AsterLauncher.exe 的 WinUI 窗口，并重新验证官服/B服、更新主按钮和渠道启动方案；截图位于本地 .artifacts/screenshots/v0.1.3-published-root-overview.png、v0.1.3-endfield-official.png、v0.1.3-endfield-bilibili.png 和 v0.1.3-published-launch-options.png。公开迁移工具包中的独立入口也通过 eng/test-migration.ps1 的全部检查。
+
+另用发布的编译程序验证乱序：仅在隔离副本的传输辅助脚本中临时延迟官服 POST 5 秒，官方响应内容不改。官服样本本地为 1.0.0，B服样本本地为 1.5.3；切到 B服后，让官服响应迟到，B服仍保留自己的版本与“启动游戏”，切回官服保持“更新游戏”。重复切换再次通过。测试后辅助脚本原始字节与 SHA-256 已还原；两个样本 EXE 从未作为游戏启动。记录和截图位于 .artifacts/v013-ui-race/channel-race-evidence.json 和 .artifacts/screenshots/v0.1.3-published-channel-race.png。
+
+这些实测仍不包含完整真实游戏安装或游戏进程启动，也不替代上述真实预下载和客户端资源可变性验收。
