@@ -1,0 +1,60 @@
+name: Update release notes
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/RELEASE_0.1.3.md'
+      - '.github/workflows/update-release-notes.yml'
+permissions:
+  contents: write
+concurrency:
+  group: update-release-notes
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Read notes from isolated E workspace
+        run: |
+          if (-not (Test-Path E:\)) {
+            $backing = Join-Path $env:RUNNER_TEMP 'aster-notes-e-volume'
+            New-Item -ItemType Directory -Force $backing | Out-Null
+            subst E: $backing
+            if ($LASTEXITCODE -ne 0) { throw 'E workspace setup failed.' }
+          }
+          $root = 'E:\AsterNotesCI'
+          git clone --no-checkout "https://github.com/$env:GITHUB_REPOSITORY.git" $root
+          if ($LASTEXITCODE -ne 0) { throw 'Clone failed.' }
+          git -C $root checkout --detach $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Source checkout failed.' }
+          "ASTER_NOTES_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Update existing release description
+        env:
+          ASTER_RELEASE_TOKEN: ${{ github.token }}
+        run: |
+          try {
+            Set-Location $env:ASTER_NOTES_ROOT
+            . .\eng\set-env.ps1
+            $headers = @{Authorization="Bearer $env:ASTER_RELEASE_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+            $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases"
+            $release = Invoke-RestMethod -Uri "$api/tags/v0.1.3-beta" -Headers $headers
+            if ($release.draft -or $release.tag_name -ne 'v0.1.3-beta') { throw 'Published release not found.' }
+            $notes = [IO.File]::ReadAllText((Join-Path $PWD 'docs\RELEASE_0.1.3.md'))
+            if ([string]::IsNullOrWhiteSpace($notes)) { throw 'Release notes are empty.' }
+            $body = @{body=$notes} | ConvertTo-Json
+            $updated = Invoke-RestMethod -Uri "$api/$($release.id)" -Method Patch -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body))
+            if ($updated.body -ne $notes) { throw 'Release notes verification failed.' }
+            foreach ($field in @('tag_name','name','draft','prerelease','target_commitish')) {
+              if ($release.$field -ne $updated.$field) { throw "Release field changed: $field" }
+            }
+            $before = @($release.assets | Sort-Object id | Select-Object id,name,size,digest) | ConvertTo-Json -Depth 5 -Compress
+            $after = @($updated.assets | Sort-Object id | Select-Object id,name,size,digest) | ConvertTo-Json -Depth 5 -Compress
+            if ($before -ne $after) { throw 'Release attachments changed.' }
+            Write-Output "Release description updated: $($updated.html_url)"
+          } catch {
+            Write-Output ("::error::" + $_.Exception.Message.Replace([char]13,' ').Replace([char]10,' '))
+            throw
+          }

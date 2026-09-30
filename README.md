@@ -1,114 +1,69 @@
 # AsterLauncher
 
-独立开发的 Windows 游戏启动器，当前版本 **Beta 0.1.2**（Git 标签 `v0.1.2-beta`）。技术栈为 .NET 10、Windows App SDK 2.4、WinUI 3。项目不是 [Starward] 的分支。
+独立开发的 Windows 游戏启动器，当前版本 **0.1.3-beta**。使用 .NET 10、Windows App SDK 2.4 和 WinUI 3。
 
-[下载与运行](#下载与运行) · [功能与现状](#功能与现状) · [内置游戏能力矩阵](#内置游戏能力矩阵) · [构建与测试](#构建与测试) · [鸣谢](#鸣谢)
+[下载](https://github.com/duobuhui/AsterLauncher/releases) · [反馈问题](https://github.com/duobuhui/AsterLauncher/issues)
+
+## 功能
+
+- 游戏库、路径查找、排序与隐藏、运行时间记录。
+- 启动方案和伴随工具编排。
+- 官方壁纸缓存、自选背景、主题与窗口设置。
+- 终末地、原神、星穹铁道、绝区零抽卡记录导入与导出；终末地和星穹铁道记录分析。
+- 终末地官服/B服下载、更新、修复、预下载和断点续传。
+- 两服独立目录、服务器切换、NTFS 硬链接共享与解除共享。
+- 启动器整包更新和文件差量更新。
+
+内置游戏：终末地、原神、崩坏3、星穹铁道、绝区零、星布谷地、明日方舟。游戏下载与更新目前仅接入终末地。
 
 ## 下载与运行
 
-发布包见 [GitHub Releases](https://github.com/duobuhui/AsterLauncher/releases)。下载 Windows x64 ZIP，解压后运行顶层的 `AsterLauncher.exe`；不要直接在压缩包内运行。若 Release 暂无附件，可按下文从源码构建。配置、日志、抽卡记录和壁纸缓存默认放在 `AsterLauncher.exe` 旁的 `Data` 目录。设置页“窗口与路径”可以迁移到用户指定的空目录；迁移后在 EXE 旁保存 `asterlauncher.data-location.json` 并重启。源码开发环境仍可用 `ASTERLAUNCHER_DATA_HOME` 指定数据目录。旧版单文件包误存到系统临时目录的数据，会在新位置为空时复制到新位置，旧数据保留。
+下载 Windows x64 完整包，解压后运行顶层 `AsterLauncher.exe`，不要在压缩包内运行。
 
-## 功能与现状
+程序文件放在 `App` 和 `MigrationTools` 文件夹中。配置、日志、抽卡记录及缓存默认保存在 `Data`，可在设置中迁移。
 
-- 首次启动可查找现有游戏，并设置游戏目录。自动查找先核对保存的 EXE；终末地还会检查运行进程及经本机样本验证的鹰角启动器卸载项；其余已知游戏会在用户选定目录内有限范围查找对应 EXE。多个结果须手动确认。
-- 游戏库可隐藏内置游戏、重新唤出、拖动排序，也能清理未安装的可见游戏。添加已知 EXE 会识别为内置游戏。
-- 可创建启动方案、编排工具与游戏启动顺序、查看运行时间与日志。只清理启动器自己启动的伴随进程。
-- 抽卡记录：终末地使用独立本地 JSON 档案、卡池分析、默认增量同步与 JSON/CSV 导出；原神、星穹铁道、绝区零使用 [UIGF] v4.2 档案。星穹铁道已有按跃迁类型分开的五星记录分析；终末地的复刻同名池按期保留记录。同步受游戏官方接口和本地缓存状态影响；本地记录缺失会影响保底估计。授权 URL 与 Token 不写入档案或日志。
-- 壁纸在启动时向官方公开来源检查一次，来源变化时更新 `Data/artwork/cloud`；断网使用已有缓存或随包背景。切换游戏不会重复请求。游戏图标、终末地卡池图及 121 张星穹铁道/终末地角色头像随包内置。
-- 设置包含主题、窗口关闭行为、游戏目录、项目主页及启动器更新。0.1.2 正式发布包仍通过官网入口取得游戏；当前开发工作树已接入终末地两渠道的安装维护界面与逐文件同步流程，尚未达到可发布的完整下载安装标准。
+### 从 0.1.2 升级
 
-公开源码与发布包包含已登记的游戏图标、离线背景、卡池图及角色头像。图片权利仍属于各游戏发行商，不能因为图片出现在本仓库或其他开源项目中，就推定可以再次使用。用户也可在本地选择自己的图片。逐项来源与权利状态见 [ASSET_SOURCES.md](ASSET_SOURCES.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+旧版单 EXE 更新器不能直接安装新布局，需要迁移一次：
 
-## 完整支持一款游戏需要什么
+1. 退出旧版，下载完整包、同名 `.zip.sha256` 和迁移工具包。
+2. 将迁移工具解压到旧安装目录之外的同一卷。
+3. 运行 `AsterLauncher.Migrator.exe`，选择旧安装目录和完整 ZIP。
+4. 完成后继续运行原目录的 `AsterLauncher.exe`。原数据保留，旧程序备份在 `MigrationBackup`。
 
-| 能力 | 验收范围 |
-| --- | --- |
-| 版本主视觉 | 从经授权的官方来源识别当前游戏版本、获取并缓存主视觉，有过期和离线回退；记录素材许可。 |
-| 本地查找 | 基于已验证的 EXE 名、官方启动器配置或卸载项查找；处理多安装路径、移动目录与误匹配。 |
-| 下载与更新游戏 | 解析官方版本清单，支持渠道、目标目录、断点续传、完整性校验、空间检查、回滚；不能把“打开官网”算作实现。 |
-| 抽卡记录 | 安全获取、显示与分析，支持导入、导出、合并与去重；核实卡池/保底规则，避免持久化授权 URL 或 Token。 |
-| 常用工具 | 维护适合该游戏的工具清单、来源、协议、用户选定的可执行文件和启动时序；不私自捆绑工具。 |
-| 图标与渠道 | 有许可的图标，以及官服、B 服等渠道/服务器的安装、启动、更新、抽卡接口差异；不能靠相同 EXE 名自动断定渠道。 |
-| 启动与恢复 | 启动参数、进程所有权、退出检测、异常恢复、游戏路径重新选择与多实例行为。 |
-| 版本与安全 | 游戏客户端版本识别、校验与迁移测试；失败时不破坏原安装、存档和用户数据。 |
+## 终末地
 
-## 内置游戏能力矩阵
+点击启动按钮右侧箭头，选择官服或 B服。每次进入游戏页面检查更新；有更新时主按钮显示“更新游戏”，下载时显示进度并可暂停。
 
-标记：**有**＝代码中有该入口或功能；**部分**＝覆盖范围有限；**无**＝尚未实现。所有游戏均有手动 EXE、基本启动、运行时间、官网链接和可选本地图片。官网链接不等于游戏下载/更新。
+- 安装与修复使用官方实时清单。两服分别保存目录、版本、任务和启动方案。
+- 硬链接限同卷 NTFS 的 VFS `.chk` 候选资源；配置和用户数据不共享。交给官方启动器维护前，先关闭游戏并解除共享。
+- 预下载只在官方开放时可用，不提前修改游戏文件。HDiff/VFS 增量目前回退为目标清单逐文件同步。
 
-| 游戏 | 版本主视觉 | 本地查找 | 内置下载/更新 | 抽卡获取、显示、导入、导出 | 工具 | 图标与渠道 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 明日方舟：终末地 | 部分：启动时检查官网版本封面，本地缓存及随包回退 | 有：已知路径、运行进程、经验证卸载项、选定目录 | Beta：两渠道官方逐文件安装、更新、修复与预下载；原生 HDiff/VFS 使用目标清单回退 | 部分：本地增量/全量同步、分期卡池分析、JSON 导入/导出、CSV 导出 | [MaaEnd] 预设 | 有：官服/B 服独立目录、即时渠道标识和硬链接管理；旧安装经配置信息核对 |
-| 原神 | 部分：启动时检查 HoYoPlay 主视觉，本地缓存及随包回退 | 部分：`YuanShen.exe` / `GenshinImpact.exe` 与选定目录 | 无 | 部分：[UIGF] 获取、总数显示、导入/导出；尚无卡池明细分析 | [BetterGI] 预设 | 部分：随包图标；渠道未区分 |
-| 崩坏3 | 部分：启动时检查 HoYoPlay 主视觉，本地缓存及随包回退 | 部分：`BH3.exe` 与选定目录 | 无 | 无 | 暂无专用预设 | 部分：随包图标；渠道未区分 |
-| 崩坏：星穹铁道 | 部分：启动时检查 HoYoPlay 主视觉，本地缓存及随包回退 | 部分：`StarRail.exe` 与选定目录 | 无 | 部分：[UIGF] 获取、五星记录分析、导入/导出；实机同步仍受官方接口状态限制 | [March7thAssistant] 预设 | 部分：随包图标；渠道未区分 |
-| 绝区零 | 部分：启动时检查 HoYoPlay 主视觉，本地缓存及随包回退 | 部分：`ZenlessZoneZero.exe` 与选定目录 | 无 | 部分：[UIGF] 获取、总数显示、导入/导出；尚无卡池明细分析 | 暂无专用预设 | 部分：随包图标；渠道未区分 |
-| 星布谷地 | 部分：启动时检查 HoYoPlay 主视觉，本地缓存及渐变回退 | 无已验证 EXE，须手动指定 | 无 | 无 | 暂无专用预设 | 部分：随包图标；渠道未区分 |
-| 明日方舟 | 部分：启动时检查官网首页主视觉，本地缓存及随包回退 | 无已验证 EXE，须手动指定 | 无 | 无 | [MAA] / [maa-cli] 预设 | 部分：随包图标；官服/B 服未区分 |
+**尚待实机验证：**两服完整安装后的游戏启动、真实预下载窗口、正式增量样本，以及游戏运行时是否修改共享候选文件。
 
-终末地抽卡的 80 抽六星、各类卡池的 UP 规则与免费十连由本地记录估算；免费抽不增加付费抽水位。缺少历史记录时，显示值不代表游戏内实时水位。壁纸随官方公开页面或启动器元数据变化更新；这不能代替游戏本体的版本检测和下载更新。
-
-## 启动器版本与更新
-
-0.1.3-beta 使用多文件发布：ZIP 顶层有 `AsterLauncher.exe`、文件校验清单以及 `App`、`MigrationTools` 文件夹，运行文件不散落在入口旁。用户数据不进入更新 ZIP。设置页查询 GitHub beta 发布中的 `aster-update-v2.json`；精确版本差量包只含变化文件，其他情况使用完整包。下载校验、逐文件复验与同卷暂存通过后退出应用，维护程序替换目录并保留旧版于 `MigrationBackup`，原 Data 和自选数据位置不移动。
-
-0.1.2 的内置更新器只接受单 EXE ZIP，无法直接安装新布局；本次提供独立迁移工具，步骤见下面“从单 EXE 迁移”。不要将新包改名后交给旧版更新器。多文件版本以后可用 `eng/package-release.ps1 -PreviousPackage <上一版多文件完整包> -PreviousVersion <上一版版本>` 制作文件差量包。发布清单仅在差量包更小时选用它。
+[验证记录](docs/VALIDATION_0.1.3.md) · [协议研究](ENDFIELD_DOWNLOAD_RESEARCH.md)
 
 ## 构建与测试
 
-Windows x64、.NET 10 SDK、Windows App SDK 对应的 NuGet 包是构建依赖。此仓库的本机开发脚本默认把 SDK、NuGet、临时目录、构建产物与应用数据放在当前项目目录下；`.sdk` 与 `.nuget` 不提交，也不会修改全局环境变量。克隆到非 E 盘时，请先按自己的存储策略调整脚本。
+需要 Windows x64 和 .NET 10 SDK。项目使用 `.sdk/dotnet` 中的 SDK，构建缓存和临时文件保存在项目目录，不修改全局环境变量。
+
+从源码构建前，按 [运行依赖说明](eng/prepare-maintenance-runtime.ps1) 准备官方 Node.js 24.19.0：下载 Windows x64 的 `node.exe`，执行 `eng/prepare-maintenance-runtime.ps1 -NodeSource <路径>`。发布包已包含 Node.js 和 7-Zip，无需另行安装。
 
 ```powershell
 . .\eng\set-env.ps1
+dotnet restore .\AsterLauncher.sln
 & .\eng\build.ps1 -Configuration Debug -NoRestore
 dotnet test .\tests\AsterLauncher.Core.Tests\AsterLauncher.Core.Tests.csproj --no-build --configuration Debug --logger 'console;verbosity=minimal'
-& .\eng\package-release.ps1
 ```
 
-首次构建需要先在项目内准备 SDK 和依赖，`-NoRestore` 只适用于已还原的工作副本。源码结构和行为见 [ARCHITECTURE.md](ARCHITECTURE.md)、[UI_SPEC.md](UI_SPEC.md)、[MILESTONES.md](MILESTONES.md)。问题与建议可提交到 [Issues](https://github.com/duobuhui/AsterLauncher/issues)；提交日志前请先移除个人路径、账户信息和授权数据。
+打包使用 `eng/package-release.ps1`。
 
-## 源码与素材授权
+## 文档与来源
 
-本仓库目前没有单独的 `LICENSE` 文件。公开可见不代表源码已获得自由复制、修改或再分发的许可；游戏图片的权利应单独判断，详见 [ASSET_SOURCES.md](ASSET_SOURCES.md)。
+[架构](ARCHITECTURE.md) · [界面规范](UI_SPEC.md) · [里程碑](MILESTONES.md) · [素材来源](ASSET_SOURCES.md) · [第三方声明](THIRD_PARTY_NOTICES.md)
 
-## 鸣谢
+源码许可尚未单独声明。游戏素材权利归发行商，依赖许可见第三方声明。
 
-感谢以下项目的维护者与贡献者提供公开资料、格式规范或可供用户自行安装的工具。AsterLauncher 独立实现自身功能，不捆绑这些工具，也不代表获得其官方背书。
-
-| 项目 | 关联内容 |
-| --- | --- |
-| [Starward] | 游戏启动器的产品范围与信息组织参考；没有复制其代码、界面、品牌或素材。 |
-| [UIGF] 与 [HoYoPlay 壁纸资料库] | 抽卡档案格式文档，以及 HoYoPlay 主视觉的来源线索；游戏图片权利仍属于发行商。 |
-| [MaaEnd]、[BetterGI]、[March7thAssistant] | 终末地、原神和星穹铁道的可选伴随工具预设。 |
-| [MAA] 与 [maa-cli] | 明日方舟的可选伴随工具预设。 |
-
-[Starward]: https://github.com/Scighost/Starward
-[UIGF]: https://github.com/UIGF-org/UIGF-org.github.io
-[HoYoPlay 壁纸资料库]: https://github.com/UIGF-org/HoYoPlay-Launcher-Background
-[MaaEnd]: https://github.com/MaaEnd/MaaEnd
-[BetterGI]: https://github.com/babalae/better-genshin-impact
-[March7thAssistant]: https://github.com/moesnow/March7thAssistant
-[MAA]: https://github.com/MaaAssistantArknights/MaaAssistantArknights
-[maa-cli]: https://github.com/MaaAssistantArknights/maa-cli
-
-## 终末地官服与哔哩哔哩服
-
-在终末地游戏页面点击启动按钮右侧箭头，维护功能与原有启动选项共用面板。切服即时同步渠道图标标识、物理目录、已安装/远程版本、主按钮和维护状态；重启保留上次选择。下载绑定原渠道，查看另一服不会重定向任务或关闭正在运行的游戏。两服分别保存安装身份、路径、版本、任务、预下载记录和所选启动方案。旧 EXE 文件名不用于猜测渠道：优先核对 config.ini 的应用、渠道对、版本与实际入口哈希，不能核实时保持未知，由用户明确选择；旧抽卡档案不重复归档。
-
-每次进入终末地页面检查官方更新。未安装时主按钮显示“下载游戏”，有更新时显示“更新游戏”，下载过程中可暂停，并显示进度与速度。默认安装目录从设置中的游戏下载目录创建 `AsterLauncher/Endfield/Official` 或 `Bilibili`。完整安装、更新和修复使用官方加密逐文件清单，同大小文件也校验 MD5。任务按物理目录互斥；内容缓存、部分文件和未完成记录保留，以便重启后重新核对目标版本并继续。只有最终资源和渠道状态复验成功才保存成功版本；不删除清单外用户文件。
-
-共享引擎只考虑十六进制路径中的 VFS .chk 候选，要求两渠道完整清单的大小/MD5 相同、源文件实际内容正确及同卷 NTFS。程序、config.ini、索引、账号和用户设置不共享。创建后核对真实卷标识与文件 ID，界面显示实际共享文件数、共享内容字节与估算节省空间；节省量使用 Windows 文件分配大小，可能受压缩/稀疏文件影响。跨卷或创建失败使用独立文件，不虚报节省量。两套安装也可执行“优化存储”。
-
-更新、修复和补丁输出都在独立临时文件中生成、校验，再替换当前渠道目录项，其他服保持原内容。实际硬链接状态通过扫描恢复，不依赖共享数据库。外部官方启动器或游戏自身的原地写入不受这层保护；关闭两服游戏后先执行“解除共享”，再交给外部维护。当前 .chk 白名单依据本机结构观察和清单核对，真实运行时的不可变性仍需扩大实测，不承诺外部更新的安全性。
-
-预下载区分未开放、检查失败、可下载、下载中和完成；缓存记录绑定渠道、源/目标版本和内容。它只下载与校验，不提前更新安装。正式发布后重新读取 patch，按内容身份复用缓存；补丁中的完整文件经过分卷/密码解压与目标清单校验后使用。HDiff/VFS 增量输出采用目标完整清单同步回退，避免原地修改共享源。当前没有真实终末地预下载窗口，固定隔离样本已覆盖缓存转正式更新、签名变化、撤回、分卷与加密 ZIP。
-
-应用实际使用的官方传输已取得官服/B服实时完整清单，并各下载校验小文件；WinUI 已实际运行、切服并截图。自动化测试不等于两服完整客户端下载或实际游戏启动。本轮没有自动下载两份几十 GB 客户端，完整安装后启动、真实预下载和正式增量样本保留为实机验收项目。详细状态见 [研究记录](ENDFIELD_DOWNLOAD_RESEARCH.md) 与 [0.1.3 发布说明](docs/RELEASE_0.1.3.md)。
-
-## 从单 EXE 迁移
-
-先退出旧版。下载完整发布包和同名 `.zip.sha256`；另将迁移工具 ZIP 解压到旧目录之外的同一卷，双击顶层 `AsterLauncher.Migrator.exe`，依次选择旧安装目录和完整 ZIP。不要把工具放进将被替换的 App/MigrationTools 中。迁移器先核验整个 ZIP 和 `release-files.json`，再提交新目录；原 Data、自选数据位置和旧 EXE 备份保留。迁移后继续从原目录的 `AsterLauncher.exe` 启动。
-
-如果中断留下 `.aster-migration.json`，再次运行独立迁移工具会提供恢复入口；命令行也可运行 `AsterLauncher.Migrator.exe --recover <旧目录>`。恢复过程保留数据与暂存文件，不覆盖已经被修改的入口。隔离回归脚本为 `eng/test-migration.ps1` 和 `eng/test-multifile-update.ps1`。
-
-维护运行依赖固定版本的便携 Node.js 与 7-Zip，均放在项目/发布文件夹内，不安装到系统。源码构建者先取得官方 Node.js v24.19.0 win-x64/node.exe，再执行 `eng/prepare-maintenance-runtime.ps1 -NodeSource <文件路径>`；脚本核对固定 SHA-256，并把下载、临时文件和解压工具放在 E 盘工作区。完整许可及 7-Zip 对应源码见 `third_party` 和 `THIRD_PARTY_NOTICES.md`。
+- [Starward](https://github.com/Scighost/Starward)：产品方向参考，本项目独立实现。
+- [UIGF](https://uigf.org/)：抽卡记录交换格式。
+- 伴随工具预设： [MaaEnd](https://github.com/MaaEnd/MaaEnd)、[BetterGI](https://github.com/babalae/better-genshin-impact)、[March7thAssistant](https://github.com/moesnow/March7thAssistant)、[MAA](https://github.com/MaaAssistantArknights/MaaAssistantArknights) 和 [maa-cli](https://github.com/MaaAssistantArknights/maa-cli)，不随包捆绑。
