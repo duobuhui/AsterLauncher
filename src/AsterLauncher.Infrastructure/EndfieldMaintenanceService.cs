@@ -226,11 +226,18 @@ public sealed class EndfieldMaintenanceService
         installation.ExecutablePath = exe;
         installation.InstalledVersion = package.Version;
         installation.MaintenanceInProgress = false;
-        if(installation.PreloadSourceVersion != package.Version)
+        var consumedPreload=installation.PreloadSourceVersion != package.Version;
+        if(consumedPreload)
         { installation.PreloadState=EndfieldPreloadState.NotOpen; installation.PreloadSourceVersion=null; installation.PreloadTargetVersion=null; installation.PreloadContentHash=null; }
         File.Delete(journal);
-        await new DownloadTaskCache(_dataRoot).ForgetAsync(TaskKey(installation,false),cancellationToken);
-        await new DownloadTaskCache(_dataRoot).ForgetAsync(TaskKey(installation,true),cancellationToken);
+        try
+        {
+            var cache=new DownloadTaskCache(_dataRoot);
+            await cache.CompleteAsync(TaskKey(installation,false));
+            if(consumedPreload)await cache.CompleteAsync(TaskKey(installation,true));
+        }
+        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        { /* Verified game remains installed; damaged cache indexes stay protected for recovery. */ }
         Report(EndfieldMaintenanceStage.Completed, "安装文件已完成校验");
         return plan;
         }

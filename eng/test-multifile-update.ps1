@@ -34,7 +34,7 @@ if((Get-Item $delta).Length -ge (Get-Item $Package).Length){throw 'File delta di
 if($LASTEXITCODE -ne 0){throw ('File delta updater failed: '+(Get-Content (Join-Path $deltaStage 'update.log') -Raw))}
 if((Get-Content (Join-Path $install 'App\fixture-maintenance.txt') -Raw) -ne 'future changed file fixture'){throw 'Delta result mismatch.'}
 if((Get-FileHash (Join-Path $data 'fixture-user-data.txt')).Hash -ne $dataHash){throw 'Delta update changed user data.'}
-Write-Output "Full and file delta updates passed; Data preserved. Delta $((Get-Item $delta).Length) bytes / full $((Get-Item $Package).Length) bytes. Evidence: $fixture"
+Write-Output "Full and file delta updates passed; Data preserved. Delta $((Get-Item $delta).Length) bytes / full $((Get-Item $Package).Length) bytes. Isolated copies removed after success."
 
 if ($BasePackage -or $DeltaPackage) {
     if (-not $BasePackage -or -not $DeltaPackage) { throw 'Both base and delta packages are required.' }
@@ -48,12 +48,13 @@ if ($BasePackage -or $DeltaPackage) {
     $location = Join-Path $baseInstall 'asterlauncher.data-location.json'
     [IO.File]::WriteAllText($location, (@{directory=$userData} | ConvertTo-Json))
     $locationHash = (Get-FileHash -LiteralPath $location -Algorithm SHA256).Hash
-    $actualStage = Join-Path $fixture 'release-delta-stage'
+    $actualStage = Join-Path $baseInstall (".aster-update-" + [Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $actualStage | Out-Null
     $actualDelta = Join-Path $actualStage 'package.zip'
     Copy-Item -LiteralPath $DeltaPackage -Destination $actualDelta
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'src\AsterLauncher.App\Services\ApplyUpdate.ps1') -Package $actualDelta -TargetExe (Join-Path $baseInstall 'AsterLauncher.exe') -Mode MultiPatch -ProcessId 99999999 -ExpectedHash $shimHash -NoLaunch
     if ($LASTEXITCODE -ne 0) { throw ('Release delta failed: ' + (Get-Content (Join-Path $actualStage 'update.log') -Raw)) }
+    if (Test-Path -LiteralPath $actualStage) { throw "Successful update left its GUID staging directory." }
     # 0.1.3 invokes its old migrator. Exercise the new entry's first-start recovery.
     $sync = Start-Process -FilePath (Join-Path $baseInstall 'AsterLauncher.exe') -ArgumentList @('--sync-release',('"'+$baseInstall+'"')) -WindowStyle Hidden -Wait -PassThru
     if ($sync.ExitCode -ne 0) { throw 'New entry failed to synchronize legacy migration manifest.' }
@@ -96,3 +97,4 @@ if ($BasePackage -or $DeltaPackage) {
     if ($updated.version -ne $expected.version) { throw 'Recovered manifest version differs.' }
     Write-Output "Actual release delta passed: $($updated.version), all target file hashes match; Data and location preserved."
 }
+& (Join-Path $PSScriptRoot "remove-validation-fixture.ps1") -Path $fixture

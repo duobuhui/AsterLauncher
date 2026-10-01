@@ -89,4 +89,6 @@ $legacy.PSObject.Properties.Remove('ManifestSha256')
 $legacy.PSObject.Properties.Remove('HadManifest')
 $legacy | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $old '.aster-migration.json') -Encoding UTF8
 if ((Invoke-Migration @('--recover',$old)) -ne 0 -or (Get-FileHash -LiteralPath $oldExe).Hash -ne $oldHash) { throw '旧迁移记录恢复失败。' }
-Write-Output "PASS: bad hash, traversal, inner hash, migration, backup, data preservation, recovery ($testRoot)"
+Write-Output "PASS: bad hash, traversal, inner hash, migration, backup, data preservation, recovery; isolated copies removed after success"
+
+& (Join-Path $PSScriptRoot "remove-validation-fixture.ps1") -Path $testRoot

@@ -122,8 +122,31 @@ try {
     $arguments=@('--migrate', ('"'+$root+'"'), '--package', ('"'+$prepared+'"'), '--sha256', $zipHash, '--no-launch')
     $child=Start-Process -FilePath $apply -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru -WorkingDirectory $toolStage
     if ($child.ExitCode -ne 0) { throw 'Migration commit failed; original install or recovery journal preserved.' }
-    if (-not $NoLaunch) { Start-Process -FilePath $TargetExe -WorkingDirectory $root -WindowStyle Hidden }
     'Multi-file update completed. Previous application is in MigrationBackup; Data is unchanged.' | Set-Content -LiteralPath $log -Encoding UTF8
+    # Only the launcher-created GUID stage is disposable; failure/recovery stages stay intact.
+    $ownedStage = [IO.Path]::GetFullPath((Split-Path -Parent $stage)).TrimEnd('\') -eq $root.TrimEnd('\') -and
+        (Split-Path -Leaf $stage) -match '^\.aster-update-[0-9a-f]{32}$'
+    if ($ownedStage -and -not (Test-Path -LiteralPath (Join-Path $root '.aster-migration.json'))) {
+        try {
+            if ((Get-Item -LiteralPath $stage -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked update stage.' }
+            $pending = [Collections.Generic.Stack[string]]::new()
+            $pending.Push($stage)
+            while ($pending.Count -gt 0) {
+                foreach ($entry in Get-ChildItem -LiteralPath $pending.Pop() -Force) {
+                    if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Update stage contains a filesystem link.' }
+                    if ($entry.PSIsContainer) { $pending.Push($entry.FullName) }
+                }
+            }
+            Set-Location -LiteralPath $root
+            [Environment]::CurrentDirectory = $root
+            Remove-Item -LiteralPath $stage -Recurse -Force
+        } catch { # Cache cleanup cannot invalidate a committed update.
+            try {
+                if (Test-Path -LiteralPath $stage) { 'Update committed; staging cleanup deferred.' | Set-Content -LiteralPath $log -Encoding UTF8 }
+            } catch { }
+        }
+    }
+    if (-not $NoLaunch) { Start-Process -FilePath $TargetExe -WorkingDirectory $root -WindowStyle Hidden }
 } catch {
     $_.Exception.Message | Set-Content -LiteralPath $log -Encoding UTF8
     exit 1

@@ -84,6 +84,9 @@ public sealed class LauncherUpdateService
             throw new InvalidOperationException("请从完整解压的多文件发布包运行启动器后再更新。");
         var stage = SafeGamePath.Resolve(installRoot, ".aster-update-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
+        var handedOff=false;
+        try
+        {
         var packagePath = Path.Combine(stage, "package.zip");
         await DownloadPackageAsync(update.Package, packagePath, cancellationToken);
         if (update.Package.IsPatch && !await CanApplyFileDeltaAsync(packagePath, installRoot, cancellationToken))
@@ -123,7 +126,26 @@ public sealed class LauncherUpdateService
         start.Environment.Remove("PSModulePath");
         using var process = Process.Start(start)
             ?? throw new InvalidOperationException("无法启动更新程序。 ");
+        handedOff=true;
         Microsoft.UI.Xaml.Application.Current.Exit();
+        }
+        finally
+        {
+            // Download/check failures have not handed this stage to the updater.
+            if(!handedOff && Directory.Exists(stage))
+            {
+                try
+                {
+                    foreach(var name in new[]{"package.zip","apply-update.ps1"})
+                    {
+                        var file=SafeGamePath.Resolve(stage,name);
+                        if(File.Exists(file))File.Delete(file);
+                    }
+                    EmptyDirectoryCleanup.Prune(stage);
+                }
+                catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidDataException) { }
+            }
+        }
     }
 
     private static async Task DownloadPackageAsync(UpdatePackage package, string path, CancellationToken token)

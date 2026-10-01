@@ -17,7 +17,7 @@ public sealed class EndfieldDownloadService
     {
         _http = http;
         _cacheRoot = SafeGamePath.Resolve(dataRoot, "endfield/objects");
-        Directory.CreateDirectory(_cacheRoot);
+
     }
 
     public static Uri FileUri(Uri fileBase, string relative)
@@ -45,6 +45,7 @@ public sealed class EndfieldDownloadService
         await gate.WaitAsync(cancellationToken);
         try
         {
+            Directory.CreateDirectory(_cacheRoot);
             var final = SafeGamePath.Resolve(_cacheRoot, key);
             if (await MatchesAsync(final, size, md5, cancellationToken))
             { byteProgress?.Report(size); return final; }

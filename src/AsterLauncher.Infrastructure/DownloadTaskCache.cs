@@ -44,7 +44,11 @@ public sealed class DownloadTaskCache(string dataRoot)
         try{var path=TaskPath(task);if(File.Exists(path))File.Delete(path);}
         finally{Gate.Release();}
     }
-    public async Task<DownloadCacheCleanup> CancelAsync(string task,CancellationToken token=default)
+    public Task<DownloadCacheCleanup> CancelAsync(string task,CancellationToken token=default)
+        => ReleaseAsync(task,true,token);
+    public Task<DownloadCacheCleanup> CompleteAsync(string task,CancellationToken token=default)
+        => ReleaseAsync(task,false,token);
+    private async Task<DownloadCacheCleanup> ReleaseAsync(string task,bool strict,CancellationToken token)
     {
         // Caller stops and awaits all task workers before entering here.
         using var cleaning=LocalStorageGate.BeginOperation(dataRoot);
@@ -62,13 +66,20 @@ public sealed class DownloadTaskCache(string dataRoot)
                 {
                     var file=SafeGamePath.Resolve(dataRoot,"endfield/objects/"+key+suffix);
                     if(!File.Exists(file))continue;
+                    try
+                    {
                     var info=new FileInfo(file);var length=info.Length;var modified=info.LastWriteTimeUtc;var identity=WindowsHardLink.Identity(file);
                     // Only unlink our cache entry; never change shared content or attributes.
                     if(!WindowsHardLink.DeleteVerifiedEntry(file,identity,length,modified))throw new IOException("缓存文件在清理前发生变化，请重试。");
                     count++;bytes+=length;
+                    }
+                    catch(Exception ex) when(!strict && ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                    { retained++; } // Completed installs can release ownership even if a cache entry is busy.
                 }
             }
             if(File.Exists(path))File.Delete(path);
+            EmptyDirectoryCleanup.Prune(Root);
+            if(referenced.Count==0)EmptyDirectoryCleanup.Prune(SafeGamePath.Resolve(dataRoot,"endfield/objects"));
             return new(count,bytes,retained);
         }
         finally{Gate.Release();}
