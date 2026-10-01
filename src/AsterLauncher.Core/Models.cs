@@ -184,6 +184,7 @@ public sealed class CompanionTool
 
 public sealed class GameUserState
 {
+    public HoYoInstallation? HoYoInstallation { get; set; }
     public string GameId { get; set; } = string.Empty;
 
     public string? DisplayNameOverride { get; set; }

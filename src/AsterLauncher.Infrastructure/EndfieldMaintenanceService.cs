@@ -479,7 +479,7 @@ public sealed class EndfieldMaintenanceService
 
     private async Task<RootLease> AcquireAsync(IEnumerable<string> roots, CancellationToken cancellationToken)
     {
-        var sorted = roots.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase)
+        var sorted = roots.Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant()).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray();
         var gates = new List<SemaphoreSlim>();
         var files = new List<FileStream>();
@@ -492,7 +492,7 @@ public sealed class EndfieldMaintenanceService
                 var gate = RootGates.GetOrAdd(root, _ => new SemaphoreSlim(1, 1));
                 await gate.WaitAsync(cancellationToken);
                 gates.Add(gate);
-                var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root))).ToLowerInvariant();
+                var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root)));
                 files.Add(new FileStream(Path.Combine(lockFolder, key + ".lock"),
                     FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
             }

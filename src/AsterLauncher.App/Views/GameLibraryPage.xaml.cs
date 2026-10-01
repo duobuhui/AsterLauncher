@@ -19,6 +19,7 @@ public sealed partial class GameLibraryPage : Page
 {
     private readonly LauncherViewModel _launcher;
     private readonly EndfieldMaintenanceViewModel _endfield;
+    private readonly HoYoMaintenanceViewModel _hoyo;
     private readonly IFilePickerService _filePicker;
     private readonly IServiceProvider _services;
     private readonly ILogger<GameLibraryPage> _logger;
@@ -51,10 +52,13 @@ public sealed partial class GameLibraryPage : Page
         _filePicker = filePicker;
         _services = services;
         _endfield = services.GetRequiredService<EndfieldMaintenanceViewModel>();
+        _hoyo = services.GetRequiredService<HoYoMaintenanceViewModel>();
         _logger = logger;
         InitializeComponent();
         DataContext = ViewModel;
         EndfieldPanel.DataContext = _endfield;
+        HoYoPanel.DataContext = _hoyo;
+        _hoyo.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(RefreshLaunchSurfaceLayout);
         DownloadStatusPanel.DataContext = _endfield;
         DownloadStatusPanel.SetBinding(VisibilityProperty, new Microsoft.UI.Xaml.Data.Binding { Source=_endfield, Path=new PropertyPath(nameof(EndfieldMaintenanceViewModel.DownloadVisibility)) });
         _endfield.PropertyChanged += (_, args) =>
@@ -108,6 +112,7 @@ public sealed partial class GameLibraryPage : Page
                 await _endfield.ScanSharingAsync();
                 if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
                     await _endfield.CheckVersionAsync();
+                else if (_hoyo.IsSupported) await _hoyo.CheckVersionAsync();
             });
 #if DEBUG
             if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_EXPANDED") == "1")
@@ -136,6 +141,8 @@ public sealed partial class GameLibraryPage : Page
         if (isOverview && _activeFeatureTag != "overview"
             && _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
             _ = _endfield.CheckVersionAsync();
+        else if (isOverview && _activeFeatureTag != "overview" && _hoyo.IsSupported)
+            _ = _hoyo.CheckVersionAsync();
         if (_activeFeatureTag == nextTag && _activeSurface is not null && AddGamePanel.Visibility == Visibility.Collapsed)
         {
             return;
@@ -252,6 +259,7 @@ public sealed partial class GameLibraryPage : Page
         if (!changed && _activeFeatureTag == "add") return;
         ShowFeature("overview");
         if (changed && game.Id == BuiltInGameIds.Endfield) await _endfield.CheckVersionAsync();
+        else if (changed && _hoyo.IsSupported) await _hoyo.CheckVersionAsync();
     }
 
     private async Task SelectChannelAsync(GameCardViewModel game, EndfieldChannel channel)
@@ -267,9 +275,13 @@ public sealed partial class GameLibraryPage : Page
     {
         var selected = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
         EndfieldPanel.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-        MaintenanceDivider.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-        MaintenanceColumn.Width = selected ? new GridLength(1.4, GridUnitType.Star) : new GridLength(0);
-        LaunchExpansionContent.ColumnSpacing = selected ? 24 : 0;
+        HoYoPanel.Visibility = _hoyo.IsSupported ? Visibility.Visible : Visibility.Collapsed;
+        var maintenance = selected || _hoyo.IsSupported;
+        DownloadStatusPanel.DataContext = _hoyo.IsSupported ? _hoyo : _endfield;
+        DownloadStatusPanel.SetBinding(VisibilityProperty, new Microsoft.UI.Xaml.Data.Binding { Source = DownloadStatusPanel.DataContext, Path = new PropertyPath("DownloadVisibility") });
+        MaintenanceDivider.Visibility = maintenance ? Visibility.Visible : Visibility.Collapsed;
+        MaintenanceColumn.Width = maintenance ? new GridLength(1.4, GridUnitType.Star) : new GridLength(0);
+        LaunchExpansionContent.ColumnSpacing = maintenance ? 24 : 0;
         RefreshLaunchSurfaceLayout();
     }
 
@@ -372,7 +384,7 @@ public sealed partial class GameLibraryPage : Page
     }
 
     private double GetExpandedLaunchWidth() =>
-        Math.Min(_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield ? 880 : 560,
+        Math.Min((_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield || _hoyo.IsSupported) ? 880 : 560,
             Math.Max(234, HeroContent.ActualWidth - HeroContent.Padding.Left - HeroContent.Padding.Right));
 
     private void RefreshLaunchSurfaceLayout()
@@ -426,10 +438,61 @@ public sealed partial class GameLibraryPage : Page
             await _endfield.SyncAsync(false);
     }
 
+    private async void HoYoChooseRoot_OnClick(object sender, RoutedEventArgs e)
+    {
+        var root = await _filePicker.PickGameDirectoryAsync(App.MainWindow);
+        if (root is null) return;
+        try { await _hoyo.SetRootAsync(root); }
+        catch (Exception ex) { await ShowMessageAsync("安装目录不可用", ex.Message); }
+    }
+    private async void HoYoCheck_OnClick(object sender, RoutedEventArgs e) => await _hoyo.CheckAsync();
+    private async void HoYoRepair_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (await ConfirmHoYoChannelAsync()) await _hoyo.SyncAsync(true);
+    }
+    private async Task<bool> ConfirmHoYoChannelAsync()
+    {
+        if (_hoyo.NeedsChannelConfirmation)
+        {
+            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
+                Title = "确认安装渠道", Content = _hoyo.InstallRoot + "\n\n请确认这是国服官服安装。配置中的 channel=1 不能可靠区分所有国际服安装；B 服和国际服请使用对应官方启动器维护。",
+                PrimaryButtonText = "这是国服官服", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+            var game = _launcher.CurrentGame;
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || !ReferenceEquals(game, _launcher.CurrentGame)) return false;
+            await _hoyo.ConfirmOfficialChannelAsync();
+        }
+        return true;
+    }
+    private async void HoYoVersion_OnClick(object sender, RoutedEventArgs e) => await _hoyo.CheckVersionAsync();
+    private async void HoYoPreload_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (await ConfirmHoYoChannelAsync()) await _hoyo.PreloadAsync();
+    }
+    private async void HoYoCancelPreload_OnClick(object sender, RoutedEventArgs e) => await _hoyo.CancelAsync(true);
+    private async Task StartHoYoSyncAsync()
+    {
+        var game = _launcher.CurrentGame;
+        try { await _hoyo.EnsureDefaultRootAsync(); }
+        catch (Exception ex) { await ShowMessageAsync("无法开始下载", ex.Message); return; }
+        await _hoyo.CheckAsync();
+        if (!ReferenceEquals(game, _launcher.CurrentGame) || !_hoyo.HasPlan) return;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
+            Title = game!.IsInstalled ? "更新游戏？" : "下载游戏？",
+            Content = _hoyo.InstallRoot + "\n\n" + _hoyo.PlanText + "\n\n此入口维护国服官服，请确认当前安装的渠道；不适用于 B 服或国际服。只下载缺失或校验不符的文件。下载完成后校验并应用；暂停保留进度，取消会删除此任务的下载缓存。",
+            PrimaryButtonText = "开始", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && ReferenceEquals(game, _launcher.CurrentGame))
+        {
+            await _hoyo.ConfirmOfficialChannelAsync();
+            await _hoyo.SyncAsync(false);
+        }
+    }
     private async void EndfieldRepair_OnClick(object sender, RoutedEventArgs e) => await _endfield.SyncAsync(true);
-    private async void EndfieldCancel_OnClick(object sender, RoutedEventArgs e) => await _endfield.CancelAsync();
+    private async void EndfieldCancel_OnClick(object sender, RoutedEventArgs e) { if (_hoyo.IsSupported) await _hoyo.CancelAsync(); else await _endfield.CancelAsync(); }
     private async void EndfieldCancelPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.CancelAsync(true);
-    private void EndfieldPause_OnClick(object sender, RoutedEventArgs e) => _endfield.Pause();
+    private void EndfieldPause_OnClick(object sender, RoutedEventArgs e) { if (_hoyo.IsSupported) _hoyo.Pause(); else _endfield.Pause(); }
     private async void EndfieldCheckPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.CheckPreloadAsync();
     private async void EndfieldPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.PreloadAsync();
     private async void EndfieldOptimize_OnClick(object sender, RoutedEventArgs e) => await _endfield.OptimizeAsync();
@@ -521,6 +584,11 @@ public sealed partial class GameLibraryPage : Page
     {
         try
         {
+            if (_hoyo.IsSupported)
+            {
+                if (_hoyo.IsPrimaryDownloading) { _hoyo.Pause(); return; }
+                if (_hoyo.StartsMaintenance) { await StartHoYoSyncAsync(); return; }
+            }
             if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
             {
                 if (_endfield.IsPrimaryDownloading) { _endfield.Pause(); return; }

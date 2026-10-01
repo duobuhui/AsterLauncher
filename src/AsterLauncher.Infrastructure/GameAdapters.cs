@@ -111,7 +111,7 @@ public static class BuiltInGameCatalog
             ["YuanShen.exe", "GenshinImpact.exe"],
             true,
             "https://ys.mihoyo.com/",
-            "通过米哈游启动器 / HoYoPlay 安装与更新。",
+            "支持国服官服下载、更新、预下载与文件修复。",
             "Assets/Games/genshin-impact-icon.png"),
         Create(
             BuiltInGameIds.HonkaiImpact3rd,
@@ -124,7 +124,7 @@ public static class BuiltInGameCatalog
             ["BH3.exe"],
             false,
             "https://bh3.mihoyo.com/",
-            "通过崩坏3官网或米哈游启动器获取桌面版。",
+            "支持国服官服下载、更新、预下载与文件修复。",
             "Assets/Games/honkai-impact-3rd-icon.png"),
         Create(
             BuiltInGameIds.HonkaiStarRail,
@@ -137,7 +137,7 @@ public static class BuiltInGameCatalog
             ["StarRail.exe"],
             true,
             "https://sr.mihoyo.com/",
-            "通过米哈游启动器 / HoYoPlay 安装与更新。",
+            "支持国服官服下载、更新、预下载与文件修复。",
             "Assets/Games/honkai-star-rail-icon.png"),
         Create(
             BuiltInGameIds.ZenlessZoneZero,
@@ -150,7 +150,7 @@ public static class BuiltInGameCatalog
             ["ZenlessZoneZero.exe"],
             true,
             "https://zzz.mihoyo.com/",
-            "通过米哈游启动器 / HoYoPlay 安装与更新。",
+            "支持国服官服下载、更新、预下载与文件修复。",
             "Assets/Games/zenless-zone-zero-icon.png"),
         Create(
             BuiltInGameIds.PetitPlanet,
@@ -160,7 +160,7 @@ public static class BuiltInGameCatalog
             "布",
             "#775D9D",
             "#80C6A6",
-            [],
+            ["PetitPlanet.exe"],
             false,
             "https://planet.hoyoverse.com/zh-cn/home",
             "打开官方页面查看当前测试或下载状态。",

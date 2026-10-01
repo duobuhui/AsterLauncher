@@ -11,12 +11,15 @@ public sealed class EndfieldDownloadService
 {
     private readonly HttpClient _http;
     private readonly string _cacheRoot;
+    private readonly Func<string, Uri> _trustedUri;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _objectLocks = new();
 
-    public EndfieldDownloadService(HttpClient http, string dataRoot)
+    public EndfieldDownloadService(HttpClient http, string dataRoot, string bucket = "endfield", Func<string, Uri>? trustedUri = null)
     {
         _http = http;
-        _cacheRoot = SafeGamePath.Resolve(dataRoot, "endfield/objects");
+        if (bucket is not ("endfield" or "hoyo")) throw new ArgumentException("Invalid cache bucket.");
+        _cacheRoot = SafeGamePath.Resolve(dataRoot, bucket + "/objects");
+        _trustedUri = trustedUri ?? EndfieldDistributionProvider.TrustedUri;
 
     }
 
@@ -39,7 +42,7 @@ public sealed class EndfieldDownloadService
         if (md5.Length != 32 || !md5.All(Uri.IsHexDigit) || size < 0)
             throw new ArgumentException("Invalid content identity.");
         using var operation = LocalStorageGate.BeginOperation(Path.GetDirectoryName(Path.GetDirectoryName(_cacheRoot))!);
-        EndfieldDistributionProvider.TrustedUri(initialUri.ToString());
+        _trustedUri(initialUri.ToString());
         var key = md5.ToLowerInvariant() + "-" + size;
         var gate = _objectLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken);
@@ -77,7 +80,7 @@ public sealed class EndfieldDownloadService
                     if (refreshUri is not null)
                     {
                         uri = await refreshUri(cancellationToken);
-                        EndfieldDistributionProvider.TrustedUri(uri.ToString());
+                        _trustedUri(uri.ToString());
                     }
                     await Task.Delay(TimeSpan.FromSeconds(Math.Min(8, 1 << attempt)), cancellationToken);
                 }

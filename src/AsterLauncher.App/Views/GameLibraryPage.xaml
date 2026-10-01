@@ -76,8 +76,8 @@
                                 <StackPanel Width="300" Spacing="12">
                                     <TextBlock Text="筛选" FontSize="18" FontWeight="SemiBold" />
                                     <ComboBox Header="发行商" HorizontalAlignment="Stretch" ItemsSource="{Binding Publishers}" SelectedItem="{Binding SelectedPublisher, Mode=TwoWay}" />
-                                    <CheckBox Content="仅显示已安装" IsChecked="{Binding InstalledOnly, Mode=TwoWay}" />
-                                    <CheckBox Content="仅显示运行中" IsChecked="{Binding RunningOnly, Mode=TwoWay}" />
+                                    <CheckBox IsEnabled="{Binding CanSetRoot}" Content="仅显示已安装" IsChecked="{Binding InstalledOnly, Mode=TwoWay}" />
+                                    <CheckBox IsEnabled="{Binding CanSetRoot}" Content="仅显示运行中" IsChecked="{Binding RunningOnly, Mode=TwoWay}" />
                                     <Button HorizontalAlignment="Right" Content="清除筛选" Click="ClearFilters_OnClick" />
                                 </StackPanel>
                             </Flyout>
@@ -109,8 +109,8 @@
                                 <StackPanel Width="300" Spacing="12">
                                     <TextBlock Text="筛选" FontSize="18" FontWeight="SemiBold" />
                                     <ComboBox Header="发行商" HorizontalAlignment="Stretch" ItemsSource="{Binding Publishers}" SelectedItem="{Binding SelectedPublisher, Mode=TwoWay}" />
-                                    <CheckBox Content="仅显示已安装" IsChecked="{Binding InstalledOnly, Mode=TwoWay}" />
-                                    <CheckBox Content="仅显示运行中" IsChecked="{Binding RunningOnly, Mode=TwoWay}" />
+                                    <CheckBox IsEnabled="{Binding CanSetRoot}" Content="仅显示已安装" IsChecked="{Binding InstalledOnly, Mode=TwoWay}" />
+                                    <CheckBox IsEnabled="{Binding CanSetRoot}" Content="仅显示运行中" IsChecked="{Binding RunningOnly, Mode=TwoWay}" />
                                     <Button HorizontalAlignment="Right" Content="清除筛选" Click="ClearFilters_OnClick" />
                                 </StackPanel>
                             </Flyout>
@@ -274,6 +274,41 @@
                                                         <TextBlock Text="预下载" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                                         <TextBlock Grid.Column="1" Text="{Binding PreloadText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" />
                                                     </Grid>
+                                                </StackPanel>
+                                                <StackPanel x:Name="HoYoPanel" Grid.Column="0" Visibility="Collapsed" Spacing="7">
+                                                    <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                                                    <TextBlock Text="国服官服 · 完整资源" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                    <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{Binding InstallRoot}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                        <Button Grid.Column="1" Content="更改目录" Style="{StaticResource FloatingButtonStyle}" IsEnabled="{Binding CanSetRoot}" Click="HoYoChooseRoot_OnClick" />
+                                                    </Grid>
+                                                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                        <TextBlock FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}"><Run Text="本地 " /><Run Text="{Binding LocalVersion}" /></TextBlock>
+                                                        <TextBlock Grid.Column="1" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}"><Run Text="最新 " /><Run Text="{Binding RemoteVersion}" /></TextBlock>
+                                                    </Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock Text="语音" VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                        <CheckBox IsEnabled="{Binding CanSetRoot}" Content="中" IsChecked="{Binding ChineseAudio, Mode=TwoWay}" MinWidth="0" />
+                                                        <CheckBox IsEnabled="{Binding CanSetRoot}" Content="英" IsChecked="{Binding EnglishAudio, Mode=TwoWay}" MinWidth="0" />
+                                                        <CheckBox IsEnabled="{Binding CanSetRoot}" Content="日" IsChecked="{Binding JapaneseAudio, Mode=TwoWay}" MinWidth="0" />
+                                                        <CheckBox IsEnabled="{Binding CanSetRoot}" Content="韩" IsChecked="{Binding KoreanAudio, Mode=TwoWay}" MinWidth="0" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding PlanText}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Button Content="检查文件" Style="{StaticResource FloatingButtonStyle}" IsEnabled="{Binding CanSetRoot}" Click="HoYoCheck_OnClick" />
+                                                        <Button Content="修复" Style="{StaticResource FloatingButtonStyle}" IsEnabled="{Binding CanRepair}" Click="HoYoRepair_OnClick" />
+                                                        <Button Content="更多" Style="{StaticResource FloatingButtonStyle}"><Button.Flyout><MenuFlyout>
+                                                            <MenuFlyoutItem Text="检查更新与预下载" Click="HoYoVersion_OnClick" />
+                                                            <MenuFlyoutItem Text="预下载资源" IsEnabled="{Binding CanPreload}" Click="HoYoPreload_OnClick" />
+                                                            <MenuFlyoutSeparator />
+                                                            <MenuFlyoutItem Text="暂停任务，保留进度" Click="EndfieldPause_OnClick" />
+                                                            <MenuFlyoutItem Text="取消下载并删除缓存" Click="EndfieldCancel_OnClick" />
+                                                            <MenuFlyoutItem Text="删除预下载缓存" Click="HoYoCancelPreload_OnClick" />
+                                                        </MenuFlyout></Button.Flyout></Button>
+                                                    </StackPanel>
+                                                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="6" />
+                                                    <TextBlock Text="{Binding StageText}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassTextBrush}" />
+                                                    <TextBlock FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}"><Run Text="预下载：" /><Run Text="{Binding PreloadText}" /></TextBlock>
                                                 </StackPanel>
                                                 <Border x:Name="MaintenanceDivider" Grid.Column="1" Width="1" HorizontalAlignment="Left" Margin="-12,0,0,0" Background="{ThemeResource GlassEdgeBrush}" Visibility="Collapsed" />
                                                 <StackPanel x:Name="LaunchSettingsPanel" Grid.Column="1" Spacing="12" VerticalAlignment="Top">

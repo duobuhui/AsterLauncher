@@ -110,6 +110,25 @@ public partial class App : Application
             LauncherDataPaths.ResolveDataDirectory(),
             new EndfieldArchiveService(Path.Combine(AppContext.BaseDirectory, "MaintenanceTools", "7za.exe"))));
         services.AddSingleton<EndfieldMaintenanceViewModel>();
+        services.AddSingleton(new HoYoContentCodec(endfieldNetworkRuntime));
+#if DEBUG
+        if (HoYoMaintenanceUiFixture.Enabled)
+            services.AddSingleton<IHoYoDistributionProvider>(new HoYoMaintenanceUiFixture());
+        else
+#endif
+        services.AddSingleton<IHoYoDistributionProvider>(provider => new HoYoDistributionProvider(
+            new HttpClient(new EndfieldNodeHttpHandler(endfieldNetworkRuntime)) { Timeout = TimeSpan.FromMinutes(3) },
+            provider.GetRequiredService<HoYoContentCodec>()));
+        services.AddSingleton(provider => new HoYoMaintenanceService(
+            provider.GetRequiredService<IHoYoDistributionProvider>(),
+            new EndfieldDownloadService(new HttpClient(
+#if DEBUG
+                HoYoMaintenanceUiFixture.Enabled ? new HoYoMaintenanceUiFixture() :
+#endif
+                new EndfieldNodeHttpHandler(endfieldNetworkRuntime))
+            { Timeout = TimeSpan.FromMinutes(30) }, LauncherDataPaths.ResolveDataDirectory(), "hoyo", HoYoDistributionProvider.TrustedUri),
+            provider.GetRequiredService<HoYoContentCodec>(), LauncherDataPaths.ResolveDataDirectory()));
+        services.AddSingleton<HoYoMaintenanceViewModel>();
         services.AddSingleton(provider => new WallpaperUpdateService(
             new HttpClient(new HttpClientHandler
             {

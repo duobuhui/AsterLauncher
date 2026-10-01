@@ -116,6 +116,16 @@
             <StaticResource x:Key="AccentTextFillColorPrimaryBrush" ResourceKey="ThemeAccentBrush" />
             <StaticResource x:Key="AccentTextFillColorSecondaryBrush" ResourceKey="ThemeAccentBrush" />
             <StaticResource x:Key="FocusVisualPrimaryBrush" ResourceKey="ThemeAccentBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="LaunchButtonBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="LaunchButtonBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPressed" ResourceKey="ThemeAccentSoftBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeChecked" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="LaunchButtonTextBrush" />
+            <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="LaunchButtonTextBrush" />
+            <StaticResource x:Key="ProgressBarForeground" ResourceKey="ThemeAccentBrush" />
+            <StaticResource x:Key="ProgressBarForegroundThemeBrush" ResourceKey="ThemeAccentBrush" />
+            <StaticResource x:Key="ProgressBarIndeterminateForegroundThemeBrush" ResourceKey="ThemeAccentBrush" />
             <Style x:Key="ThemeSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
                 <Setter Property="CornerRadius" Value="9" />
                 <Setter Property="MinHeight" Value="34" />

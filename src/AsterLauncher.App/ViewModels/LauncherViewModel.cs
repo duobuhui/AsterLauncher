@@ -148,7 +148,8 @@ public sealed class LauncherViewModel : ObservableObject
     }
 
     public bool CanLaunch => CurrentGame?.IsInstalled == true && SelectedProfile is not null && !IsLaunching
-        && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldInstallation?.MaintenanceInProgress != true);
+        && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldInstallation?.MaintenanceInProgress != true)
+        && !HasHoYoMaintenance(CurrentGame);
 
     public string LaunchButtonText => IsLaunching ? "运行中…" : "启动游戏";
 
@@ -1058,6 +1059,22 @@ SafeGamePath.Resolve(root, "Endfield.exe");
         OnPropertyChanged(nameof(CanLaunch));
     }
 
+    private static bool HasHoYoMaintenance(GameCardViewModel game) => game.State.HoYoInstallation?.MaintenanceInProgress == true
+        || (HoYoDistributionProvider.Games.ContainsKey(game.Id) && game.ExecutablePath is { } exe
+            && File.Exists(Path.Combine(Path.GetDirectoryName(exe)!, ".aster-hoyo-maintenance.json")));
+
+    public async Task PersistHoYoInstallationAsync(GameCardViewModel game, bool completed = false)
+    {
+        if (completed && game.State.HoYoInstallation is { InstallRoot: { } root } installation)
+        {
+            var release = game.Adapter.Definition.ExecutableNames.FirstOrDefault(name => File.Exists(SafeGamePath.Resolve(root, name)));
+            if (release is not null) { game.State.ExecutablePath = SafeGamePath.Resolve(root, release); UpdateSavedPath(game); }
+        }
+        UpdateSavedPath(game);
+        game.Refresh();
+        if (ReferenceEquals(CurrentGame, game)) { RefreshLaunchSequence(); OnPropertyChanged(nameof(CanLaunch)); }
+        await _configurationStore.SaveAsync(_configuration);
+    }
     private static string GetScanLabel(ScanResultKind kind) => kind switch
     {
         ScanResultKind.Found => "已找到",

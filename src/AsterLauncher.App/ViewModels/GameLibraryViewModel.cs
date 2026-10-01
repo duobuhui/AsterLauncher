@@ -15,6 +15,7 @@ public sealed class GameLibraryViewModel : ObservableObject
 
     private readonly LauncherViewModel _launcher;
     private readonly EndfieldMaintenanceViewModel _endfield;
+    private readonly HoYoMaintenanceViewModel _hoyo;
     private readonly IUigfArchiveService _uigfArchive;
     private readonly HashSet<GameCardViewModel> _observedGames = [];
     private string _searchText = string.Empty;
@@ -24,10 +25,12 @@ public sealed class GameLibraryViewModel : ObservableObject
     private UigfArchiveSummary _gachaSummary = new("v4.2", 0, 0, 0, null);
 
     public GameLibraryViewModel(LauncherViewModel launcher, IUigfArchiveService uigfArchive,
-        EndfieldMaintenanceViewModel endfield)
+        EndfieldMaintenanceViewModel endfield, HoYoMaintenanceViewModel hoyo)
     {
         _launcher = launcher;
         _endfield = endfield;
+        _hoyo = hoyo;
+        _hoyo.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(LaunchButtonText)); OnPropertyChanged(nameof(PrimaryProgress)); OnPropertyChanged(nameof(PrimaryActionGlyph)); OnPropertyChanged(nameof(PrimaryProgressVisibility)); };
         _endfield.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName is nameof(EndfieldMaintenanceViewModel.PrimaryActionText)
@@ -156,11 +159,11 @@ public sealed class GameLibraryViewModel : ObservableObject
 
     public bool CanLaunch => _launcher.CanLaunch;
 
-    public string LaunchButtonText => _endfield.PrimaryActionText;
-    public double PrimaryProgress => _endfield.PrimaryProgress;
-    public string PrimaryActionGlyph => _endfield.PrimaryActionGlyph;
+    public string LaunchButtonText => _hoyo.IsSupported ? _hoyo.PrimaryActionText : _endfield.PrimaryActionText;
+    public double PrimaryProgress => _hoyo.IsSupported ? _hoyo.Progress : _endfield.PrimaryProgress;
+    public string PrimaryActionGlyph => _hoyo.IsSupported ? _hoyo.PrimaryActionGlyph : _endfield.PrimaryActionGlyph;
     public Microsoft.UI.Xaml.Visibility PrimaryProgressVisibility =>
-        CurrentGame?.Id == BuiltInGameIds.Endfield && _endfield.IsPrimaryDownloading
+        (_hoyo.IsSupported && _hoyo.IsPrimaryDownloading || CurrentGame?.Id == BuiltInGameIds.Endfield && _endfield.IsPrimaryDownloading)
             ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
     public string LaunchStatusText => _launcher.StatusText;

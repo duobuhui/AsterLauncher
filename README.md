@@ -1,6 +1,6 @@
 # AsterLauncher
 
-独立开发的 Windows 游戏启动器，使用 .NET 10、Windows App SDK 2.4 和 WinUI 3。当前版本：**0.1.5-beta**。
+独立开发的 Windows 游戏启动器，使用 .NET 10、Windows App SDK 2.4 和 WinUI 3。当前版本：**0.1.6-beta**。
 
 [下载](https://github.com/duobuhui/AsterLauncher/releases) · [反馈问题](https://github.com/duobuhui/AsterLauncher/issues)
 
@@ -28,6 +28,13 @@
 
 设置中的“本地存储”可扫描下载缓存、日志、云壁纸、更新暂存和已识别的旧数据目录。先查看文件列表，再勾选删除；旧数据可能包含配置和抽卡档案，请确认已迁移或备份。当前配置、档案、游戏文件及任务正在引用的缓存会保留。删除后会一并移除空目录，遗留的空暂存目录也可单独扫描删除。
 
+### 米哈游游戏（Beta）
+
+原神、崩坏3、星穹铁道、绝区零的国服官服支持下载、更新、预下载和修复。进入游戏页检查官方版本；主按钮用于下载、继续任务、更新或启动，箭头展开后可更改目录、选择语音及检查文件。新安装会在设置的游戏下载目录下创建游戏文件夹。
+
+下载使用官方当前分支的文件与分块清单，支持实时进度、速度、暂停续传和重启恢复。更新按目标清单同步变化的文件，暂未使用 HDiff / LDiff 差分补丁。修复仅补齐缺失或损坏文件；安装版本较旧时请先更新。取消任务会删除此任务的缓存，已应用但未完成的更新需继续维护后才能启动；完成任务也会清理缓存，预下载及其他任务仍引用的内容保留。
+
+预下载仅在官方开放时可用，不提前改动已安装版本，正式更新按内容哈希复用缓存。语音默认中文，可勾选其他语言；取消勾选不会删除已安装的语音。已有安装首次维护需要明确确认国服官服；B 服和国际服请使用对应官方启动器维护。星布谷地已接入资源检查，官方尚未提供公开 PC 下载分支时显示“未开放下载”。
 ### 终末地（Beta）
 
 右键点击游戏列表中的终末地，在“服务器”菜单切换官服或 B服。两服使用独立安装目录，分别保存版本、任务和启动方案；下载任务不会因切服而转移。
@@ -82,7 +89,7 @@ dotnet test .\tests\AsterLauncher.Core.Tests\AsterLauncher.Core.Tests.csproj --n
 
 感谢以下项目和社区：
 
-- [Starward](https://github.com/Scighost/Starward)：游戏启动器的产品方向与功能参考。
+- [Starward](https://github.com/Scighost/Starward)：游戏启动器的产品方向、HoYoPlay 与 Sophon 协议参考。
 - [UIGF](https://uigf.org/)：抽卡记录交换格式。
 - [米游社图鉴](https://bbs.mihoyo.com/ys/obc/)及编辑者：角色与装备图片目录和名称资料。
 - [Hi3Helper.Plugin.Hypergryph](https://github.com/misaka10843/Hi3Helper.Plugin.Hypergryph)、[ake-tracker](https://github.com/mmgfrcs/ake-tracker)：终末地公开协议与记录格式参考。

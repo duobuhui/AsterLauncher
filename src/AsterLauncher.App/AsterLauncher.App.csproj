@@ -25,6 +25,7 @@
   <ItemGroup>
     <Content Include="Assets\Games\**\*" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Services\ApplyUpdate.ps1" LogicalName="AsterLauncher.ApplyUpdate.ps1" />
+    <Content Include="NetworkRuntime\hoyo-zstd.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="NetworkRuntime\endfield-https.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\.artifacts\vendor\node-v24.19.0\node.exe" Link="NetworkRuntime\node.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\third_party\node-v24.19.0\LICENSE" Link="NetworkRuntime\LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

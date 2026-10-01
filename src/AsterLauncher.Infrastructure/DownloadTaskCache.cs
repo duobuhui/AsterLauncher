@@ -7,10 +7,11 @@ namespace AsterLauncher.Infrastructure;
 public sealed record DownloadCacheCleanup(int DeletedFiles,long DeletedBytes,int RetainedObjects);
 
 /// <summary>Persistent content references, independent of expiring download URLs.</summary>
-public sealed class DownloadTaskCache(string dataRoot)
+public sealed class DownloadTaskCache(string dataRoot, string bucket = "endfield")
 {
     private static readonly ConcurrentDictionary<string,SemaphoreSlim> Gates=new(StringComparer.OrdinalIgnoreCase);
-    private string Root => SafeGamePath.Resolve(dataRoot,"endfield/tasks");
+    private string Root => SafeGamePath.Resolve(dataRoot, Bucket + "/tasks");
+    private string Bucket => bucket is "endfield" or "hoyo" ? bucket : throw new ArgumentException("Invalid cache bucket.");
     private SemaphoreSlim Gate=>Gates.GetOrAdd(Path.GetFullPath(dataRoot),_=>new(1,1));
     public static string ContentKey(string md5,long size)
     {
@@ -64,7 +65,7 @@ public sealed class DownloadTaskCache(string dataRoot)
                 if(referenced.Contains(key)){retained++;continue;}
                 foreach(var suffix in new[]{"",".part"})
                 {
-                    var file=SafeGamePath.Resolve(dataRoot,"endfield/objects/"+key+suffix);
+                    var file=SafeGamePath.Resolve(dataRoot,Bucket+"/objects/"+key+suffix);
                     if(!File.Exists(file))continue;
                     try
                     {
@@ -79,7 +80,7 @@ public sealed class DownloadTaskCache(string dataRoot)
             }
             if(File.Exists(path))File.Delete(path);
             EmptyDirectoryCleanup.Prune(Root);
-            if(referenced.Count==0)EmptyDirectoryCleanup.Prune(SafeGamePath.Resolve(dataRoot,"endfield/objects"));
+            if(referenced.Count==0)EmptyDirectoryCleanup.Prune(SafeGamePath.Resolve(dataRoot,Bucket+"/objects"));
             return new(count,bytes,retained);
         }
         finally{Gate.Release();}

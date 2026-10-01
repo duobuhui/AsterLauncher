@@ -21,16 +21,16 @@ public sealed class EndfieldNodeHttpHandler : HttpMessageHandler
         _nodePath = Path.Combine(runtimeDirectory, "node.exe");
         _scriptPath = Path.Combine(runtimeDirectory, "endfield-https.js");
         if (!File.Exists(_nodePath) || !File.Exists(_scriptPath))
-            throw new FileNotFoundException("终末地官方网络运行文件缺失，请重新解压完整发布包。", runtimeDirectory);
+            throw new FileNotFoundException("官方资源网络运行文件缺失，请重新解压完整发布包。", runtimeDirectory);
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (request.RequestUri is null || !Allowed(request.RequestUri))
-            throw new InvalidOperationException("终末地下载请求的目标地址未获允许。");
+            throw new InvalidOperationException("官方下载请求的目标地址未获允许。");
         if (request.Method != HttpMethod.Get && request.Method != HttpMethod.Post)
-            throw new InvalidOperationException("终末地官方网络请求方法无效。");
+            throw new InvalidOperationException("官方资源网络请求方法无效。");
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in new[] { "Range", "Accept", "User-Agent" })
             if (request.Headers.TryGetValues(name, out var values)) headers[name] = string.Join(", ", values);
@@ -106,7 +106,8 @@ public sealed class EndfieldNodeHttpHandler : HttpMessageHandler
             && (host.Equals("launcher.hypergryph.com", StringComparison.OrdinalIgnoreCase)
                 || host.EndsWith(".hycdn.cn", StringComparison.OrdinalIgnoreCase)
                 || host.EndsWith(".hypergryph.com", StringComparison.OrdinalIgnoreCase)
-                || host.EndsWith(".gryphline.com", StringComparison.OrdinalIgnoreCase));
+                || host.EndsWith(".gryphline.com", StringComparison.OrdinalIgnoreCase)
+                || new[] { "mihoyo.com", "yuanshen.com", "bhsr.com", "bh3.com", "juequling.com" }.Any(domain => host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static void Kill(Process process)

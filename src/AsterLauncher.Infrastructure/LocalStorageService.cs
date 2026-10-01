@@ -28,6 +28,9 @@ public sealed class LocalStorageService(string dataRoot,string installationRoot,
         IReadOnlySet<string> references;
         try{references=await new DownloadTaskCache(dataRoot).ReferencedAsync(token);}
         catch(InvalidDataException){references=new HashSet<string>();notes.Add("下载任务索引损坏，终末地缓存未列入清理，请先恢复任务。");}
+        IReadOnlySet<string> hoyoReferences; bool hoyoIndexInvalid=false;
+        try { hoyoReferences=await new DownloadTaskCache(dataRoot,"hoyo").ReferencedAsync(token); }
+        catch(InvalidDataException) { hoyoReferences=new HashSet<string>(); hoyoIndexInvalid=true; notes.Add("米哈游下载任务索引损坏，缓存暂时保留。"); }
         var legacyMaintenance=HasUnindexedMaintenance();
         var protectedPaths=ReadProtectedPaths();
         foreach(var area in Areas())
@@ -62,6 +65,11 @@ public sealed class LocalStorageService(string dataRoot,string installationRoot,
                                 var key=Path.GetFileNameWithoutExtension(safe);
                                 if(!safe.EndsWith(".part",StringComparison.OrdinalIgnoreCase))key=Path.GetFileName(safe);
                                 if(notes.Count>0||legacyMaintenance||references.Contains(key)){protectedCount++;continue;}
+                            }
+                            if(area.Category=="米哈游下载缓存")
+                            {
+                                var key=safe.EndsWith(".part",StringComparison.OrdinalIgnoreCase)?Path.GetFileNameWithoutExtension(safe):Path.GetFileName(safe);
+                                if(hoyoIndexInvalid||hoyoReferences.Contains(key)){protectedCount++;continue;}
                             }
                             var info=new FileInfo(safe);var identity=WindowsHardLink.Identity(safe);
                             var allocation=identity.LinkCount>1?0:WindowsHardLink.EstimatedAllocatedBytes(safe);
@@ -119,6 +127,8 @@ public sealed class LocalStorageService(string dataRoot,string installationRoot,
     private IEnumerable<Area> Areas()
     {
         yield return new("终末地下载缓存",Path.Combine(dataRoot,"endfield","objects"),false,
+            p=>!p.Contains(Path.DirectorySeparatorChar)&&Regex.IsMatch(p,@"\A[0-9a-f]{32}-[0-9]+(?:\.part)?\z"));
+        yield return new("米哈游下载缓存",Path.Combine(dataRoot,"hoyo","objects"),false,
             p=>!p.Contains(Path.DirectorySeparatorChar)&&Regex.IsMatch(p,@"\A[0-9a-f]{32}-[0-9]+(?:\.part)?\z"));
         yield return new("旧版 OTA 缓存",Path.Combine(dataRoot,"updates"),false,_=>true);
         yield return new("运行日志",Path.Combine(dataRoot,"logs"),false,p=>p.EndsWith(".log",StringComparison.OrdinalIgnoreCase)||p.EndsWith(".txt",StringComparison.OrdinalIgnoreCase));
