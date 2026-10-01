@@ -88,6 +88,11 @@
                 <Button x:Name="FullCaptureButton" Grid.Column="4" Content="全量同步" Click="FullCapture_OnClick" VerticalAlignment="Center" Visibility="Collapsed" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" />
             </Grid>
 
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ToggleButton x:Name="RecordsTab" Content="抽卡记录" IsChecked="True" Click="RecordsTab_OnClick" />
+                <ToggleButton x:Name="StatisticsTab" Content="统计详情" Click="StatisticsTab_OnClick" />
+            </StackPanel>
+            <views:GachaStatisticsControl x:Name="StatisticsView" Visibility="Collapsed" />
             <Grid x:Name="EndfieldPityStrip" ColumnSpacing="8" Visibility="Collapsed" ToolTipService.ToolTip="按本地记录估算；缺失的历史记录会影响计数，免费抽不计入保底。">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,6">
@@ -268,7 +273,7 @@
                     </ItemsRepeater>
                 </Grid>
             </StackPanel>
-            <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="8">
+            <Border x:Name="ExportPanel" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="8">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <Button x:Name="ImportButton" Content="导入 UIGF v4 JSON" Click="Import_OnClick" />
                     <Button x:Name="ExportButton" Content="导出 UIGF v4.2 JSON" Click="Export_OnClick" />

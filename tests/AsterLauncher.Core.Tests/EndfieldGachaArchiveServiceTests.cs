@@ -22,6 +22,32 @@ public sealed class EndfieldGachaArchiveServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Statistics_WeaponPoolsRemainIndependentAndExcludeGiftEvents()
+    {
+        var input = Path.Combine(_root, "weapon-analysis.json");
+        await File.WriteAllTextAsync(input, """
+        {"characters":[],"weapons":[
+          {"seqId":1,"poolId":"weapon-a","poolName":"武器池 A","kind":"draw","rarity":6},
+          {"seqId":2,"poolId":"weapon-a","poolName":"武器池 A","kind":"draw","rarity":5},
+          {"seqId":3,"poolId":"weapon-b","poolName":"武器池 B","rarity":4},
+          {"seqId":4,"poolId":"weapon-b","poolName":"武器池 B","kind":"gift","rarity":6}
+        ]}
+        """);
+        var service = new EndfieldGachaArchiveService(NullLogger<EndfieldGachaArchiveService>.Instance);
+        Assert.True((await service.ImportAsync(input)).Success);
+        var result = await service.GetAnalysisAsync();
+        Assert.Equal(0, result.CharacterDrawCount);
+        Assert.Equal(2, result.WeaponPools.Count);
+        var a = Assert.Single(result.WeaponPools, p => p.PoolId == "weapon-a");
+        Assert.Equal(2, a.Draws);
+        Assert.Equal(1, a.SixStars);
+        Assert.Equal(1, a.FiveStars);
+        var b = Assert.Single(result.WeaponPools, p => p.PoolId == "weapon-b");
+        Assert.Equal(1, b.Draws);
+        Assert.Equal(0, b.SixStars);
+        Assert.Equal(1, b.OtherRarity);
+    }
+    [Fact]
     public async Task ImportMergeAndExport_PreservesCharacterAndWeaponRecords()
     {
         var input = Path.Combine(_root, "akerecord.json");

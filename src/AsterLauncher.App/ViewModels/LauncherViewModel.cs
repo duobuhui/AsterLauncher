@@ -632,14 +632,7 @@ public sealed class LauncherViewModel : ObservableObject
                     StartedAt = result.StartedAt,
                     DurationSeconds = Math.Max(0, result.Duration.TotalSeconds)
                 });
-                if (selectedGame.State.PlaySessions.Count > 512)
-                {
-                    selectedGame.State.PlaySessions = selectedGame.State.PlaySessions
-                        .OrderByDescending(session => session.StartedAt)
-                        .Take(512)
-                        .OrderBy(session => session.StartedAt)
-                        .ToList();
-                }
+                // Preserve dated sessions for yearly play activity; older totals remain compatible.
                 selectedGame.Refresh();
                 await _configurationStore.SaveAsync(_configuration);
             }

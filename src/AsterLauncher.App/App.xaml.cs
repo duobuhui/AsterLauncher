@@ -87,14 +87,22 @@ public partial class App : Application
         services.AddSingleton<IEndfieldGachaArchiveService, EndfieldGachaArchiveService>();
         services.AddSingleton<LauncherUpdateService>();
         var endfieldNetworkRuntime = Path.Combine(AppContext.BaseDirectory, "NetworkRuntime");
-        services.AddSingleton<IEndfieldDistributionProvider>(provider =>
-            new EndfieldDistributionProvider(new HttpClient(new EndfieldNodeHttpHandler(endfieldNetworkRuntime))
-            { Timeout = TimeSpan.FromMinutes(3) }));
-        services.AddSingleton(provider => new EndfieldDownloadService(
-            new HttpClient(new EndfieldNodeHttpHandler(endfieldNetworkRuntime))
-            { Timeout = TimeSpan.FromMinutes(30) },
-            LauncherDataPaths.ResolveDataDirectory()));
-        services.AddSingleton<EndfieldSharingService>();
+#if DEBUG
+        if (EndfieldMaintenanceUiFixture.Enabled)
+        {
+            services.AddSingleton<IEndfieldDistributionProvider>(new EndfieldMaintenanceUiFixture());
+            services.AddSingleton(new EndfieldDownloadService(new HttpClient(new EndfieldMaintenanceUiFixture()),LauncherDataPaths.ResolveDataDirectory()));
+        }
+        else
+#endif
+        {
+            services.AddSingleton<IEndfieldDistributionProvider>(provider =>
+                new EndfieldDistributionProvider(new HttpClient(new EndfieldNodeHttpHandler(endfieldNetworkRuntime))
+                { Timeout = TimeSpan.FromMinutes(3) }));
+            services.AddSingleton(provider => new EndfieldDownloadService(
+                new HttpClient(new EndfieldNodeHttpHandler(endfieldNetworkRuntime))
+                { Timeout = TimeSpan.FromMinutes(30) },LauncherDataPaths.ResolveDataDirectory()));
+        }        services.AddSingleton<EndfieldSharingService>();
         services.AddSingleton(provider => new EndfieldMaintenanceService(
             provider.GetRequiredService<IEndfieldDistributionProvider>(),
             provider.GetRequiredService<EndfieldDownloadService>(),
@@ -122,6 +130,7 @@ public partial class App : Application
         services.AddTransient<LaunchProfilesPage>();
         services.AddTransient<ToolsPage>();
         services.AddTransient<GachaPage>();
+        services.AddTransient<PlayActivityPage>();
         services.AddTransient<GameSettingsPage>();
         services.AddTransient<SettingsPage>();
         services.AddTransient<LogsPage>();

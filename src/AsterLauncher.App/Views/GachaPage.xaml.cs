@@ -19,6 +19,7 @@ public sealed partial class GachaPage : Page
     private int _poolCardCount;
     private UigfGachaAnalysis _analysis = UigfGachaAnalysis.Empty;
     private bool _settingAccounts;
+    private bool _showStatistics;
     private int _refreshRevision;
 
     public GachaPage(LauncherViewModel launcher, IUigfArchiveService archive, IEndfieldGachaArchiveService endfieldArchive, IFilePickerService filePicker)
@@ -70,6 +71,7 @@ public sealed partial class GachaPage : Page
             var endfieldSummary = await _endfieldArchive.GetSummaryAsync();
             var analysis = await _endfieldArchive.GetAnalysisAsync();
             if (!IsCurrent()) return;
+            StatisticsView.SetEndfield(analysis, endfieldSummary.WeaponCount);
             CurrentGameText.Text = gameName;
             ArchiveSummaryText.Text = $"{endfieldSummary.TotalCount} 条 · {analysis.CharacterDrawCount} 抽 · 六星 {analysis.SixStarCount}（免费 {analysis.FreeSixStarCount}）";
             ToolTipService.SetToolTip(ArchiveSummaryText, _endfieldArchive.ArchivePath);
@@ -94,6 +96,7 @@ public sealed partial class GachaPage : Page
             PoolRightItems.ItemsSource = otherPools.Where((_, index) => index % 2 == 1).ToArray();
             SixStarEmptyText.Visibility = analysis.Pools.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
             UpdatePoolLayout(GachaScrollViewer.ActualWidth);
+            ApplyStatisticsView();
             return;
         }
 
@@ -108,6 +111,8 @@ public sealed partial class GachaPage : Page
             var analysis = await _archive.GetAnalysisAsync(gameId);
             if (!IsCurrent()) return;
             _analysis = analysis;
+            await StatisticsView.SetUigfAsync(analysis);
+            if (!IsCurrent()) return;
             CurrentGameText.Text = gameName;
             UigfRulesText.Text = gameId switch
             {
@@ -123,6 +128,7 @@ public sealed partial class GachaPage : Page
             UigfAccountSelector.SelectedIndex = analysis.Accounts.Count == 0 ? -1 : Math.Max(0, index);
             _settingAccounts = false;
             ShowUigfAccount(UigfAccountSelector.SelectedIndex);
+            ApplyStatisticsView();
             return;
         }
 
@@ -140,6 +146,21 @@ public sealed partial class GachaPage : Page
         if (!_settingAccounts) ShowUigfAccount(UigfAccountSelector.SelectedIndex);
     }
 
+    private void RecordsTab_OnClick(object sender, RoutedEventArgs e) { _showStatistics = false; ApplyStatisticsView(); }
+    private void StatisticsTab_OnClick(object sender, RoutedEventArgs e) { _showStatistics = true; ApplyStatisticsView(); }
+    private void ApplyStatisticsView()
+    {
+        RecordsTab.IsChecked = !_showStatistics;
+        StatisticsTab.IsChecked = _showStatistics;
+        StatisticsView.Visibility = _showStatistics ? Visibility.Visible : Visibility.Collapsed;
+        ExportPanel.Visibility = _showStatistics ? Visibility.Collapsed : Visibility.Visible;
+        var endfield = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
+        EndfieldAnalysisPanel.Visibility = !_showStatistics && endfield ? Visibility.Visible : Visibility.Collapsed;
+        EndfieldPityStrip.Visibility = !_showStatistics && endfield ? Visibility.Visible : Visibility.Collapsed;
+        UigfAnalysisPanel.Visibility = !_showStatistics && !endfield ? Visibility.Visible : Visibility.Collapsed;
+        UigfPityStrip.Visibility = !_showStatistics && !endfield ? Visibility.Visible : Visibility.Collapsed;
+        GachaScrollViewer.ChangeView(null, 0, null, true);
+    }
     private void ShowUigfAccount(int index)
     {
         var account = index >= 0 && index < _analysis.Accounts.Count ? _analysis.Accounts[index] : null;

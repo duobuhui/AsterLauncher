@@ -55,3 +55,10 @@ The game rail supports mouse and keyboard context menus with game-page, records,
 Genshin Impact, Star Rail and Zenless Zone Zero reuse one compact record layout. The header shows the current game and masked account, with incremental and full sync actions. An account selector appears only when needed. Local pity tiles follow each game's categories; unknown rules show the local count without an invented cap. Role sections occupy the wider column, other pools the narrower column; small windows stack all sections.
 
 High-rarity rows show a bundled character or equipment icon, name, interval bar and date. Genshin/Star Rail use star labels; Zenless uses S/A/B. The first interval is explicitly a local lower bound, and the mean excludes it. Explanations use normal page text rather than repeated hover tooltips. Imports retain the existing UIGF archive layout.
+## Activity and statistics details
+
+The overview time button opens a daily heatmap with a year selector, weekday/month labels, duration-based color legend and per-day details. Empty days remain visible; cumulative legacy time is explained separately.
+
+The records page has “抽卡记录 / 统计详情” secondary controls. Statistics provide account/pool selectors, compact summary and native XAML dot strips. Wider views place high-rarity and featured strips side by side; smaller views stack them. A dashed mean line excludes truncated intervals. Hollow points mark incomplete history. User correction is in an expander; Endfield has category summaries without scatter strips.
+
+A download card remains visible above the overview launch controls while downloading, with cumulative bytes, speed, progress, pause and cancel. The expanded maintenance menu also exposes pause/cancel for paused tasks and preload cleanup. Settings “本地存储” displays scan results by category and root, expandable file lists, explicit selection and a final deletion dialog. Old configuration/archive content has a separate caution beside its selection.

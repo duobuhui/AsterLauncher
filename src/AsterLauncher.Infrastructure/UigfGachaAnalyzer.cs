@@ -40,7 +40,7 @@ internal static class UigfGachaAnalyzer
                     if (r.Rank != high) continue;
                     pulls[r] = new UigfHighRarityPull(gameId,
                         r.Name.Length > 0 ? r.Name : $"未命名{highLabel}", r.ItemType,
-                        i - previous, previous >= 0, category.PityMaximum ?? 0, DateLabel(r.Time));
+                        i - previous, previous >= 0, category.PityMaximum ?? 0, DateLabel(r.Time), r.Id, r.PoolId, r.Time);
                     previous = i;
                 }
                 // Only a real gacha_id identifies a banner. Dates and raw 301/400 codes do not identify a release period.

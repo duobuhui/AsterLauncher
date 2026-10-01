@@ -232,9 +232,22 @@ internal static class EndfieldGachaAnalyzer
             sixStars.Count(item => item.IsFree),
             sixStars.AsEnumerable().Reverse().ToArray(),
             pools,
-            pity);
+            pity) { WeaponPools = AnalyzeWeapons(archive) };
     }
 
+    private static IReadOnlyList<EndfieldWeaponPoolStatistics> AnalyzeWeapons(JsonObject archive)
+    {
+        return (archive["weapons"] as JsonArray ?? []).OfType<JsonObject>()
+            .Where(record => (ReadText(record, "kind") is not string kind
+                || kind.Equals("draw", StringComparison.OrdinalIgnoreCase)) && ReadLong(record, "rarity") > 0)
+            .GroupBy(record => ReadText(record, "poolId", "pool_id") ?? ReadText(record, "poolName", "pool_name") ?? "未分类武器池",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => new EndfieldWeaponPoolStatistics(group.Key,
+                ReadText(group.Last(), "poolName", "pool_name") ?? group.Key, group.Count(),
+                group.Count(r => ReadLong(r, "rarity") == 6), group.Count(r => ReadLong(r, "rarity") == 5),
+                group.Count(r => ReadLong(r, "rarity") is not (6 or 5))))
+            .OrderBy(pool => pool.Title, StringComparer.Ordinal).ToArray();
+    }
     private static DateTimeOffset? ToDateTime(long timestamp) =>
         timestamp is > 0 and <= 253_402_300_799_999
             ? DateTimeOffset.FromUnixTimeMilliseconds(timestamp)

@@ -55,6 +55,8 @@ public sealed partial class GameLibraryPage : Page
         InitializeComponent();
         DataContext = ViewModel;
         EndfieldPanel.DataContext = _endfield;
+        DownloadStatusPanel.DataContext = _endfield;
+        DownloadStatusPanel.SetBinding(VisibilityProperty, new Microsoft.UI.Xaml.Data.Binding { Source=_endfield, Path=new PropertyPath(nameof(EndfieldMaintenanceViewModel.DownloadVisibility)) });
         _endfield.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(EndfieldMaintenanceViewModel.CanPreload))
@@ -171,6 +173,7 @@ public sealed partial class GameLibraryPage : Page
                     "profiles" => _services.GetRequiredService<LaunchProfilesPage>(),
                     "tools" => _services.GetRequiredService<ToolsPage>(),
                     "gacha" => _services.GetRequiredService<GachaPage>(),
+                    "play-time" => _services.GetRequiredService<PlayActivityPage>(),
                     "game-settings" => _services.GetRequiredService<GameSettingsPage>(),
                     "launcher-settings" => _services.GetRequiredService<SettingsPage>(),
                     "logs" => _services.GetRequiredService<LogsPage>(),
@@ -421,6 +424,8 @@ public sealed partial class GameLibraryPage : Page
     }
 
     private async void EndfieldRepair_OnClick(object sender, RoutedEventArgs e) => await _endfield.SyncAsync(true);
+    private async void EndfieldCancel_OnClick(object sender, RoutedEventArgs e) => await _endfield.CancelAsync();
+    private async void EndfieldCancelPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.CancelAsync(true);
     private void EndfieldPause_OnClick(object sender, RoutedEventArgs e) => _endfield.Pause();
     private async void EndfieldCheckPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.CheckPreloadAsync();
     private async void EndfieldPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.PreloadAsync();
@@ -563,6 +568,7 @@ public sealed partial class GameLibraryPage : Page
         if (await dialog.ShowAsync() == ContentDialogResult.Primary) ShowFeature("logs");
     }
 
+    private void PlayTime_OnClick(object sender, RoutedEventArgs e) => ShowFeature("play-time");
     private void LaunchOptionsButton_OnClick(object sender, RoutedEventArgs e) => SetLaunchExpanded(!_isLaunchExpanded);
 
     private void SetLaunchExpanded(bool expanded)

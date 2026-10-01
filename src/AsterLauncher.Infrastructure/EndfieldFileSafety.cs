@@ -165,6 +165,28 @@ public static class WindowsHardLink
         return new WindowsFileIdentity(info.VolumeSerialNumber, info.FileIndexHigh, info.FileIndexLow, info.NumberOfLinks);
     }
 
+    [DllImport("kernel32.dll", EntryPoint="CreateFileW", CharSet=CharSet.Unicode, SetLastError=true)]
+    private static extern SafeFileHandle OpenForDelete(string path,uint access,uint share,nint security,uint disposition,uint flags,nint template);
+    [DllImport("kernel32.dll", SetLastError=true)]
+    private static extern bool SetFileInformationByHandle(SafeFileHandle handle,int informationClass,ref FileDispositionInformation info,uint size);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileDispositionInformation { public byte DeleteFile; }
+    public static bool DeleteVerifiedEntry(string path,WindowsFileIdentity expected,long size,DateTime lastWriteUtc)
+    {
+        // DELETE + GENERIC_READ, share READ only: deny writes and renames until unlink is committed.
+        using var handle=OpenForDelete(path,0x80010000,1,0,3,0x00200000,0);
+        if(handle.IsInvalid)throw new IOException("File is busy or cannot be deleted.",Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error()));
+        if(!GetFileInformationByHandle(handle,out var info))throw new IOException("Cannot verify cleanup file identity.");
+        if((info.FileAttributes&(uint)FileAttributes.ReparsePoint)!=0)return false;
+        var identity=new WindowsFileIdentity(info.VolumeSerialNumber,info.FileIndexHigh,info.FileIndexLow,info.NumberOfLinks);
+        var length=((long)info.FileSizeHigh<<32)|info.FileSizeLow;
+        var timestamp=DateTime.FromFileTimeUtc(((long)(uint)info.LastWriteTime.dwHighDateTime<<32)|(uint)info.LastWriteTime.dwLowDateTime);
+        if(!identity.SameFile(expected)||length!=size||timestamp!=lastWriteUtc)return false;
+        var disposition=new FileDispositionInformation{DeleteFile=1};
+        if(!SetFileInformationByHandle(handle,4,ref disposition,(uint)Marshal.SizeOf<FileDispositionInformation>()))
+            throw new IOException("Cannot remove selected directory entry.",Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error()));
+        return true;
+    }
     public static bool TryCreate(string linkName, string existingFileName)
     {
         if (!OperatingSystem.IsWindows()) return false;

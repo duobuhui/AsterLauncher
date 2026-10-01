@@ -203,20 +203,15 @@
                         <Grid x:Name="HeroContent" Padding="40,24,40,24">
                             <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
 <StackPanel Grid.Row="1" VerticalAlignment="Bottom" Spacing="10">
-                                <Button x:Name="PlayTimeButton" HorizontalAlignment="Right" MinWidth="112" Height="36" Padding="10,4" Background="{ThemeResource HeroGlassBrush}" Foreground="White" BorderBrush="#48FFFFFF" BorderThickness="1" CornerRadius="12" AutomationProperties.Name="查看游玩时间详情">
-                                    <Button.Flyout>
-                                        <Flyout Placement="BottomEdgeAlignedRight">
-                                            <StackPanel Width="268" Spacing="12">
-                                                <TextBlock Text="游玩时间" FontSize="18" FontWeight="SemiBold" />
-                                                <Grid ColumnSpacing="18">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                                    <StackPanel Spacing="3"><TextBlock Text="上次" FontSize="12" Opacity="0.72" /><TextBlock Text="{Binding LastSessionPlayTimeText}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /></StackPanel>
-                                                    <StackPanel Grid.Column="1" Spacing="3"><TextBlock Text="本周" FontSize="12" Opacity="0.72" /><TextBlock Text="{Binding ThisWeekPlayTimeText}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /></StackPanel>
-                                                    <StackPanel Grid.Column="2" Spacing="3"><TextBlock Text="总计" FontSize="12" Opacity="0.72" /><TextBlock Text="{Binding TotalPlayTimeText}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" /></StackPanel>
-                                                </Grid>
-                                            </StackPanel>
-                                        </Flyout>
-                                    </Button.Flyout>
+                                <Border x:Name="DownloadStatusPanel" DataContext="{Binding}" Visibility="Collapsed" HorizontalAlignment="Right" Width="380" Padding="14,10" CornerRadius="12" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1">
+                                    <StackPanel Spacing="6">
+                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock Text="{Binding DownloadText}" FontSize="12" Foreground="White" /><TextBlock Grid.Column="1" Text="{Binding SpeedText}" FontSize="12" Foreground="White" /></Grid>
+                                        <ProgressBar Height="7" Maximum="100" Value="{Binding Progress}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="暂停" Click="EndfieldPause_OnClick" Style="{StaticResource FloatingButtonStyle}" /><Button Content="取消任务并删除缓存" Click="EndfieldCancel_OnClick" Style="{StaticResource FloatingButtonStyle}" /></StackPanel>
+                                    </StackPanel>
+                                </Border>
+                                <Button x:Name="PlayTimeButton" HorizontalAlignment="Right" MinWidth="112" Height="36" Padding="10,4" Background="{ThemeResource HeroGlassBrush}" Foreground="White" BorderBrush="#48FFFFFF" BorderThickness="1" CornerRadius="12" AutomationProperties.Name="查看游玩时间详情" Click="PlayTime_OnClick">
+
                                     <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE823;" FontSize="15" /><TextBlock Text="{Binding TotalPlayTimeText}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel>
                                 </Button>
 
@@ -253,6 +248,10 @@
                                                         <Button Content="更多" Style="{StaticResource FloatingButtonStyle}" AutomationProperties.Name="更多终末地维护操作">
                                                             <Button.Flyout>
                                                                 <MenuFlyout>
+                                                                    <MenuFlyoutItem Text="暂停任务，保留进度" Click="EndfieldPause_OnClick" />
+                                                                    <MenuFlyoutItem Text="取消下载并删除缓存" Click="EndfieldCancel_OnClick" />
+                                                                    <MenuFlyoutItem Text="取消预下载并删除缓存" Click="EndfieldCancelPreload_OnClick" />
+                                                                    <MenuFlyoutSeparator />
                                                                     <MenuFlyoutItem Text="检查预下载" Click="EndfieldCheckPreload_OnClick" />
                                                                     <MenuFlyoutItem x:Name="EndfieldPreloadItem" Text="下载预下载包" Visibility="Collapsed" Click="EndfieldPreload_OnClick" />
                                                                     <MenuFlyoutSeparator />
@@ -262,7 +261,8 @@
                                                             </Button.Flyout>
                                                         </Button>
                                                     </StackPanel>
-                                                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="3" />
+                                                    <ProgressBar Value="{Binding Progress}" Maximum="100" Height="6" />
+                                                    <TextBlock Text="{Binding DownloadText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                                     <TextBlock Text="{Binding StageText}" FontSize="12" Foreground="{ThemeResource GlassTextBrush}" TextWrapping="Wrap" />
                                                     <Grid ColumnSpacing="8">
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>

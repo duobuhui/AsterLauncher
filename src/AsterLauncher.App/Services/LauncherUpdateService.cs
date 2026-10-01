@@ -78,6 +78,7 @@ public sealed class LauncherUpdateService
             throw new InvalidOperationException("请从正式发布包运行启动器后再安装更新。");
         }
         var dataRoot = LauncherDataPaths.ResolveDataDirectory();
+        using var operation = LocalStorageGate.BeginOperation(dataRoot);
         var installRoot = LauncherDataPaths.InstallationDirectory;
         if (!File.Exists(Path.Combine(installRoot, "MigrationTools", "AsterLauncher.Migrator.exe")))
             throw new InvalidOperationException("请从完整解压的多文件发布包运行启动器后再更新。");
@@ -119,6 +120,7 @@ public sealed class LauncherUpdateService
             start.ArgumentList.Add(argument);
         }
 
+        start.Environment.Remove("PSModulePath");
         using var process = Process.Start(start)
             ?? throw new InvalidOperationException("无法启动更新程序。 ");
         Microsoft.UI.Xaml.Application.Current.Exit();

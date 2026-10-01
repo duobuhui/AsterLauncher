@@ -43,7 +43,7 @@ public sealed record UigfPoolSection(
 
 public sealed record UigfHighRarityPull(
     string GameId, string Name, string ItemType, int LocalPullCount,
-    bool HasPreviousHighRarity, int PityMaximum, string TimeText)
+    bool HasPreviousHighRarity, int PityMaximum, string TimeText, string RecordId = "", string BannerId = "", string RawTime = "")
 {
     public string PortraitKey => GameId + "\u001F" + Name;
     public string PullCountText => HasPreviousHighRarity ? $"{LocalPullCount} 抽" : $"本地 ≥{LocalPullCount} 抽";

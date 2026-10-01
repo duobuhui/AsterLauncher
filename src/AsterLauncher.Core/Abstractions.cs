@@ -149,6 +149,7 @@ public sealed record EndfieldGachaAnalysis(
     IReadOnlyList<EndfieldPoolAnalysis> Pools,
     EndfieldPityOverview Pity)
 {
+    public IReadOnlyList<EndfieldWeaponPoolStatistics> WeaponPools { get; init; } = [];
     public static EndfieldGachaAnalysis Empty { get; } = new(0, 0, 0, [], [], EndfieldPityOverview.Empty);
 }
 

@@ -38,6 +38,7 @@ public sealed class EndfieldDownloadService
     {
         if (md5.Length != 32 || !md5.All(Uri.IsHexDigit) || size < 0)
             throw new ArgumentException("Invalid content identity.");
+        using var operation = LocalStorageGate.BeginOperation(Path.GetDirectoryName(Path.GetDirectoryName(_cacheRoot))!);
         EndfieldDistributionProvider.TrustedUri(initialUri.ToString());
         var key = md5.ToLowerInvariant() + "-" + size;
         var gate = _objectLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
@@ -97,7 +98,7 @@ public sealed class EndfieldDownloadService
             File.Delete(partial);
             existing = 0;
         }
-        if (existing == expected) return;
+        if (existing == expected) { progress?.Report(existing); return; }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         if (existing > 0) request.Headers.Range = new RangeHeaderValue(existing, null);
@@ -129,12 +130,13 @@ public sealed class EndfieldDownloadService
         await using var network = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var target = new FileStream(partial, append ? FileMode.Append : FileMode.Create,
             FileAccess.Write, FileShare.None, 128 * 1024, FileOptions.Asynchronous);
+        progress?.Report(target.Length);
         var buffer = new byte[128 * 1024];
         int read;
         while ((read = await network.ReadAsync(buffer, cancellationToken)) > 0)
         {
             await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-            progress?.Report(read);
+            progress?.Report(target.Length);
             if (target.Length > expected) throw new InvalidDataException("Download exceeded expected size.");
         }
         await target.FlushAsync(cancellationToken);
