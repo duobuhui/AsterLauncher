@@ -7,7 +7,7 @@
         <StackPanel Padding="28,24" Spacing="16" HorizontalAlignment="Stretch">
             <StackPanel Spacing="4">
                 <TextBlock Text="游戏设置" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
-                <TextBlock Text="路径与主视觉" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                <TextBlock Text="设置游戏程序、名称和背景图片" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" />
             </StackPanel>
 
             <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
@@ -29,15 +29,15 @@
                     <TextBox x:Name="DisplayNameBox" Grid.Row="2" Grid.Column="1" />
                     <TextBlock Grid.Row="3" Text="发行商" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBox x:Name="PublisherBox" Grid.Row="3" Grid.Column="1" />
-                    <TextBlock Grid.Row="4" Text="主视觉图片" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Row="4" Text="背景图片" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <Grid Grid.Row="4" Grid.Column="1" ColumnSpacing="8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <TextBox x:Name="ArtworkPathBox" IsReadOnly="True" PlaceholderText="未设置时使用原创渐变占位" />
+                        <TextBox x:Name="ArtworkPathBox" IsReadOnly="True" PlaceholderText="未选择时使用官方壁纸或内置背景" />
                         <Button Grid.Column="1" Content="选择图片" Click="SelectArtwork_OnClick" />
                     </Grid>
                     <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
                         <Button x:Name="OfficialDownloadButton" Content="打开官方下载" Click="OpenOfficialDownload_OnClick" />
-                        <Button Content="保存游戏设置" Style="{StaticResource AccentButtonStyle}" Click="Save_OnClick" />
+                        <Button Content="保存游戏设置" Style="{StaticResource ThemePrimaryButtonStyle}" Click="Save_OnClick" />
                     </StackPanel>
                 </Grid>
             </Border>

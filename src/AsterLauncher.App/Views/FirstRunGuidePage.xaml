@@ -10,7 +10,7 @@
             <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="20">
                 <StackPanel Spacing="12">
                     <TextBlock Text="1  查找现有游戏" FontSize="19" FontWeight="SemiBold" />
-                    <TextBlock Text="检查已保存的 EXE；终末地还检查运行进程和已验证的官方启动器安装信息。" TextWrapping="Wrap" />
+                    <TextBlock Text="从已保存的路径和安装信息查找游戏；找不到时，可在游戏库中手动选择游戏程序。" TextWrapping="Wrap" />
                     <Button x:Name="ScanButton" Content="自动查找现有游戏" Style="{StaticResource ThemeActionButtonStyle}" Click="ScanButton_OnClick" HorizontalAlignment="Left" />
                     <TextBlock x:Name="ScanResultText" Text="尚未开始查找" TextWrapping="Wrap" />
                 </StackPanel>
@@ -23,7 +23,7 @@
                         <TextBox x:Name="DirectoryBox" PlaceholderText="例如 E:\Games" AutomationProperties.Name="游戏目录" />
                         <Button Grid.Column="1" Content="浏览…" Click="BrowseButton_OnClick" />
                     </Grid>
-                    <TextBlock Text="此目录会保存为未来下载功能的目标目录。当前官方下载会打开官网，官网安装器的路径需在官网程序中选择。" TextWrapping="Wrap" FontSize="12" />
+                    <TextBlock Text="终末地会在此目录下分别创建官服和 B 服文件夹。其他游戏通过官方安装器下载，安装路径请在官方安装器中设置。" TextWrapping="Wrap" FontSize="12" />
                     <TextBlock x:Name="DirectoryResultText" TextWrapping="Wrap" />
                     <Button x:Name="FinishButton" Content="保存目录并进入启动器" Style="{StaticResource ThemeActionButtonStyle}" Click="FinishButton_OnClick" HorizontalAlignment="Left" />
                 </StackPanel>

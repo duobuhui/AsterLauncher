@@ -65,6 +65,76 @@
             <SolidColorBrush x:Key="ThemeAccentBrush" Color="#A797FF" />
             <SolidColorBrush x:Key="ThemeAccentSoftBrush" Color="#558975FF" />
             <SolidColorBrush x:Key="ThemeStrokeBrush" Color="#889E8BFF" />
+            <!-- Shared control colors stay on the app palette, including hover and checked states. -->
+            <SolidColorBrush x:Key="ControlStrokeBrush" Color="#33FFFFFF" />
+            <SolidColorBrush x:Key="ControlSurfaceBrush" Color="#1FFFFFFF" />
+            <SolidColorBrush x:Key="ControlHoverBrush" Color="#33FFFFFF" />
+            <SolidColorBrush x:Key="ControlPressedBrush" Color="#14FFFFFF" />
+            <SolidColorBrush x:Key="ControlDisabledBrush" Color="#0FFFFFFF" />
+            <SolidColorBrush x:Key="ControlDisabledTextBrush" Color="#77FFFFFF" />
+            <SolidColorBrush x:Key="LibraryRowBrush" Color="#16FFFFFF" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="ControlSurfaceBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="ControlHoverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="ControlPressedBrush" />
+            <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="ControlDisabledBrush" />
+            <StaticResource x:Key="ButtonForeground" ResourceKey="GlassTextBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="GlassTextBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="GlassTextBrush" />
+            <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="ControlDisabledTextBrush" />
+            <StaticResource x:Key="ButtonBorderBrush" ResourceKey="ControlStrokeBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="ControlStrokeBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="LaunchButtonBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="LaunchButtonBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="ThemeAccentSoftBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundDisabled" ResourceKey="ControlDisabledBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="LaunchButtonTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="LaunchButtonTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="GlassTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundDisabled" ResourceKey="ControlDisabledTextBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrush" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPointerOver" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="AccentButtonBorderBrushPressed" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="ToggleButtonBackground" ResourceKey="ControlSurfaceBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="ControlHoverBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="ControlPressedBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="ThemeAccentSoftBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="ThemeAccentSoftBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="ThemeAccentSoftBrush" />
+            <StaticResource x:Key="ToggleButtonForeground" ResourceKey="GlassTextBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundPointerOver" ResourceKey="GlassTextBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundPressed" ResourceKey="GlassTextBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="PageTitleBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="PageTitleBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="PageTitleBrush" />
+            <StaticResource x:Key="ToggleButtonBorderBrushChecked" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="ToggleButtonBorderBrushCheckedPointerOver" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="ToggleButtonBorderBrushCheckedPressed" ResourceKey="ThemeStrokeBrush" />
+            <StaticResource x:Key="AccentFillColorDefaultBrush" ResourceKey="LaunchButtonBrush" />
+            <StaticResource x:Key="AccentFillColorSecondaryBrush" ResourceKey="LaunchButtonBrush" />
+            <StaticResource x:Key="AccentFillColorTertiaryBrush" ResourceKey="ThemeAccentSoftBrush" />
+            <StaticResource x:Key="AccentTextFillColorPrimaryBrush" ResourceKey="ThemeAccentBrush" />
+            <StaticResource x:Key="AccentTextFillColorSecondaryBrush" ResourceKey="ThemeAccentBrush" />
+            <StaticResource x:Key="FocusVisualPrimaryBrush" ResourceKey="ThemeAccentBrush" />
+            <Style x:Key="ThemeSecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="Padding" Value="11,6" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="Foreground" Value="{ThemeResource GlassTextBrush}" />
+            </Style>
+            <Style TargetType="Button" BasedOn="{StaticResource ThemeSecondaryButtonStyle}" />
+            <Style x:Key="ThemePrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="Padding" Value="11,6" />
+                <Setter Property="FontSize" Value="14" />
+            </Style>
+            <Style TargetType="ToggleButton">
+                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="Padding" Value="11,6" />
+            </Style>
             <Style x:Key="CardBorderStyle" TargetType="Border">
                 <Setter Property="Background" Value="{ThemeResource FrostedPanelBrush}" />
                 <Setter Property="BorderBrush" Value="#42DDEBFF" />
@@ -77,10 +147,10 @@
                 <Setter Property="FontWeight" Value="SemiBold" />
             </Style>
             <Style x:Key="MutedTextStyle" TargetType="TextBlock">
-                <Setter Property="Foreground" Value="{ThemeResource MutedTextBrush}" />
+                <Setter Property="Foreground" Value="{ThemeResource GlassMutedTextBrush}" />
                 <Setter Property="TextWrapping" Value="Wrap" />
             </Style>
-            <Style x:Key="LaunchButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+            <Style x:Key="LaunchButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemePrimaryButtonStyle}">
                 <Setter Property="Background" Value="{ThemeResource LaunchButtonBrush}" />
                 <Setter Property="Foreground" Value="{ThemeResource LaunchButtonTextBrush}" />
                 <Setter Property="MinWidth" Value="190" />
@@ -89,7 +159,7 @@
                 <Setter Property="FontSize" Value="17" />
                 <Setter Property="FontWeight" Value="SemiBold" />
             </Style>
-            <Style x:Key="FloatingButtonStyle" TargetType="Button">
+            <Style x:Key="FloatingButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemeSecondaryButtonStyle}">
                 <Setter Property="MinHeight" Value="34" />
                 <Setter Property="Padding" Value="11,5" />
                 <Setter Property="CornerRadius" Value="12" />
@@ -98,14 +168,14 @@
                 <Setter Property="BorderBrush" Value="#33FFFFFF" />
                 <Setter Property="BorderThickness" Value="1" />
             </Style>
-            <Style x:Key="ThemeActionButtonStyle" TargetType="Button">
+            <Style x:Key="ThemeActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemeSecondaryButtonStyle}">
                 <Setter Property="Background" Value="{ThemeResource ThemeAccentSoftBrush}" />
                 <Setter Property="Foreground" Value="{ThemeResource PageTitleBrush}" />
                 <Setter Property="BorderBrush" Value="{ThemeResource ThemeStrokeBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="9" />
             </Style>
-            <Style x:Key="SecondaryNavButtonStyle" TargetType="Button">
+            <Style x:Key="SecondaryNavButtonStyle" TargetType="Button" BasedOn="{StaticResource ThemeSecondaryButtonStyle}">
                 <Setter Property="Height" Value="40" />
                 <Setter Property="MinWidth" Value="40" />
                 <Setter Property="Width" Value="40" />

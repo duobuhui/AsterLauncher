@@ -75,16 +75,16 @@
         </DataTemplate>
     </Page.Resources>
     <ScrollViewer x:Name="GachaScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" SizeChanged="GachaScrollViewer_OnSizeChanged">
-        <StackPanel Padding="24,18" Spacing="10" HorizontalAlignment="Stretch">
+        <StackPanel Padding="28,24" Spacing="10" HorizontalAlignment="Stretch">
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                <TextBlock Text="抽卡记录" FontSize="23" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="抽卡记录" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                     <TextBlock x:Name="CurrentGameText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="ArchiveSummaryText" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <ProgressRing x:Name="BusyRing" Grid.Column="2" Width="20" Height="20" VerticalAlignment="Center" IsActive="False" />
-                <Button x:Name="CaptureButton" Grid.Column="3" Content="同步记录" Style="{StaticResource AccentButtonStyle}" Click="Capture_OnClick" VerticalAlignment="Center" />
+                <Button x:Name="CaptureButton" Grid.Column="3" Content="同步记录" Style="{StaticResource ThemePrimaryButtonStyle}" Click="Capture_OnClick" VerticalAlignment="Center" />
                 <Button x:Name="FullCaptureButton" Grid.Column="4" Content="全量同步" Click="FullCapture_OnClick" VerticalAlignment="Center" Visibility="Collapsed" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" />
             </Grid>
 

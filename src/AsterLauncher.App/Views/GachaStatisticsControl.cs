@@ -48,7 +48,14 @@ public sealed class GachaStatisticsControl : UserControl
         _plots.RowDefinitions.Add(new() { Height=GridLength.Auto });
         _plots.Children.Add(_highPlot); _plots.Children.Add(_upPlot); _body.Children.Add(_plots);
         SizeChanged+=(_,_)=>LayoutPlots();
-        _body.Children.Add(_rules);
+        _rules.Margin = new(12, 0, 12, 12);
+        _body.Children.Add(new Expander { Header = "统计说明", Content = _rules,
+            HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brush("HeroGlassBrush"),
+            BorderBrush = Brush("GlassEdgeBrush"), BorderThickness = new(1), CornerRadius = new(12) });
+        _editor.Background = Brush("HeroGlassBrush");
+        _editor.BorderBrush = Brush("GlassEdgeBrush");
+        _editor.BorderThickness = new(1);
+        _editor.CornerRadius = new(12);
         var editor = new StackPanel { Spacing = 10 };
         editor.Children.Add(new TextBlock { Text="部分角色加入可歪名单后，仅凭名字无法区分 UP。选择具体记录进行校对，可随时恢复自动判定。",FontSize=12,TextWrapping=TextWrapping.Wrap });
         AutomationProperties.SetName(_record,"校对出货记录"); editor.Children.Add(_record);
@@ -125,20 +132,22 @@ public sealed class GachaStatisticsControl : UserControl
         if(_pool.SelectedItem is not GachaPoolStatistics pool)
         {
             _highPlot.Visibility=_upPlot.Visibility=_editor.Visibility=Visibility.Collapsed;
-            _summary.Text="暂无可统计的抽卡记录；同步或导入档案后显示。"; _rules.Text=""; return;
+            _summary.Text="暂无抽卡记录。同步或导入后可查看统计。"; _rules.Text=""; return;
         }
         var complete=pool.HighPoints.Where(p=>p.Complete).Select(p=>p.Pulls).Order().ToArray();
         var median=complete.Length==0?"—":((complete[(complete.Length-1)/2]+complete[complete.Length/2])/2d).ToString("0.0");
         var identified=pool.FeaturedCount+pool.NonFeaturedCount;
-        _summary.Text=$"{pool.Title} · {pool.Draws} 抽 · {pool.HighLabel} {pool.HighCount}（{100d*pool.HighCount/Math.Max(1,pool.Draws):0.00}%） · 次高星级 {pool.MiddleCount} · 其他星级 {pool.LowCount}\n完整出货间隔 {complete.Length} 个 · 均值 {Mean(pool.Average)} · 中位数 {median} · 最短 {pool.Minimum?.ToString()??"—"} / 最长 {pool.Maximum?.ToString()??"—"} 抽 · 本地已垫 {pool.CurrentPity}\n已识别 UP {pool.FeaturedCount} · 非 UP {pool.NonFeaturedCount} · 待校对 {pool.UnknownCount}"+(identified>0?$" · UP 占比 {pool.FeaturedCount*100d/identified:0.00}%（含保底）":"");
+        var middleLabel=_analysis.GameId==BuiltInGameIds.ZenlessZoneZero?"A级":"四星";
+        var lowLabel=_analysis.GameId==BuiltInGameIds.ZenlessZoneZero?"B级":"三星";
+        _summary.Text=$"{pool.Title} · {pool.Draws} 抽 · {pool.HighLabel} {pool.HighCount}（{100d*pool.HighCount/Math.Max(1,pool.Draws):0.00}%） · {middleLabel} {pool.MiddleCount} · {lowLabel} {pool.LowCount}\n完整出货间隔 {complete.Length} 个 · 均值 {Mean(pool.Average)} · 中位数 {median} · 最短 {pool.Minimum?.ToString()??"—"} / 最长 {pool.Maximum?.ToString()??"—"} 抽 · 本地已垫 {pool.CurrentPity}"+(pool.FeaturedMaximum is not null?$"\n已识别 UP {pool.FeaturedCount} · 非 UP {pool.NonFeaturedCount} · 待校对 {pool.UnknownCount}"+(identified>0?$" · UP 占比 {pool.FeaturedCount*100d/identified:0.00}%（含保底）":""):"");
         _highPlot.Visibility=Visibility.Visible;
         var max=pool.PityMaximum??Math.Max(10,pool.HighPoints.Select(p=>p.Pulls).DefaultIfEmpty(10).Max());
         _highPlot.SetData(pool.HighLabel+"出货散点",pool.HighPoints,max,pool.Average);
         _upPlot.Visibility=pool.FeaturedMaximum is not null?Visibility.Visible:Visibility.Collapsed;
         LayoutPlots();
         if(pool.FeaturedMaximum is int upMax)_upPlot.SetData("UP "+pool.HighLabel+"出货散点",pool.FeaturedPoints,upMax,pool.FeaturedAverage);
-        _rules.Text="每个圆点对应一次出货；同抽数的结果错位排列。均值只使用有前一次出货记录的完整间隔，各卡池种类独立计算。"
-            +(pool.FeaturedMaximum is not null?" UP 间隔从上一件确定的 UP 物品起算；待校对结果会中断可确认的间隔，避免误计均值。UP 占比包含保底出货，不能当作小保底胜率。":"")
+        _rules.Text="横轴为两次出货之间的抽数，各卡池分别计算。相同抽数合并在一个位置，点击圆点查看全部物品和日期；均值不包含历史不完整的间隔。"
+            +(pool.FeaturedMaximum is not null?" UP 间隔从上一件确定的 UP 物品起算；待校对结果会中断可确认的间隔，该段不计入均值。UP 占比包含保底出货，不等于小保底胜率。":"")
             +(pool.PityMaximum is null?" 此类卡池的横轴按本地记录范围绘制，不代表保底上限。":"")
             +(_analysis.GameId==BuiltInGameIds.GenshinImpact&&pool.Type=="302"?" 武器 UP 指当期任一 UP 武器，不表示定轨目标。":"");
         _editor.Visibility=pool.FeaturedMaximum is not null?Visibility.Visible:Visibility.Collapsed;

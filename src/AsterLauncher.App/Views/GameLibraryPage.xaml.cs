@@ -146,8 +146,10 @@ public sealed partial class GameLibraryPage : Page
         var outgoingOffset = (outgoing?.RenderTransform as TranslateTransform)?.Y ?? 0;
         var revision = ++_contentRevision;
         _activeTransition?.Stop();
+        _activeTransition = null;
         foreach (var surface in new UIElement[] { OverviewPanel, FeatureFrame, FeatureTransitionFrame, AddGamePanel })
         {
+            surface.IsHitTestVisible = false;
             if (!ReferenceEquals(surface, outgoing))
             {
                 surface.Visibility = Visibility.Collapsed;
@@ -192,6 +194,7 @@ public sealed partial class GameLibraryPage : Page
         (App.MainWindow as MainWindow)?.SetWorkspaceOverlay(!isOverview);
         SetSurfaceShades(!isOverview);
         incoming.Visibility = Visibility.Visible;
+        incoming.IsHitTestVisible = true;
         if (outgoing is null || ReferenceEquals(outgoing, incoming) || !_uiSettings.AnimationsEnabled)
         {
             if (outgoing is not null && !ReferenceEquals(outgoing, incoming))
@@ -852,10 +855,19 @@ public sealed partial class GameLibraryPage : Page
     {
         ++_contentRevision;
         _activeTransition?.Stop();
+        _activeTransition = null;
+        if (_isLaunchExpanded) SetLaunchExpanded(false);
         GameList.SelectedItem = null;
-        OverviewPanel.Visibility = Visibility.Collapsed;
-        FeatureFrame.Visibility = Visibility.Collapsed;
+        foreach (var surface in new UIElement[] { OverviewPanel, FeatureFrame, FeatureTransitionFrame, AddGamePanel })
+        {
+            surface.Visibility = Visibility.Collapsed;
+            surface.IsHitTestVisible = false;
+            surface.Opacity = 1;
+            surface.RenderTransform = null;
+            if (surface is Frame frame) frame.Content = null;
+        }
         AddGamePanel.Visibility = Visibility.Visible;
+        AddGamePanel.IsHitTestVisible = true;
         (App.MainWindow as MainWindow)?.SetWorkspaceOverlay(true);
         SetSurfaceShades(true);
         _activeSurface = AddGamePanel;

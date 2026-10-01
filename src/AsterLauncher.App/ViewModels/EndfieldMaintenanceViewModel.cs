@@ -9,9 +9,9 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
     private sealed class ChannelState
     {
         public string RemoteVersion = "尚未检查";
-        public string Stage = "就绪";
+        public string Stage = "";
         public EndfieldMaintenanceStage StageKind;
-        public string Plan = "请检查官方清单";
+        public string Plan = "检查文件后显示缺失、损坏数量及所需下载空间。";
         public string Preload = "尚未检查";
         public string Sharing = "尚未扫描";
         public double Progress;
@@ -152,7 +152,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         {
             state.RemoteVersion = "检查失败";
             state.HasUpdate = false;
-            state.Stage = "无法获取当前渠道的最新版本；本地安装未改动。检查网络后可重新进入页面重试。";
+            state.Stage = "版本检查失败，请检查网络后重试。";
         }
         finally
         {
@@ -162,12 +162,12 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
     }
     public async Task CheckAsync()
     {
-        if (!HasSelectedChannel) { SetStage(Channel, "请先选择并确认官服或 B 服。"); return; }
+        if (!HasSelectedChannel) { SetStage(Channel, "请在游戏右键菜单中选择官服或 B 服。"); return; }
         var channel = Channel;
         State(channel).HasTrustedPlan = false;
         await RunBusyAsync(channel, async token =>
         {
-            SetStage(channel, "正在读取官方完整清单与校验本地文件…");
+            SetStage(channel, "正在读取官方文件列表并检查本地文件…");
             var installation = _launcher.GetOrCreateEndfieldInstallation(channel);
             var (package, plan) = await _service.PlanAsync(installation, token);
             var state = State(channel);
@@ -225,7 +225,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                 });
                 await _service.SyncAsync(installation, otherChannel, repairOnly, report, token);
                 await _launcher.PersistEndfieldInstallationAsync();
-                state.Stage = "已完成并复验";
+                state.Stage = "文件校验完成";
                 state.HasUpdate = false;
                 if (Channel == channel) Refresh();
             });
@@ -321,7 +321,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         var second = _launcher.OtherEndfieldInstallation;
         if (first?.InstallRoot is not { Length: > 0 } || second?.InstallRoot is not { Length: > 0 })
         {
-            State(channel).Sharing = "设置两服目录后可扫描";
+            State(channel).Sharing = "设置两服安装目录后，可检查共享资源及节省空间。";
             if (Channel == channel) Refresh();
             return;
         }
@@ -408,7 +408,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             if(state.CancelRequested) await ClearCancelledAsync(channel,state.Preloading);
-            else SetStage(channel, "已暂停；已验证缓存保留，可再次执行续传");
+            else SetStage(channel, "已暂停，继续下载时会使用已保存的进度。");
         }
         catch (InvalidOperationException exception)
         {
@@ -420,7 +420,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             SetStage(channel, exception switch
             {
                 HttpRequestException => "无法连接官方资源服务器；已下载并校验的缓存会保留。请检查网络后重试。",
-                InvalidDataException => "官方清单或下载文件未通过校验；当前安装版本未写入成功状态。可重新检查并继续。",
+                InvalidDataException => "文件校验失败，安装尚未完成。重新检查后可继续下载。",
                 IOException => "文件读写失败；请检查目标卷剩余空间、目录权限和占用情况，然后重试。",
                 _ => $"操作未完成（{exception.GetType().Name}）；请查看本地日志了解详情。"
             });

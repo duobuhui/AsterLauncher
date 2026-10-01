@@ -11,13 +11,14 @@ namespace AsterLauncher.App.Views;
 public sealed class PlayActivityPage : Page
 {
     private readonly LauncherViewModel _launcher;
-    private readonly StackPanel _body = new() { Spacing = 14, Padding = new Thickness(24,18,24,18) };
+    private readonly StackPanel _body = new() { Spacing = 14, Padding = new Thickness(28,24,28,24) };
     private readonly ComboBox _period = new() { MinWidth = 130 };
     private readonly Grid _calendar = new() { ColumnSpacing = 3, RowSpacing = 3 };
     private readonly TextBlock _summary = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _selected = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _legacy = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
-    private readonly TextBlock _title = new() { FontSize = 25, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+    private readonly TextBlock _title = new() { FontSize = 27, Foreground = (Brush)Application.Current.Resources["PageTitleBrush"], FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+    private readonly List<Border> _legendCells = [];
     private bool _setting;
 
     public PlayActivityPage(LauncherViewModel launcher)
@@ -36,7 +37,12 @@ public sealed class PlayActivityPage : Page
         panel.Children.Add(_calendar);
         var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         legend.Children.Add(new TextBlock { Text = "少", FontSize = 12 });
-        for (var i = 0; i < 5; i++) legend.Children.Add(new Border { Width = 12, Height = 12, CornerRadius = new(3), Background = Shade(i) });
+        for (var i = 0; i < 5; i++)
+        {
+            var cell = new Border { Width = 12, Height = 12, CornerRadius = new(3), Background = Shade(i) };
+            _legendCells.Add(cell);
+            legend.Children.Add(cell);
+        }
         legend.Children.Add(new TextBlock { Text = "多 · 15 分钟 / 1 小时 / 3 小时", FontSize = 12 });
         panel.Children.Add(legend);
         panel.Children.Add(_selected);
@@ -60,6 +66,7 @@ public sealed class PlayActivityPage : Page
     {
         var game = _launcher.CurrentGame;
         if (game is null || _period.SelectedItem is null) return;
+        for (var i = 0; i < _legendCells.Count; i++) _legendCells[i].Background = Shade(i);
         var now = DateTimeOffset.Now; var today = DateOnly.FromDateTime(now.DateTime);
         var year = int.TryParse(_period.SelectedItem.ToString(), out var y) ? y : (int?)null;
         var from = year is int selectedYear ? new DateOnly(selectedYear, 1, 1) : today.AddDays(-364);
@@ -105,10 +112,12 @@ public sealed class PlayActivityPage : Page
         _selected.Text = $"{from:yyyy/MM/dd} — {through:yyyy/MM/dd}";
     }
     private static Brush Brush(string name) => (Brush)Application.Current.Resources[name];
-    private static Brush Shade(int level) => new SolidColorBrush(level switch
+    private static Brush Shade(int level)
     {
-        0 => Color.FromArgb(90,104,112,141), 1 => Color.FromArgb(255,78,68,124),
-        2 => Color.FromArgb(255,113,88,181), 3 => Color.FromArgb(255,150,120,233), _ => Color.FromArgb(255,191,169,255)
-    });
+        var accent = ((SolidColorBrush)Application.Current.Resources["ThemeAccentBrush"]).Color;
+        return new SolidColorBrush(level == 0 ? Color.FromArgb(45, 255, 255, 255)
+            : Color.FromArgb(level switch { 1 => (byte)55, 2 => (byte)105, 3 => (byte)175, _ => (byte)255 },
+                accent.R, accent.G, accent.B));
+    }
     internal static string Duration(double seconds) => seconds < 60 ? "0 分钟" : seconds < 3600 ? $"{seconds/60:0} 分钟" : $"{seconds/3600:0.0} 小时";
 }

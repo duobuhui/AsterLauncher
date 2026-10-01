@@ -9,7 +9,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <StackPanel Spacing="2"><TextBlock Text="启动方案" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /><TextBlock Text="按阶段安排游戏和外部工具" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
+        <StackPanel Spacing="2"><TextBlock Text="启动方案" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /><TextBlock Text="设置游戏启动前后运行的工具及执行顺序" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
 
         <Border Grid.Row="1" Margin="0,16,0,12" Padding="16" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16">
             <Grid RowSpacing="10">
