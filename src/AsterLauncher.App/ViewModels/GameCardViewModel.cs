@@ -78,16 +78,16 @@ public sealed class GameCardViewModel : ObservableObject
 
     public string? EffectiveExecutablePath => Id == BuiltInGameIds.Endfield
         ? _endfieldChannel == EndfieldChannel.Unknown ? null : _endfieldInstallation?.ExecutablePath
-        : State.ExecutablePath;
+        : HoYoInstallationIdentity.HasChannels(Id) ? State.HoYoInstallation?.ExecutablePath : State.ExecutablePath;
 
-    public string ChannelBadgeText => Id != BuiltInGameIds.Endfield ? string.Empty : _endfieldChannel switch
+    public string ChannelBadgeText => HoYoInstallationIdentity.HasChannels(Id) ? State.SelectedHoYoChannel switch { HoYoChannel.Official => "官", HoYoChannel.Bilibili => "B", _ => "?" } : Id != BuiltInGameIds.Endfield ? string.Empty : _endfieldChannel switch
     {
         EndfieldChannel.Official => "官",
         EndfieldChannel.Bilibili => "B",
         _ => "?"
     };
 
-    public Visibility ChannelBadgeVisibility => Id == BuiltInGameIds.Endfield ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ChannelBadgeVisibility => Id == BuiltInGameIds.Endfield || HoYoInstallationIdentity.HasChannels(Id) ? Visibility.Visible : Visibility.Collapsed;
 
     public bool IsInstalled => !string.IsNullOrWhiteSpace(EffectiveExecutablePath) && File.Exists(EffectiveExecutablePath);
 
@@ -184,6 +184,8 @@ public sealed class GameCardViewModel : ObservableObject
     {
         BackgroundImage = ResolveArtwork(Adapter.Definition, State.ArtworkPath);
         IconImage = ResolvePackagedImage(Adapter.Definition.IconAssetPath);
+        OnPropertyChanged(nameof(ChannelBadgeText));
+        OnPropertyChanged(nameof(ChannelBadgeVisibility));
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(Publisher));
         OnPropertyChanged(nameof(IconGlyph));

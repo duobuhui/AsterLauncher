@@ -8,7 +8,18 @@ namespace AsterLauncher.Infrastructure;
 public sealed class HoYoDistributionProvider(HttpClient http, HoYoContentCodec codec) : IHoYoDistributionProvider
 {
     private const string Api = "https://hyp-api.mihoyo.com/hyp/hyp-connect/api/";
-    private const string Launcher = "jGHBHlcOq1";
+    public static string LauncherFor(string gameId, HoYoChannel channel) => channel switch
+    {
+        HoYoChannel.Official => "jGHBHlcOq1",
+        HoYoChannel.Bilibili => gameId switch
+        {
+            BuiltInGameIds.GenshinImpact => "umfgRO5gh5", BuiltInGameIds.HonkaiStarRail => "6P5gHMNyK3",
+            BuiltInGameIds.ZenlessZoneZero => "xV0f4r1GT0", _ => throw new ArgumentException("此游戏无需独立 B 服安装。")
+        },
+        _ => throw new InvalidOperationException("请先选择游戏服务器。")
+    };
+    private static string Parameters(string gameId, HoYoChannel channel) => "launcher_id=" + LauncherFor(gameId, channel)
+        + "&language=zh-cn&channel=" + (channel == HoYoChannel.Bilibili ? "14&sub_channel=0" : "1&sub_channel=1");
     public static IReadOnlyDictionary<string, string> Games { get; } = new Dictionary<string, string>
     {
         [BuiltInGameIds.GenshinImpact] = "hk4e_cn", [BuiltInGameIds.HonkaiImpact3rd] = "bh3_cn",
@@ -26,19 +37,23 @@ public sealed class HoYoDistributionProvider(HttpClient http, HoYoContentCodec c
     }
     public async Task<HoYoRelease?> GetReleaseAsync(string gameId, CancellationToken token = default)
     {
-        var (release, _) = await ReadBranchAsync(gameId, token);
+        var (release, _) = await ReadBranchAsync(gameId, HoYoChannel.Official, token);
         return release;
     }
-    private async Task<(HoYoRelease?, JsonElement)> ReadBranchAsync(string gameId, CancellationToken token)
+    public async Task<HoYoRelease?> GetReleaseAsync(string gameId, HoYoChannel channel, CancellationToken token = default)
+    {
+        var (release, _) = await ReadBranchAsync(gameId, channel, token); return release;
+    }
+    private async Task<(HoYoRelease?, JsonElement)> ReadBranchAsync(string gameId, HoYoChannel channel, CancellationToken token)
     {
         if (!Games.TryGetValue(gameId, out var biz)) throw new ArgumentException("Unsupported game.");
-        using var branches = await JsonAsync(Api + "getGameBranches?launcher_id=" + Launcher, token);
+        using var branches = await JsonAsync(Api + "getGameBranches?" + Parameters(gameId, channel), token);
         var branch = branches.RootElement.GetProperty("data").GetProperty("game_branches").EnumerateArray()
             .FirstOrDefault(x => x.GetProperty("game").GetProperty("biz").GetString() == biz);
         if (branch.ValueKind == JsonValueKind.Undefined || !branch.TryGetProperty("main", out var main)
             || main.ValueKind == JsonValueKind.Null || string.IsNullOrWhiteSpace(Text(main, "tag"))) return (null, default);
         var id = Text(branch.GetProperty("game"), "id");
-        using var configs = await JsonAsync(Api + "getGameConfigs?launcher_id=" + Launcher + "&game_ids%5B%5D=" + Uri.EscapeDataString(id), token);
+        using var configs = await JsonAsync(Api + "getGameConfigs?" + Parameters(gameId, channel) + "&game_ids%5B%5D=" + Uri.EscapeDataString(id), token);
         var config = configs.RootElement.GetProperty("data").GetProperty("launch_configs").EnumerateArray()
             .Single(x => Text(x.GetProperty("game"), "id") == id);
         var exe = Text(config, "exe_file_name"); var dir = Text(config, "installation_dir");
@@ -48,13 +63,18 @@ public sealed class HoYoDistributionProvider(HttpClient http, HoYoContentCodec c
         string? pre = branch.TryGetProperty("pre_download", out var p) && p.ValueKind == JsonValueKind.Object ? Text(p, "tag") : null;
         var audio = Text(config, "audio_pkg_scan_dir");
         if (!string.IsNullOrEmpty(audio)) SafeGamePath.ValidateRelative(audio);
-        var release = new HoYoRelease(gameId, id, Text(main, "tag"), exe, dir, string.IsNullOrWhiteSpace(pre) ? null : pre, string.IsNullOrEmpty(audio) ? null : audio);
+        var release = new HoYoRelease(gameId, id, Text(main, "tag"), exe, dir, string.IsNullOrWhiteSpace(pre) ? null : pre, string.IsNullOrEmpty(audio) ? null : audio, channel);
         return (release, branch.Clone());
     }
     public async Task<HoYoPackage> GetPackageAsync(string gameId, IReadOnlyCollection<string> audioLanguages,
         bool preload = false, CancellationToken token = default)
     {
-        var (release, branch) = await ReadBranchAsync(gameId, token);
+        return await GetPackageAsync(gameId, HoYoChannel.Official, audioLanguages, preload, token);
+    }
+    public async Task<HoYoPackage> GetPackageAsync(string gameId, HoYoChannel channel, IReadOnlyCollection<string> audioLanguages,
+        bool preload = false, CancellationToken token = default)
+    {
+        var (release, branch) = await ReadBranchAsync(gameId, channel, token);
         if (release is null) throw new InvalidOperationException("官方尚未提供该游戏的公开 PC 下载资源。");
         var selected = branch.GetProperty(preload ? "pre_download" : "main");
         if (selected.ValueKind != JsonValueKind.Object || string.IsNullOrWhiteSpace(Text(selected, "tag")))
@@ -97,7 +117,20 @@ public sealed class HoYoDistributionProvider(HttpClient http, HoYoContentCodec c
         if (!result.ContainsKey(release.ExecutableName)) throw new InvalidDataException("官方完整清单缺少游戏程序。");
         var files = result.Values.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToArray();
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', files.Select(f => $"{f.Path}|{f.Size}|{f.Md5.ToLowerInvariant()}")))));
-        return new(release with { Version = version }, files, hash);
+        HoYoSdk? sdk = null;
+        if (channel == HoYoChannel.Bilibili)
+        {
+            using var sdkResponse = await JsonAsync(Api + "getGameChannelSDKs?" + Parameters(gameId, channel) + "&game_ids%5B%5D=" + Uri.EscapeDataString(release.PublisherId), token);
+            var entry = sdkResponse.RootElement.GetProperty("data").GetProperty("game_channel_sdks").EnumerateArray()
+                .Single(x => Text(x.GetProperty("game"), "id") == release.PublisherId);
+            var package = entry.GetProperty("channel_sdk_pkg");
+            var md5 = Text(package, "md5"); var marker = Text(entry, "pkg_version_file_name"); SafeGamePath.ValidateRelative(marker);
+            var size = Number(package, "size"); var expanded = Number(package, "decompressed_size");
+            if (!HoYoManifestReader.ValidMd5(md5) || size is <= 0 or > 256 * 1024 * 1024 || expanded is <= 0 or > 512 * 1024 * 1024)
+                throw new InvalidDataException("官方渠道组件信息无效。");
+            sdk = new(TrustedUri(Text(package, "url")), md5, size, expanded, Text(entry, "version"), marker);
+        }
+        return new(release with { Version = version }, files, hash, sdk);
     }
     public static Uri Address(JsonElement address, string id)
     {

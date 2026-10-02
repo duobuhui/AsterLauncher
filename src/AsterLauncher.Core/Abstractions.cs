@@ -217,6 +217,13 @@ public sealed record EndfieldPoolAnalysis(
     string SeriesKey = "",
     IReadOnlyList<EndfieldPoolAnalysis>? PreviousPhases = null)
 {
+    public string DateRangeText { get; init; } = "";
+    public int DateSectionCount => string.IsNullOrEmpty(DateRangeText) ? 0 : 1;
+    public int DetailSectionCount => string.IsNullOrEmpty(DetailText) ? 0 : 1;
+    public string? AnnouncementUri { get; init; }
+    public EndfieldSignatureWeaponAnalysis? SignatureWeapon { get; init; }
+    public string WeaponSummaryText => SignatureWeapon?.Summary ?? "";
+    public int WeaponSectionCount => SignatureWeapon is null ? 0 : 1;
     public int PreviousPhaseCount => PreviousPhases?.Count ?? 0;
 
     public string PreviousPhaseLabel => $"往期记录 · {PreviousPhaseCount} 期";
@@ -224,10 +231,10 @@ public sealed record EndfieldPoolAnalysis(
     public string CountText => $"{DrawCount} 抽 · {SixStarPulls.Count} 六星";
 
     public string DetailText => Category == EndfieldPoolCategory.Refactor
-        ? $"本期计数 {PaidDrawCount} · 同名累计 {SeriesPaidDrawCount ?? PaidDrawCount} · 免费 {FreeDrawCount}（六星 {FreeSixStarCount}）"
+        ? $"本期计数 {PaidDrawCount} · 同名累计 {SeriesPaidDrawCount ?? PaidDrawCount}" + (FreeDrawCount > 0 ? $" · 免费 {FreeDrawCount}（六星 {FreeSixStarCount}）" : "")
         : FreeDrawCount > 0
             ? $"计数 {PaidDrawCount} · 免费 {FreeDrawCount}（六星 {FreeSixStarCount}）"
-            : $"计数 {PaidDrawCount} · 免费无记录";
+            : "";
 
     public string FeaturedText => FeaturedOperatorName is null ? Category switch
     {
@@ -286,7 +293,7 @@ public sealed record EndfieldSixStarPull(
 
     public string SourceText => IsFree ? "免费" : "常规";
 
-    public string ObtainedAtText => ObtainedAt?.ToLocalTime().ToString("yyyy/MM/dd HH:mm") ?? "—";
+    public string ObtainedAtText => ObtainedAt?.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy/MM/dd HH:mm") ?? "—";
 
     public string BarTitle => IsFree ? (IsFeatured ? "免费 UP 六星" : "免费六星") : IsFeatured ? "UP 六星" : "六星";
 
@@ -297,4 +304,22 @@ public sealed record EndfieldSixStarPull(
     public double BarPercent => Math.Clamp(CountedDrawsSincePaidSixStar * 100d / 80d, 0d, 100d);
 
     public bool IsOver65 => CountedDrawsSincePaidSixStar > 65;
+}
+
+public sealed record EndfieldWeaponResult(string Name, bool IsFeatured, int RecordPosition, DateTimeOffset? ObtainedAt)
+{
+    public string DisplayName => Name + (IsFeatured ? " · UP" : "");
+    public string PositionText => $"第 {RecordPosition} 件记录";
+    public string DateText => ObtainedAt?.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy/MM/dd HH:mm") ?? "时间未记录";
+}
+public sealed record EndfieldSignatureWeaponAnalysis(string WeaponName, string PoolName, int RecordedWeapons,
+    int FeaturedCount, IReadOnlyList<EndfieldWeaponResult> SixStars, bool IsRefactor)
+{
+    public string Title => $"专武 · {WeaponName}";
+    public string CountText => $"{RecordedWeapons} 件 · 六星 {SixStars.Count} · 专武 {FeaturedCount}";
+    public string Summary => RecordedWeapons == 0 ? $"{WeaponName} · 暂无对应申领记录" : $"{WeaponName} · {RecordedWeapons} 件记录 · 六星 {SixStars.Count} · 专武 {FeaturedCount}";
+    public string RulesText => IsRefactor
+        ? "一次申领包含 10 件武器。当期最多 4 次申领获得六星；同名重构申领首次 8 次内获得 UP，首次 UP 计数可跨同名期数继承。"
+        : "一次申领包含 10 件武器。武器池的开放时间可跨 3 次特许寻访，记录按对应申领池汇总，不与角色池混算。";
+    public string RecordNote => "位置按本地记录累计件数显示，不代表申领次数或游戏中的保底进度。奖励、兑换获得的武器不计入。";
 }

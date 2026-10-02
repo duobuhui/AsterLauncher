@@ -38,6 +38,7 @@ public sealed class EndfieldInstallation
     public string? InstallRoot { get; set; }
     public string? ExecutablePath { get; set; }
     public string? InstalledVersion { get; set; }
+    public string? ScreenshotDirectory { get; set; }
     public bool MaintenanceInProgress { get; set; }
     public Guid? SelectedLaunchProfileId { get; set; }
     public EndfieldPreloadState PreloadState { get; set; }

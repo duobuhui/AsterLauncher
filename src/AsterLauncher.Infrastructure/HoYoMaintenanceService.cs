@@ -21,7 +21,7 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         if (new FileInfo(path).Length > 64 * 1024) throw new InvalidDataException("游戏配置文件过大。");
         return File.ReadLines(path).Select(line => line.Split('=', 2)).FirstOrDefault(p => p.Length == 2 && p[0].Trim() == "game_version")?[1].Trim();
     }
-    public static void ValidateExistingRoot(string root, string executable)
+    public static void ValidateExistingRoot(string root, string executable, HoYoChannel channel = HoYoChannel.Official)
     {
         SafeGamePath.Resolve(root, executable);
         var config = SafeGamePath.Resolve(root, "config.ini");
@@ -36,15 +36,17 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         var values = File.ReadLines(config).Select(line => line.Split('=', 2)).Where(p => p.Length == 2)
             .GroupBy(p => p[0].Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Last()[1].Trim(), StringComparer.OrdinalIgnoreCase);
         // Never turn a Bilibili/global install into a national official install by replacing SDK files.
-        if (values.GetValueOrDefault("channel") != "1" || values.GetValueOrDefault("cps", "mihoyo") != "mihoyo"
-            || values.GetValueOrDefault("sub_channel", "1") != "1"
+        if (values.GetValueOrDefault("channel") != (channel == HoYoChannel.Bilibili ? "14" : "1")
+            || values.GetValueOrDefault("cps", "mihoyo") != (channel == HoYoChannel.Bilibili ? "bilibili" : "mihoyo")
+            || values.GetValueOrDefault("sub_channel", "1") != (channel == HoYoChannel.Bilibili ? "0" : "1")
             || values.GetValueOrDefault("game_biz", "").Contains("global", StringComparison.OrdinalIgnoreCase)
             || !File.Exists(SafeGamePath.Resolve(root, executable)))
-            throw new InvalidOperationException("此安装不是已确认的国服官服。当前米哈游维护入口仅适用于国服官服；请保留原渠道并使用对应官方启动器维护。");
+            throw new InvalidOperationException("安装配置与所选渠道不符。请保留原目录，为当前渠道选择独立目录。");
     }
-    public async Task<HoYoPlan> PlanAsync(string gameId, HoYoInstallation install, bool preload = false, CancellationToken token = default)
+    public async Task<HoYoPlan> PlanAsync(string gameId, HoYoInstallation install, bool preload = false, CancellationToken token = default, HoYoInstallation? peer = null, IProgress<HoYoProgress>? progress = null)
     {
-        var package = await provider.GetPackageAsync(gameId, install.AudioLanguages, preload, token);
+        using var storage = LocalStorageGate.BeginOperation(dataRoot);
+        var package = await PreparePackageAsync(gameId, install, preload, progress, token);
         if (package.Release.GameId != gameId) throw new InvalidDataException("官方清单游戏身份不符。");
         var missing = new List<HoYoFile>(); var corrupt = new List<HoYoFile>();
         foreach (var file in package.Files)
@@ -54,30 +56,49 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
             else if (!await VerifiedFileCommit.MatchesAsync(SafeGamePath.Resolve(root, file.Path), file.Integrity, token)) corrupt.Add(file);
         }
         var targets = missing.Concat(corrupt).ToArray();
-        var chunks = UniqueChunks(targets);
+        var reused = new List<HoYoReusableFile>(); string? fallback = null;
+        if (!preload && install.ShareResources && peer?.InstallRoot is { Length: > 0 } sourceRoot && install.InstallRoot is { } targetRoot)
+        {
+            HoYoSharingPolicy.ValidateIndependent(targetRoot, sourceRoot);
+            if (!WindowsHardLink.CanShareVolume(sourceRoot, targetRoot)) fallback = "跨卷或非 NTFS，使用独立文件。";
+            else
+            {
+                var sourcePackage = await provider.GetPackageAsync(gameId, peer.Channel, peer.AudioLanguages, false, token);
+                var sourceFiles = sourcePackage.Files.ToDictionary(f => f.Path, StringComparer.OrdinalIgnoreCase);
+                foreach (var file in targets.Where(f => HoYoSharingPolicy.IsShareable(gameId, f.Path)))
+                    if (sourceFiles.TryGetValue(file.Path, out var other) && other.Size == file.Size && other.Md5.Equals(file.Md5, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var path = SafeGamePath.Resolve(sourceRoot, file.Path);
+                        if (await VerifiedFileCommit.MatchesAsync(path, file.Integrity, token)) reused.Add(new(file, path));
+                    }
+            }
+        }
+        var reusablePaths = reused.Select(f => f.File.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var chunks = UniqueChunks(targets.Where(f => !reusablePaths.Contains(f.Path)));
         long remaining = 0;
         foreach (var chunk in chunks)
             if (!await EndfieldDownloadService.MatchesAsync(CachePath(chunk), chunk.CompressedSize, chunk.CompressedMd5, token))
                 remaining = checked(remaining + chunk.CompressedSize);
-        var outputBytes = targets.Sum(f => f.Size);
+        var outputBytes = targets.Where(f => !reusablePaths.Contains(f.Path)).Sum(f => f.Size);
         var peak = checked(chunks.Sum(c => c.CompressedSize) + outputBytes + targets.Select(f => f.Size).DefaultIfEmpty().Max());
-        return new(package, missing, corrupt, remaining, peak);
+        return new(package, missing, corrupt, remaining, peak, reused, fallback);
     }
     public async Task SyncAsync(string gameId, HoYoInstallation install, bool repairOnly,
-        IProgress<HoYoProgress>? progress = null, CancellationToken token = default)
+        IProgress<HoYoProgress>? progress = null, CancellationToken token = default, HoYoInstallation? peer = null)
     {
         var root = install.InstallRoot ?? throw new InvalidOperationException("请先设置安装目录。");
         using var storage = LocalStorageGate.BeginOperation(dataRoot);
-        await using var lease = await LockAsync(root, token);
+        HoYoSharingPolicy.ValidateIndependent(root, peer?.InstallRoot);
+        await using var lease = await LockRootsAsync(root, peer?.InstallRoot, token);
         EnsureNotRunning(gameId);
         progress?.Report(new("正在检查官方清单", 0, 0, 0, 0));
-        var plan = await PlanAsync(gameId, install, false, token);
+        var plan = await PlanAsync(gameId, install, false, token, peer, progress);
         var existingJournal = SafeGamePath.Resolve(root, ".aster-hoyo-maintenance.json");
         if (File.Exists(existingJournal))
         {
             if (new FileInfo(existingJournal).Length > 16 * 1024 * 1024) throw new InvalidDataException("维护恢复记录过大。");
             using var record = JsonDocument.Parse(await File.ReadAllTextAsync(existingJournal, token));
-            if (record.RootElement.GetProperty("gameId").GetString() != gameId)
+            if (record.RootElement.GetProperty("gameId").GetString() != gameId || (record.RootElement.TryGetProperty("channel", out var savedChannel) && savedChannel.GetInt32() != (int)install.Channel))
                 throw new InvalidOperationException("此目录存在另一游戏的未完成维护任务。");
             if (record.RootElement.TryGetProperty("stageName", out var oldStageName) && record.RootElement.TryGetProperty("files", out var oldFiles))
             {
@@ -87,9 +108,9 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
                 RemoveStage(SafeGamePath.Resolve(root, name), entries.Select(f => new HoYoFile(f.Path, f.Size, f.Md5, [])));
             }
         }
-        ValidateExistingRoot(root, plan.Package.Release.ExecutableName);
+        ValidateExistingRoot(root, plan.Package.Release.ExecutableName, install.Channel);
         var local = ReadVersion(root) ?? install.InstalledVersion;
-        if (local is not null && !install.OfficialChannelConfirmed) throw new InvalidOperationException("请先确认这是国服官服安装，再维护游戏文件。");
+        if (local is not null && !(install.ChannelConfirmed || install.OfficialChannelConfirmed)) throw new InvalidOperationException("请先确认当前安装的渠道，再维护游戏文件。");
         if (repairOnly && !string.Equals(local, plan.Package.Release.Version, StringComparison.Ordinal))
             throw new InvalidOperationException("当前安装与最新版本不同，请先更新游戏；不能用新版本清单修复旧版本。");
         if (local is { Length: > 0 } && Version.TryParse(local, out var installed) && Version.TryParse(plan.Package.Release.Version, out var target) && installed > target)
@@ -101,16 +122,30 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         install.MaintenanceInProgress = true;
         var files = plan.Missing.Concat(plan.Corrupt).ToArray();
         var stageName = ".aster-hoyo-stage-" + install.InstallationId.ToString("N");
-        await WriteAtomicAsync(journal, JsonSerializer.Serialize(new { gameId, target = plan.Package.Release.Version, plan.Package.ContentHash, stageName, files = files.Select(f => f.Integrity).ToArray() }), token);
+        await WriteAtomicAsync(journal, JsonSerializer.Serialize(new { gameId, channel = install.Channel, installationId = install.InstallationId, target = plan.Package.Release.Version, plan.Package.ContentHash, stageName, files = files.Select(f => f.Integrity).ToArray() }), token);
         var task = TaskName(install, false);
+        var sharedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (plan.Reusable is { Count: > 0 } reusable && peer?.InstallRoot is { } peerRoot)
+        {
+            var engine = SharingEngine(gameId);
+            foreach (var item in reusable)
+            {
+                EnsureNotRunning(gameId);
+                var linked = await engine.OptimizeAsync(peerRoot, root, [item.File.Integrity], [item.File.Integrity], token);
+                if (linked.FileCount > 0) sharedPaths.Add(item.File.Path);
+            }
+        }
+        files = files.Where(f => !sharedPaths.Contains(f.Path)).ToArray();
         var chunks = UniqueChunks(files);
+        CheckSpace(dataRoot, chunks.Sum(c => c.CompressedSize));
+        CheckSpace(root, checked(chunks.Sum(c => c.CompressedSize) + files.Sum(f => f.Size) + files.Select(f => f.Size).DefaultIfEmpty().Max()));
         await _tasks.TrackAsync(task, chunks.Select(c => DownloadTaskCache.ContentKey(c.CompressedMd5, c.CompressedSize)), token);
         var stage = SafeGamePath.Resolve(root, ".aster-hoyo-stage-" + install.InstallationId.ToString("N"));
         try
         {
             RemoveStage(stage, files);
             await DownloadChunksAsync(gameId, install, plan.Package, chunks, false, progress, token);
-            var fresh = await provider.GetPackageAsync(gameId, install.AudioLanguages, false, token);
+            var fresh = await PreparePackageAsync(gameId, install, false, progress, token);
             if (fresh.Release.Version != plan.Package.Release.Version || fresh.ContentHash != plan.Package.ContentHash) throw new InvalidOperationException("下载期间官方版本已变化，请重新检查后继续。");
             // Stage every output before modifying any game directory entry.
             var count = 0;
@@ -127,6 +162,8 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
                 EnsureNotRunning(gameId);
                 progress?.Report(new("正在应用文件", count++, files.Length, 0, 0));
                 await VerifiedFileCommit.CommitAsync(SafeGamePath.Resolve(stage, file.Path), SafeGamePath.Resolve(root, file.Path), file.Integrity, token);
+                // Release the committed staging copy so staged + installed outputs stay within the planned peak.
+                File.Delete(SafeGamePath.Resolve(stage, file.Path));
             }
             count = 0;
             foreach (var file in plan.Package.Files)
@@ -144,8 +181,13 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
                 { "zh-cn" => "Chinese", "en-us" => "English(US)", "ja-jp" => "Japanese", "ko-kr" => "Korean", _ => throw new InvalidDataException("无效语音语言。") });
                 await WriteAtomicAsync(audio, string.Join(Environment.NewLine, names) + Environment.NewLine, token);
             }
-            await WriteGameConfigAsync(root, plan.Package.Release.Version, token);
-            install.InstalledVersion = plan.Package.Release.Version; install.AudioSelectionPending = false; install.OfficialChannelConfirmed = true;
+            foreach (var obsolete in plan.Package.RemovedSdkFiles ?? [])
+            {
+                token.ThrowIfCancellationRequested(); EnsureNotRunning(gameId);
+                File.Delete(SafeGamePath.Resolve(root, obsolete));
+            }
+            await WriteGameConfigAsync(root, plan.Package.Release.Version, install.Channel, token);
+            install.InstalledVersion = plan.Package.Release.Version; install.AudioSelectionPending = false; install.ChannelConfirmed = true; install.OfficialChannelConfirmed = install.Channel == HoYoChannel.Official;
             File.Delete(journal); install.MaintenanceInProgress = false;
             await _tasks.CompleteAsync(task, token);
             // A formal update only consumes a matching completed preload; unrelated caches remain explicit tasks.
@@ -163,7 +205,7 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
     {
         using var storage = LocalStorageGate.BeginOperation(dataRoot);
         await using var lease = await LockAsync(install.InstallRoot ?? Path.Combine(dataRoot, install.InstallationId.ToString("N")), token);
-        var plan = await PlanAsync(gameId, install, true, token);
+        var plan = await PlanAsync(gameId, install, true, token, progress: progress);
         CheckSpace(dataRoot, plan.DownloadBytes);
         var chunks = UniqueChunks(plan.Missing.Concat(plan.Corrupt));
         var task = TaskName(install, true);
@@ -176,7 +218,7 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
             if (!Convert.ToHexString(MD5.HashData(decoded)).Equals(chunk.Md5, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("预下载分块校验失败。");
         }
-        var current = await provider.GetPackageAsync(gameId, install.AudioLanguages, true, token);
+        var current = await PreparePackageAsync(gameId, install, true, progress, token);
         if (current.ContentHash != plan.Package.ContentHash || current.Release.Version != plan.Package.Release.Version)
             throw new InvalidOperationException("官方预下载内容已撤回或替换，请重新检查。");
         install.PreloadVersion = plan.Package.Release.Version;
@@ -198,7 +240,7 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
                 await refreshGate.WaitAsync(refreshToken);
                 try
                 {
-                    refreshed = await provider.GetPackageAsync(gameId, install.AudioLanguages, preload, refreshToken);
+                    refreshed = await PreparePackageAsync(gameId, install, preload, progress, refreshToken);
                     if (refreshed.ContentHash != package.ContentHash || refreshed.Release.Version != package.Release.Version)
                         throw new InvalidOperationException("官方资源内容已变化，请重新检查。");
                     return refreshed.Files.SelectMany(f => f.Chunks).First(c => c.CompressedMd5 == chunk.CompressedMd5 && c.CompressedSize == chunk.CompressedSize).Uri;
@@ -218,7 +260,9 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);
         try
         {
-            await using (var stream = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            if (file.SdkEntry is { } sdkFile)
+                await HoYoSdkArchive.ExtractAsync(SafeGamePath.Resolve(dataRoot, "hoyo/objects/" + sdkFile.CacheKey), file, output, token);
+            else await using (var stream = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 foreach (var chunk in file.Chunks)
                 {
@@ -256,10 +300,10 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(root))!);
         if (drive.AvailableFreeSpace < bytes) throw new IOException($"{drive.Name} 可用空间不足，需要至少 {bytes / 1073741824d:0.0} GiB。");
     }
-    private static async Task WriteGameConfigAsync(string root, string version, CancellationToken token)
+    private static async Task WriteGameConfigAsync(string root, string version, HoYoChannel channel, CancellationToken token)
     {
         var path = SafeGamePath.Resolve(root, "config.ini");
-        var lines = File.Exists(path) ? (await File.ReadAllLinesAsync(path, token)).ToList() : new List<string> { "[General]", "channel=1", "sub_channel=1", "cps=mihoyo" };
+        var lines = File.Exists(path) ? (await File.ReadAllLinesAsync(path, token)).ToList() : new List<string> { "[General]", "channel=" + (int)channel, "sub_channel=" + (channel == HoYoChannel.Bilibili ? "0" : "1"), "cps=" + (channel == HoYoChannel.Bilibili ? "bilibili" : "mihoyo") };
         var index = lines.FindIndex(line => line.Split('=', 2)[0].Trim() == "game_version");
         if (index < 0) lines.Add("game_version=" + version); else lines[index] = "game_version=" + version;
         await WriteAtomicAsync(path, string.Join(Environment.NewLine, lines) + Environment.NewLine, token);
@@ -296,6 +340,82 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
     private sealed class Lease(SemaphoreSlim gate, FileStream file) : IAsyncDisposable
     {
         public ValueTask DisposeAsync() { file.Dispose(); gate.Release(); return ValueTask.CompletedTask; }
+    }
+    public Task<HoYoRelease?> GetReleaseAsync(string gameId, HoYoChannel channel, CancellationToken token = default)
+        => provider.GetReleaseAsync(gameId, channel, token);
+    private async Task<HoYoPackage> PreparePackageAsync(string gameId, HoYoInstallation installation, bool preload,
+        IProgress<HoYoProgress>? progress, CancellationToken token)
+    {
+        if (installation.Channel == HoYoChannel.Unknown) throw new InvalidOperationException("请在游戏右键菜单中选择安装渠道。");
+        var package = await provider.GetPackageAsync(gameId, installation.Channel, installation.AudioLanguages, preload, token);
+        if (package.Sdk is not { } sdk) return package;
+        var key = DownloadTaskCache.ContentKey(sdk.Md5, sdk.Size);
+        var path = SafeGamePath.Resolve(dataRoot, "hoyo/objects/" + key);
+        CheckSpace(dataRoot, sdk.Size);
+        await _tasks.TrackAsync(TaskName(installation, preload), [key], token);
+        await download.DownloadAsync(sdk.Uri, sdk.Md5, sdk.Size, async refreshToken =>
+        {
+            var refreshed = await provider.GetPackageAsync(gameId, installation.Channel, installation.AudioLanguages, preload, refreshToken);
+            if (refreshed.Sdk is not { } replacement || replacement.Md5 != sdk.Md5 || replacement.Size != sdk.Size)
+                throw new InvalidOperationException("渠道组件已变化，请重新检查。");
+            return replacement.Uri;
+        }, new ByteProgress(bytes => progress?.Report(new("正在下载渠道组件", 0, 1, bytes, sdk.Size))), token);
+        progress?.Report(new("正在校验渠道组件", 0, 1, 0, 0));
+        var components = await HoYoSdkArchive.ReadAsync(path, sdk, token);
+        var files = package.Files.ToDictionary(f => f.Path, StringComparer.OrdinalIgnoreCase);
+        var removed = HoYoSdkArchive.ReadRemovedFiles(path);
+        var prefix = Path.GetFileNameWithoutExtension(package.Release.ExecutableName) + "_Data/Plugins/";
+        if (components.Any(f => f.Path != sdk.VersionFile && !f.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            || removed.Any(p => !p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("渠道组件路径与当前游戏不符。");
+        foreach (var obsolete in removed) files.Remove(obsolete);
+        foreach (var file in components) files[file.Path] = file;
+        if (removed.Any(files.ContainsKey)) throw new InvalidDataException("渠道组件清单与删除列表冲突。");
+        var ordered = files.Values.OrderBy(f => f.Path, StringComparer.Ordinal).ToArray();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", ordered.Select(f => $"{f.Path}|{f.Size}|{f.Md5}")) + "\nremoved:" + string.Join("|", removed))));
+        return new(package.Release, ordered, fingerprint, sdk, removed);
+    }
+    private static ResourceSharingService SharingEngine(string gameId)
+        => new(path => HoYoSharingPolicy.IsShareable(gameId, path), () => EnsureNotRunning(gameId));
+    public async Task<EndfieldSharingSummary> OptimizeAsync(string gameId, HoYoInstallation target, HoYoInstallation source, CancellationToken token = default)
+    {
+        using var storage = LocalStorageGate.BeginOperation(dataRoot);
+        var root = target.InstallRoot ?? throw new InvalidOperationException("请先设置当前服目录。");
+        var peer = source.InstallRoot ?? throw new InvalidOperationException("请先设置另一服目录。");
+        HoYoSharingPolicy.ValidateIndependent(root, peer);
+        await using var lease = await LockRootsAsync(root, peer, token);
+        EnsureNotRunning(gameId);
+        var first = await provider.GetPackageAsync(gameId, source.Channel, source.AudioLanguages, false, token);
+        var second = await provider.GetPackageAsync(gameId, target.Channel, target.AudioLanguages, false, token);
+        ValidateExistingRoot(peer, first.Release.ExecutableName, source.Channel);
+        ValidateExistingRoot(root, second.Release.ExecutableName, target.Channel);
+        return await SharingEngine(gameId).OptimizeAsync(peer, root, first.Files.Select(f => f.Integrity).ToArray(), second.Files.Select(f => f.Integrity).ToArray(), token);
+    }
+    public EndfieldSharingSummary ScanSharing(string gameId, HoYoInstallation first, HoYoInstallation second)
+        => SharingEngine(gameId).ScanLocal(first.InstallRoot!, second.InstallRoot!);
+    public async Task<int> UnshareAsync(string gameId, HoYoInstallation install, HoYoInstallation? peer, CancellationToken token = default)
+    {
+        using var storage = LocalStorageGate.BeginOperation(dataRoot);
+        var root = install.InstallRoot ?? throw new InvalidOperationException("请先设置安装目录。");
+        await using var lease = await LockRootsAsync(root, peer?.InstallRoot, token);
+        EnsureNotRunning(gameId);
+        return await SharingEngine(gameId).UnshareAsync(root, [], token);
+    }
+    private async Task<RootLeases> LockRootsAsync(string root, string? peer, CancellationToken token)
+    {
+        var leases = new List<Lease>();
+        try
+        {
+            foreach (var path in new[] { root, peer }.Where(p => p is not null).Select(p => Path.GetFullPath(p!))
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+                leases.Add(await LockAsync(path, token));
+            return new(leases);
+        }
+        catch { foreach (var lease in leases) await lease.DisposeAsync(); throw; }
+    }
+    private sealed class RootLeases(List<Lease> leases) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync() { foreach (var lease in leases.AsEnumerable().Reverse()) await lease.DisposeAsync(); }
     }
     private sealed class ByteProgress(Action<long> action) : IProgress<long> { public void Report(long value) => action(value); }
 }

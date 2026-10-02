@@ -22,6 +22,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         public bool Syncing;
         public bool Preloading;
         public bool CancelRequested;
+        public bool Paused, LastWasPreload;
         public string Download = "";
         public bool Busy;
         public CancellationTokenSource? Operation;
@@ -76,7 +77,8 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
     public string SpeedText => Current.Speed;
     public string DownloadText => Current.Download;
     public bool CanCancel => HasSelectedChannel && (Current.Syncing || Current.Preloading || _launcher.SelectedEndfieldInstallation?.MaintenanceInProgress == true);
-    public Microsoft.UI.Xaml.Visibility DownloadVisibility => _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield && (Current.Syncing || Current.Preloading) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public Microsoft.UI.Xaml.Visibility DownloadVisibility => _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield && (Current.Syncing || Current.Preloading || Current.Paused) ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public bool IsIndeterminate => Current.Busy && Current.StageKind != EndfieldMaintenanceStage.Downloading;
     public bool IsBusy => Current.Busy;
     public bool HasTrustedPlan => Current.HasTrustedPlan;
     public bool HasUpdate => Current.HasUpdate;
@@ -122,9 +124,20 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
 
     public Task SelectChannelAsync(EndfieldChannel channel) => _launcher.SelectEndfieldChannelAsync(channel);
 
-    public async Task SetRootAsync(string root)
+    public async Task SetRootAsync(string root, bool createDirectory = false)
     {
-        await _launcher.AssignEndfieldRootAsync(root);
+        var channel = Channel; var current = _launcher.SelectedEndfieldInstallation; var peer = _launcher.OtherEndfieldInstallation?.InstallRoot;
+        if (Current.Busy) return;
+        var full = Path.GetFullPath(root);
+        if (current?.MaintenanceInProgress == true && !string.Equals(current.InstallRoot, full, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("当前目录有未完成维护，请完成任务后再更改目录。");
+        await Task.Run(() =>
+        {
+            SafeGamePath.Resolve(full, "Endfield.exe"); HoYoSharingPolicy.ValidateIndependent(full, peer);
+            if (createDirectory) Directory.CreateDirectory(full);
+        });
+        if (Channel != channel) return;
+        await _launcher.AssignEndfieldRootAsync(full);
         Refresh();
     }
 
@@ -141,7 +154,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         {
             var installation = _launcher.GetOrCreateEndfieldInstallation(channel);
             var sourceVersion = installation.InstalledVersion;
-            var version = await _service.GetLatestVersionAsync(installation);
+            var version = await Task.Run(() => _service.GetLatestVersionAsync(installation));
             if (installation.InstalledVersion != sourceVersion) return;
             state.RemoteVersion = version;
             state.HasUpdate = !string.IsNullOrWhiteSpace(sourceVersion)
@@ -169,7 +182,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         {
             SetStage(channel, "正在读取官方文件列表并检查本地文件…");
             var installation = _launcher.GetOrCreateEndfieldInstallation(channel);
-            var (package, plan) = await _service.PlanAsync(installation, token);
+            var (package, plan) = await Task.Run(() => _service.PlanAsync(installation, token), token);
             var state = State(channel);
             state.RemoteVersion = package.Version;
             state.HasTrustedPlan = true;
@@ -202,7 +215,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                 state.LastSpeedAt = DateTimeOffset.UtcNow;
                 state.LastSpeedBytes = 0;
                 state.Speed = "";
-                var report = new Progress<EndfieldMaintenanceProgress>(item =>
+                var report = new MaintenanceProgress<EndfieldMaintenanceProgress>(item =>
                 {
                     if (token.IsCancellationRequested) return;
                     var target = State(item.Channel);
@@ -222,8 +235,8 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                         }
                         if (Channel == item.Channel) Refresh();
                     }
-                });
-                await _service.SyncAsync(installation, otherChannel, repairOnly, report, token);
+                }, item => item.Stage.ToString());
+                await Task.Run(() => _service.SyncAsync(installation, otherChannel, repairOnly, report, token), token);
                 await _launcher.PersistEndfieldInstallationAsync();
                 state.Stage = "文件校验完成";
                 state.HasUpdate = false;
@@ -245,7 +258,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             var installation = _launcher.GetOrCreateEndfieldInstallation(channel);
             try
             {
-                var patch = await _service.CheckPreloadAsync(installation, token);
+                var patch = await Task.Run(() => _service.CheckPreloadAsync(installation, token), token);
                 State(channel).Patch = patch;
                 State(channel).Preload = patch is null ? "未开放" : $"可预下载至 {patch.TargetVersion}";
                 installation.PreloadState = patch is null ? EndfieldPreloadState.NotOpen : EndfieldPreloadState.Available;
@@ -276,7 +289,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             State(channel).LastSpeedAt=DateTimeOffset.UtcNow;State(channel).LastSpeedBytes=0;State(channel).Speed="";
             installation.PreloadState = EndfieldPreloadState.Downloading;
             await _launcher.PersistEndfieldInstallationAsync();
-            var report = new Progress<EndfieldMaintenanceProgress>(item =>
+            var report = new MaintenanceProgress<EndfieldMaintenanceProgress>(item =>
             {
                 if(token.IsCancellationRequested) return;
                 var state = State(item.Channel);
@@ -287,10 +300,10 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                 state.Preload = $"{item.Message} · {item.CompletedFiles}/{item.TotalFiles}";
                 state.Progress = item.TotalBytes > 0 ? 100d * item.CompletedBytes / item.TotalBytes : 0;
                 if (Channel == item.Channel) Refresh();
-            });
+            }, item => item.Stage.ToString());
             try
             {
-                await _service.PreloadAsync(installation, patch, report, token);
+                await Task.Run(() => _service.PreloadAsync(installation, patch, report, token), token);
             }
             catch (OperationCanceledException)
             {
@@ -327,7 +340,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         }
         try
         {
-            var summary = await _service.GetSharingAsync(first, second);
+            var summary = await Task.Run(() => _service.GetSharingAsync(first, second));
             State(channel).Sharing = $"硬链接 {summary.FileCount} 个 · 共享 {FormatBytes(summary.SharedBytes)} · 预计节省 {FormatBytes(summary.EstimatedSavedBytes)}";
         }
         catch (Exception)
@@ -351,7 +364,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                 if (Channel == channel) Refresh();
                 return;
             }
-            var summary = await _service.OptimizeAsync(first, second, token);
+            var summary = await Task.Run(() => _service.OptimizeAsync(first, second, token), token);
             State(channel).Sharing = $"硬链接 {summary.FileCount} 个 · 共享 {FormatBytes(summary.SharedBytes)} · 预计节省 {FormatBytes(summary.EstimatedSavedBytes)}";
             if (Channel == channel) Refresh();
         });
@@ -364,7 +377,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         await RunBusyAsync(channel, async token =>
         {
             var installation = _launcher.GetOrCreateEndfieldInstallation(channel);
-            var count = await _service.UnshareAsync(installation, token);
+            var count = await Task.Run(() => _service.UnshareAsync(installation, token), token);
             State(channel).Sharing = $"已解除 {count} 个硬链接，当前渠道文件独立";
             if (Channel == channel) Refresh();
         });
@@ -375,6 +388,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
     {
         if(!HasSelectedChannel)return;
         var channel=Channel;var state=State(channel);
+        preload |= state.Preloading || state.Paused && state.LastWasPreload;
         if(state.Busy){state.CancelRequested=true;state.Operation?.Cancel();return;}
         await ClearCancelledAsync(channel,preload);
     }
@@ -383,9 +397,9 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         var installation=_launcher.GetOrCreateEndfieldInstallation(channel);
         try
         {
-            var result=await _service.CancelTaskAsync(installation,preload);
+            var result=await Task.Run(() => _service.CancelTaskAsync(installation,preload));
             await _launcher.PersistEndfieldInstallationAsync();
-            var state=State(channel);state.Progress=0;state.Download="";state.Speed="";
+            var state=State(channel);state.Paused=false;state.Progress=0;state.Download="";state.Speed="";
             var message=$"已取消，删除 {result.DeletedFiles} 个缓存文件（{FormatBytes(result.DeletedBytes)}）";
             if(result.RetainedObjects>0)message+=$"；{result.RetainedObjects} 项仍被另一任务引用，已保留";
             if(!preload&&installation.MaintenanceInProgress)message+="。部分文件已应用，下次继续时将重新校验安装。";
@@ -400,7 +414,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
     {
         var state = State(channel);
         if (state.Busy) return;
-        state.CancelRequested = false;
+        state.CancelRequested = false; state.Paused = false; state.LastWasPreload = state.Preloading;
         state.Busy = true;
         state.Operation = new CancellationTokenSource();
         if (Channel == channel) Refresh();
@@ -408,7 +422,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             if(state.CancelRequested) await ClearCancelledAsync(channel,state.Preloading);
-            else SetStage(channel, "已暂停，继续下载时会使用已保存的进度。");
+            else { state.Paused = state.Syncing || state.Preloading; SetStage(channel, "已暂停，继续下载时会使用已保存的进度。"); }
         }
         catch (InvalidOperationException exception)
         {
@@ -470,6 +484,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         OnPropertyChanged(nameof(DownloadVisibility));
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(IsIndeterminate));
         OnPropertyChanged(nameof(HasSelectedChannel));
         OnPropertyChanged(nameof(CanPreload));
         OnPropertyChanged(nameof(CanRepair));

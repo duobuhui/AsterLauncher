@@ -16,8 +16,17 @@ internal sealed class HoYoMaintenanceUiFixture : HttpMessageHandler, IHoYoDistri
     private static HoYoRelease Release(string id) => new(id, "fixture", "1.0.0", BuiltInGameCatalog.CreateAdapters().Single(a => a.Definition.Id == id).Definition.ExecutableNames[0], id, "2.0.0");
     public Task<HoYoPackage> GetPackageAsync(string id, IReadOnlyCollection<string> languages, bool preload = false, CancellationToken token = default)
     {
+        if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_HOYO_SLOW_CHECK") == "1")
+            for (var i = 0; i < 60; i++) { token.ThrowIfCancellationRequested(); Thread.Sleep(50); }
         var r = Release(id); if (preload) r = r with { Version = "2.0.0" };
         return Task.FromResult(new HoYoPackage(r, [Entry(r.ExecutableName, _exe), Entry("fixture/data", _data)], preload ? "future" : "current"));
+    }
+    public Task<HoYoRelease?> GetReleaseAsync(string gameId, HoYoChannel channel, CancellationToken token = default)
+        => Task.FromResult<HoYoRelease?>(Release(gameId) with { Channel = channel });
+    public async Task<HoYoPackage> GetPackageAsync(string id, HoYoChannel channel, IReadOnlyCollection<string> languages, bool preload = false, CancellationToken token = default)
+    {
+        var package = await GetPackageAsync(id, languages, preload, token);
+        return package with { Release = package.Release with { Channel = channel } };
     }
     private static HoYoFile Entry(string path, byte[] bytes)
     {
@@ -41,7 +50,7 @@ internal sealed class HoYoMaintenanceUiFixture : HttpMessageHandler, IHoYoDistri
         public override long Length => bytes.Length; public override long Position { get => _position; set => throw new NotSupportedException(); }
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken token = default)
         {
-            await Task.Delay(45, token); var count = Math.Min(64 * 1024, Math.Min(buffer.Length, bytes.Length - _position));
+            await Task.Delay(Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_HOYO_SLOW_CHECK") == "1" ? 200 : 45, token); var count = Math.Min(64 * 1024, Math.Min(buffer.Length, bytes.Length - _position));
             bytes.AsMemory(_position, count).CopyTo(buffer); _position += count; return count;
         }
         public override int Read(byte[] buffer, int offset, int count) => ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();

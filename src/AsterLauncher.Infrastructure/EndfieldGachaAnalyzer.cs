@@ -161,7 +161,13 @@ internal static class EndfieldGachaAnalyzer
                     PoolVersion: last.PoolVersion,
                     SeriesPaidDrawCount: seriesPaidCount,
                     SeriesUpRecorded: seriesUpRecorded,
-                    SeriesKey: definition.UpSeries);
+                    SeriesKey: definition.UpSeries) with
+                {
+                    DateRangeText = EndfieldBannerDetails.Resolve(last.PoolName, last.PoolVersion, definition.Category)?.Dates
+                        ?? (definition.Category == EndfieldPoolCategory.Standard ? "常驻" : ""),
+                    AnnouncementUri = EndfieldBannerDetails.Resolve(last.PoolName, last.PoolVersion, definition.Category)?.Source,
+                    SignatureWeapon = AnalyzeSignatureWeapon(archive, last.PoolName, last.PoolVersion, definition.Category)
+                };
             })
             .OrderBy(item => item.Category == EndfieldPoolCategory.Standard ? 1 : 0)
             .ThenByDescending(item => orderedDraws.Last(draw =>
@@ -235,6 +241,38 @@ internal static class EndfieldGachaAnalyzer
             pity) { WeaponPools = AnalyzeWeapons(archive) };
     }
 
+    private static EndfieldSignatureWeaponAnalysis? AnalyzeSignatureWeapon(JsonObject archive, string name, string? version, EndfieldPoolCategory category)
+    {
+        var detail = EndfieldBannerDetails.Resolve(name, version, category);
+        if (detail is null) return null;
+        var isRefactor = category == EndfieldPoolCategory.Refactor;
+        var records = (archive["weapons"] as JsonArray ?? []).OfType<JsonObject>()
+            .Where(r => (ReadText(r, "kind") is not string kind || kind.Equals("draw", StringComparison.OrdinalIgnoreCase))
+                && ReadLong(r, "rarity") > 0
+                && WeaponPoolMatches(ReadText(r, "poolName", "pool_name") ?? "", detail.WeaponPool)
+                && (!isRefactor || PhaseMatches(r, version, name)))
+            .OrderBy(r => NormalizeTimestamp(ReadLong(r, "gachaTs", "gacha_ts"))).ThenBy(r => ReadLong(r, "seqId", "seq_id")).ToArray();
+        var results = records.Select((r, i) => new { Record = r, Position = i + 1 }).Where(r => ReadLong(r.Record, "rarity") == 6)
+            .Select(r => new EndfieldWeaponResult(ReadText(r.Record, "weaponName", "weapon_name", "nameText", "name") ?? "未知武器",
+                NormalizeWeaponName(ReadText(r.Record, "weaponName", "weapon_name", "nameText", "name") ?? "") == detail.Weapon,
+                r.Position, ToDateTime(NormalizeTimestamp(ReadLong(r.Record, "gachaTs", "gacha_ts")))))
+            .Reverse().ToArray();
+        return new(detail.Weapon, detail.WeaponPool + (isRefactor ? $" #{version ?? EndfieldPoolCatalog.RefactorPhaseNumber(name, null).ToString()}" : ""),
+            records.Length, results.Count(r => r.IsFeatured), results, isRefactor);
+    }
+    private static long NormalizeTimestamp(long value) => value is > 0 and < 100_000_000_000 ? value * 1000 : value;
+    private static string NormalizeWeaponName(string value) => value.Split(['（', '('])[0].Trim();
+    private static bool WeaponPoolMatches(string actual, string expected)
+    {
+        var name = EndfieldPoolCatalog.RefactorSeriesName(actual).Replace("重构申领", "", StringComparison.Ordinal).Trim();
+        return name == expected;
+    }
+    private static bool PhaseMatches(JsonObject record, string? version, string name)
+    {
+        var expected = EndfieldPoolCatalog.RefactorPhaseNumber(name, version);
+        var actual = EndfieldPoolCatalog.RefactorPhaseNumber(ReadText(record, "poolName", "pool_name") ?? "", ReadText(record, "poolVersion", "pool_version"));
+        return expected > 0 && expected == actual;
+    }
     private static IReadOnlyList<EndfieldWeaponPoolStatistics> AnalyzeWeapons(JsonObject archive)
     {
         return (archive["weapons"] as JsonArray ?? []).OfType<JsonObject>()

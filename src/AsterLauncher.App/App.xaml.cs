@@ -139,6 +139,12 @@ public partial class App : Application
             LauncherDataPaths.ResolveDataDirectory(),
             provider.GetRequiredService<ILogger<WallpaperUpdateService>>()));
 
+#if DEBUG
+        if (EndfieldMaintenanceUiFixture.Enabled) services.AddSingleton<IEndfieldDisplayStore, EndfieldDisplayUiFixture>();
+        else
+#endif
+        services.AddSingleton<IEndfieldDisplayStore, EndfieldRegistryDisplayStore>();
+        services.AddSingleton(provider => new EndfieldDisplayService(provider.GetRequiredService<IEndfieldDisplayStore>(), LauncherDataPaths.ResolveDataDirectory()));
         services.AddSingleton<LauncherViewModel>();
         services.AddSingleton<GameLibraryViewModel>();
         services.AddSingleton<LogViewModel>();

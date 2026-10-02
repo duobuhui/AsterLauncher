@@ -89,6 +89,8 @@ public sealed class LauncherViewModel : ObservableObject
                 _configuration.SelectedProfileId = value?.Id;
                 if (CurrentGame?.Id == BuiltInGameIds.Endfield && SelectedEndfieldInstallation is { } installation)
                     installation.SelectedLaunchProfileId = value?.Id;
+                if (CurrentGame is { } game && HoYoInstallationIdentity.HasChannels(game.Id))
+                    game.State.HoYoInstallation!.SelectedLaunchProfileId = value?.Id;
                 RefreshLaunchSequence();
                 OnPropertyChanged(nameof(CompanionSummary));
                 OnPropertyChanged(nameof(CanLaunch));
@@ -108,7 +110,7 @@ public sealed class LauncherViewModel : ObservableObject
     public bool IsLaunching => CurrentGame is not null && _activeLaunchGameIds.Contains(CurrentLaunchKey);
 
     private string CurrentLaunchKey => CurrentGame?.Id == BuiltInGameIds.Endfield
-        ? $"endfield:{SelectedEndfieldChannel}" : CurrentGame?.Id ?? string.Empty;
+        ? $"endfield:{SelectedEndfieldChannel}" : CurrentGame is { } game && HoYoInstallationIdentity.HasChannels(game.Id) ? $"{game.Id}:{game.State.SelectedHoYoChannel}" : CurrentGame?.Id ?? string.Empty;
 
     private void SetLaunching(string gameId, bool launching)
     {
@@ -195,6 +197,7 @@ public sealed class LauncherViewModel : ObservableObject
         _configuration.HiddenGameIds ??= [];
         _configuration.GameOrder ??= [];
         EnsureBuiltInStates();
+        foreach (var state in _configuration.Games.Where(state => HoYoDistributionProvider.Games.ContainsKey(state.GameId))) HoYoInstallationIdentity.Restore(state);
         RebuildGames();
         await RestoreEndfieldIdentityAsync();
         if (SelectedEndfieldChannel is EndfieldChannel.Official or EndfieldChannel.Bilibili)
@@ -258,6 +261,7 @@ public sealed class LauncherViewModel : ObservableObject
         }
 
         var found = results.FirstOrDefault(result => result.Kind == ScanResultKind.Found && result.Installation is not null);
+
         if (found?.Installation is not null)
         {
             ScanStatus = $"已找到 · {found.Source} · {found.Installation.ExecutablePath}";
@@ -300,9 +304,11 @@ public sealed class LauncherViewModel : ObservableObject
         var found = results.FirstOrDefault(result => result.Kind == ScanResultKind.Found && result.Installation is not null);
         if (game.Id == BuiltInGameIds.Endfield && SelectedEndfieldChannel != EndfieldChannel.Unknown)
             return results; // Generic discovery does not prove the selected server.
+        if (HoYoInstallationIdentity.HasChannels(game.Id) && game.State.SelectedHoYoChannel != HoYoChannel.Unknown) return results;
         if (found?.Installation is not null)
         {
             game.State.ExecutablePath = found.Installation.ExecutablePath;
+            PreserveUnidentifiedHoYoPath(game, found.Installation.ExecutablePath);
             UpdateSavedPath(game);
             game.Refresh();
             OnPropertyChanged(nameof(CanLaunch));
@@ -378,6 +384,7 @@ public sealed class LauncherViewModel : ObservableObject
             else
             {
                 CurrentGame.State.ExecutablePath = result.Installation.ExecutablePath;
+                PreserveUnidentifiedHoYoPath(CurrentGame, result.Installation.ExecutablePath);
                 UpdateSavedPath(CurrentGame);
             }
             CurrentGame.Refresh();
@@ -412,6 +419,7 @@ public sealed class LauncherViewModel : ObservableObject
             var result = builtIn.Adapter.ValidateManualExecutable(executablePath);
             if (result.Kind != ScanResultKind.Found || result.Installation is null) return result;
             builtIn.State.ExecutablePath = result.Installation.ExecutablePath;
+            PreserveUnidentifiedHoYoPath(builtIn, result.Installation.ExecutablePath);
             if (builtIn.Id == BuiltInGameIds.Endfield)
             {
                 _configuration.SelectedEndfieldChannel = EndfieldChannel.Unknown;
@@ -681,6 +689,7 @@ public sealed class LauncherViewModel : ObservableObject
         {
             GameId = CurrentGame.Id,
             EndfieldInstallationId = CurrentGame.Id == BuiltInGameIds.Endfield ? SelectedEndfieldInstallation?.InstallationId : null,
+            HoYoInstallationId = HoYoInstallationIdentity.HasChannels(CurrentGame.Id) && CurrentGame.State.SelectedHoYoChannel != HoYoChannel.Unknown ? CurrentGame.State.HoYoInstallation?.InstallationId : null,
             Name = $"新方案 {index}",
             IsDefault = false
         };
@@ -885,7 +894,10 @@ public sealed class LauncherViewModel : ObservableObject
             return;
         }
 
+        if (HoYoInstallationIdentity.HasChannels(CurrentGame.Id) && CurrentGame.State.SelectedHoYoChannel != HoYoChannel.Unknown)
+            HoYoInstallationIdentity.EnsureProfile(_configuration, CurrentGame.State, CurrentGame.State.HoYoInstallation!);
         foreach (var profile in _configuration.LaunchProfiles.Where(profile => profile.GameId == CurrentGame.Id
+            && (HoYoInstallationIdentity.HasChannels(CurrentGame.Id) && CurrentGame.State.SelectedHoYoChannel != HoYoChannel.Unknown ? profile.HoYoInstallationId == CurrentGame.State.HoYoInstallation!.InstallationId : profile.HoYoInstallationId is null)
             && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldChannel == EndfieldChannel.Unknown
                 ? profile.EndfieldInstallationId is null : profile.EndfieldInstallationId == SelectedEndfieldInstallation?.InstallationId)))
         {
@@ -893,7 +905,7 @@ public sealed class LauncherViewModel : ObservableObject
         }
 
         var profileId = CurrentGame.Id == BuiltInGameIds.Endfield && SelectedEndfieldChannel != EndfieldChannel.Unknown
-            ? SelectedEndfieldInstallation?.SelectedLaunchProfileId : _configuration.SelectedProfileId;
+            ? SelectedEndfieldInstallation?.SelectedLaunchProfileId : HoYoInstallationIdentity.HasChannels(CurrentGame.Id) && CurrentGame.State.SelectedHoYoChannel != HoYoChannel.Unknown ? CurrentGame.State.HoYoInstallation?.SelectedLaunchProfileId : _configuration.SelectedProfileId;
         SelectedProfile = CurrentProfiles.FirstOrDefault(profile => profile.Id == profileId)
             ?? CurrentProfiles.FirstOrDefault(profile => profile.IsDefault)
             ?? CurrentProfiles.FirstOrDefault();
@@ -1063,16 +1075,44 @@ SafeGamePath.Resolve(root, "Endfield.exe");
         || (HoYoDistributionProvider.Games.ContainsKey(game.Id) && game.ExecutablePath is { } exe
             && File.Exists(Path.Combine(Path.GetDirectoryName(exe)!, ".aster-hoyo-maintenance.json")));
 
-    public async Task PersistHoYoInstallationAsync(GameCardViewModel game, bool completed = false)
+    private static void PreserveUnidentifiedHoYoPath(GameCardViewModel game, string executable)
     {
-        if (completed && game.State.HoYoInstallation is { InstallRoot: { } root } installation)
+        if (!HoYoInstallationIdentity.HasChannels(game.Id)) return;
+        var install = HoYoInstallationIdentity.Get(game.State, HoYoChannel.Unknown);
+        install.ExecutablePath = executable; install.InstallRoot = Path.GetDirectoryName(executable);
+        game.State.SelectedHoYoChannel = HoYoChannel.Unknown; game.State.HoYoInstallation = install;
+    }
+    public HoYoInstallation? OtherHoYoInstallation(GameCardViewModel game) => game.State.HoYoInstallations
+        .FirstOrDefault(i => i.Channel is HoYoChannel.Official or HoYoChannel.Bilibili && i.Channel != game.State.SelectedHoYoChannel && i.InstallRoot is not null);
+    public async Task SelectHoYoChannelAsync(GameCardViewModel game, HoYoChannel channel)
+    {
+        if (!HoYoInstallationIdentity.HasChannels(game.Id)) return;
+        game.State.SelectedHoYoChannel = channel;
+        game.State.HoYoInstallation = HoYoInstallationIdentity.Get(game.State, channel);
+        game.State.ExecutablePath = game.State.HoYoInstallation.ExecutablePath;
+        UpdateSavedPath(game); game.Refresh();
+        if (ReferenceEquals(CurrentGame, game))
         {
-            var release = game.Adapter.Definition.ExecutableNames.FirstOrDefault(name => File.Exists(SafeGamePath.Resolve(root, name)));
-            if (release is not null) { game.State.ExecutablePath = SafeGamePath.Resolve(root, release); UpdateSavedPath(game); }
+            RefreshProfiles(); RefreshLaunchSequence(); OnPropertyChanged(nameof(CanLaunch));
+            OnPropertyChanged(nameof(CurrentGame)); OnPropertyChanged(nameof(LaunchButtonText));
         }
-        UpdateSavedPath(game);
-        game.Refresh();
-        if (ReferenceEquals(CurrentGame, game)) { RefreshLaunchSequence(); OnPropertyChanged(nameof(CanLaunch)); }
+        await _configurationStore.SaveAsync(_configuration);
+    }
+    public Task PersistHoYoInstallationAsync(GameCardViewModel game, bool completed = false)
+        => PersistHoYoInstallationAsync(game, game.State.HoYoInstallation!, completed);
+    public async Task PersistHoYoInstallationAsync(GameCardViewModel game, HoYoInstallation installation, bool completed = false)
+    {
+        if (completed && installation.InstallRoot is { } root)
+        {
+            installation.ExecutablePath = await Task.Run(() => game.Adapter.Definition.ExecutableNames
+                .Select(name => SafeGamePath.Resolve(root, name)).FirstOrDefault(File.Exists));
+        }
+        if (ReferenceEquals(installation, game.State.HoYoInstallation))
+        {
+            game.State.ExecutablePath = installation.ExecutablePath;
+            UpdateSavedPath(game); game.Refresh();
+            if (ReferenceEquals(CurrentGame, game)) { RefreshLaunchSequence(); OnPropertyChanged(nameof(CanLaunch)); }
+        }
         await _configurationStore.SaveAsync(_configuration);
     }
     private static string GetScanLabel(ScanResultKind kind) => kind switch

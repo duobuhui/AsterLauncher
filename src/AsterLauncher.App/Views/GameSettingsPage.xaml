@@ -2,14 +2,49 @@
     x:Class="AsterLauncher.App.Views.GameSettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:infra="using:AsterLauncher.Infrastructure"
     Loaded="Page_OnLoaded">
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Padding="28,24" Spacing="16" HorizontalAlignment="Stretch">
             <StackPanel Spacing="4">
                 <TextBlock Text="游戏设置" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
-                <TextBlock Text="设置游戏程序、名称和背景图片" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                <TextBlock Text="画面设置、游戏照片和展示信息" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" />
             </StackPanel>
 
+            <Border Visibility="{x:Bind EndfieldSettings.Visibility, Mode=OneWay}" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
+                <StackPanel Spacing="12">
+                    <Grid><TextBlock Text="终末地画面设置" FontSize="20" FontWeight="SemiBold" /><Button Content="重新读取" HorizontalAlignment="Right" Click="ReadDisplay_OnClick" /></Grid>
+                    <TextBlock Text="官服和 B服共用画面设置。请先关闭两服游戏；保存后在下次启动生效。" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="13" />
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <NumberBox Header="宽度" Value="{x:Bind EndfieldSettings.Width, Mode=TwoWay}" Minimum="640" Maximum="16384" Width="140" SpinButtonPlacementMode="Compact" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
+                        <NumberBox Header="高度" Value="{x:Bind EndfieldSettings.Height, Mode=TwoWay}" Minimum="480" Maximum="16384" Width="140" SpinButtonPlacementMode="Compact" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
+                        <ToggleSwitch Header="窗口模式" OnContent="全屏窗口" OffContent="窗口" IsOn="{x:Bind EndfieldSettings.Fullscreen, Mode=TwoWay}" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" ><ToggleSwitch.Resources><StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="LaunchButtonBrush" /><StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="LaunchButtonBrush" /><StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="ThemeAccentSoftBrush" /></ToggleSwitch.Resources></ToggleSwitch>
+                        <Button Content="保存分辨率" VerticalAlignment="Bottom" Tag="resolution" Style="{StaticResource ThemePrimaryButtonStyle}" Click="DisplayAction_OnClick" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
+                    </StackPanel>
+                    <Border Height="1" Background="{ThemeResource GlassEdgeBrush}" />
+                    <TextBlock Text="画质方案" FontWeight="SemiBold" />
+                    <TextBlock Text="先在游戏内调整画质，退出后重新读取并保存到方案。方案保留帧率、纹理、阴影、抗锯齿等游戏已有设置，不改变分辨率。更新游戏后如选项发生变化，请重新保存方案。" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <NumberBox Value="{x:Bind EndfieldSettings.PresetSlot, Mode=TwoWay}" Minimum="1" Maximum="3" Width="110" SpinButtonPlacementMode="Inline" AutomationProperties.Name="画质方案编号" />
+                        <Button Content="保存当前画质" Tag="save-quality" Click="DisplayAction_OnClick" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
+                        <Button Content="应用方案" Tag="apply-quality" Click="DisplayAction_OnClick" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
+                        <Button Content="撤销上次修改" Tag="restore" Click="DisplayAction_OnClick" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock Text="{x:Bind EndfieldSettings.Status, Mode=OneWay}" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                </StackPanel>
+            </Border>
+            <Border Visibility="{x:Bind EndfieldSettings.Visibility, Mode=OneWay}" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
+                <StackPanel Spacing="10">
+                    <Grid><TextBlock Text="游戏照片" FontSize="20" FontWeight="SemiBold" /><StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"><Button Content="选择文件夹" Click="SelectPhotoDirectory_OnClick" /><Button Content="打开文件夹" Click="OpenPhotoDirectory_OnClick" /><Button Content="刷新" Click="ReadDisplay_OnClick" /></StackPanel></Grid>
+                    <TextBlock Text="{x:Bind EndfieldSettings.PhotoDirectory, Mode=OneWay}" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                    <TextBlock Text="默认读取两服共用的照片目录。选择其他文件夹只改变本渠道的展示来源，原照片保持原样。点击照片用系统图片查看器打开。" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                    <TextBlock Text="{x:Bind EndfieldSettings.PhotoSummary, Mode=OneWay}" FontSize="13" />
+                    <GridView MaxHeight="400" ItemsSource="{x:Bind EndfieldSettings.Photos, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Photo_OnClick" SelectionMode="None" HorizontalAlignment="Stretch">
+                        <GridView.ItemTemplate><DataTemplate x:DataType="infra:EndfieldPhoto"><StackPanel Width="220" Spacing="5" Margin="0,0,8,8"><Border CornerRadius="8" Background="{ThemeResource HeroGlassBrush}"><Image Height="124" Stretch="Uniform" Loaded="PhotoImage_OnLoaded" Unloaded="PhotoImage_OnUnloaded" /></Border><TextBlock Text="{x:Bind Name}" FontSize="12" TextTrimming="CharacterEllipsis" /><TextBlock Text="{x:Bind DateText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel></DataTemplate></GridView.ItemTemplate>
+                    </GridView>
+                </StackPanel>
+            </Border>
+            <Expander x:Name="PresentationExpander" Header="游戏信息与背景" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
             <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
                 <Grid ColumnSpacing="18" RowSpacing="14">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -41,7 +76,7 @@
                     </StackPanel>
                 </Grid>
             </Border>
-
+            </Expander>
             <InfoBar x:Name="ResultInfo" IsOpen="False" IsClosable="True" />
             <TextBlock x:Name="DownloadDescriptionText" Style="{StaticResource MutedTextStyle}" />
         </StackPanel>

@@ -3,6 +3,10 @@ using AsterLauncher.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.System;
+using AsterLauncher.Infrastructure;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Storage;
+using Windows.Storage.FileProperties;
 
 namespace AsterLauncher.App.Views;
 
@@ -11,18 +15,61 @@ public sealed partial class GameSettingsPage : Page
     private readonly LauncherViewModel _viewModel;
     private readonly IFilePickerService _filePicker;
 
-    public GameSettingsPage(LauncherViewModel viewModel, IFilePickerService filePicker)
+    public GameSettingsPage(LauncherViewModel viewModel, IFilePickerService filePicker, EndfieldDisplayService display)
     {
         _viewModel = viewModel;
         _filePicker = filePicker;
+        EndfieldSettings = new(viewModel, display);
         InitializeComponent();
     }
 
-    private void Page_OnLoaded(object sender, RoutedEventArgs e) => RefreshForm();
+    public EndfieldSettingsViewModel EndfieldSettings { get; }
+    private async void Page_OnLoaded(object sender, RoutedEventArgs e)
+    {
+        RefreshForm();
+        await EndfieldSettings.RefreshAsync();
+    }
+    private async void ReadDisplay_OnClick(object sender, RoutedEventArgs e) => await EndfieldSettings.RefreshAsync();
+    private async void DisplayAction_OnClick(object sender, RoutedEventArgs e)
+    {
+        try { await EndfieldSettings.ExecuteAsync((sender as FrameworkElement)?.Tag?.ToString() ?? ""); }
+        catch (Exception exception) { ResultInfo.Title = "设置未保存"; ResultInfo.Message = exception.Message; ResultInfo.IsOpen = true; }
+    }
+    private async void SelectPhotoDirectory_OnClick(object sender, RoutedEventArgs e)
+    {
+        var path = await _filePicker.PickGameDirectoryAsync(App.MainWindow);
+        if (path is not null) await EndfieldSettings.SelectPhotoDirectoryAsync(path);
+    }
+    private async void OpenPhotoDirectory_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (Directory.Exists(EndfieldSettings.PhotoDirectory))
+            await Launcher.LaunchFolderAsync(await StorageFolder.GetFolderFromPathAsync(EndfieldSettings.PhotoDirectory));
+    }
+    private async void Photo_OnClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is EndfieldPhoto photo && File.Exists(photo.Path))
+            await Launcher.LaunchFileAsync(await Windows.Storage.StorageFile.GetFileFromPathAsync(photo.Path));
+    }
+    private async void PhotoImage_OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Image image || image.DataContext is not EndfieldPhoto photo) return;
+        try
+        {
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(photo.Path);
+            using var thumbnail = await file.GetThumbnailAsync(ThumbnailMode.PicturesView, 320, ThumbnailOptions.UseCurrentScale);
+            if (thumbnail is null || !Equals(image.DataContext, photo)) return;
+            var bitmap = new BitmapImage();
+            await bitmap.SetSourceAsync(thumbnail);
+            if (Equals(image.DataContext, photo)) image.Source = bitmap;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException) { image.Source = null; }
+    }
+    private void PhotoImage_OnUnloaded(object sender, RoutedEventArgs e) { if (sender is Image image) image.Source = null; }
 
     private void RefreshForm()
     {
         var game = _viewModel.CurrentGame;
+        PresentationExpander.IsExpanded = game?.Id != Core.BuiltInGameIds.Endfield;
         GameNameText.Text = game?.DisplayName ?? "未选择游戏";
         ExecutablePathBox.Text = game?.State.ExecutablePath ?? string.Empty;
         DisplayNameBox.Text = game?.DisplayName ?? string.Empty;

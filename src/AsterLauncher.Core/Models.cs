@@ -102,6 +102,7 @@ public sealed record InstallScanResult(
 public sealed class LaunchProfile
 {
     public Guid? EndfieldInstallationId { get; set; }
+    public Guid? HoYoInstallationId { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public string GameId { get; set; } = string.Empty;
@@ -185,6 +186,8 @@ public sealed class CompanionTool
 public sealed class GameUserState
 {
     public HoYoInstallation? HoYoInstallation { get; set; }
+    public List<HoYoInstallation> HoYoInstallations { get; set; } = [];
+    public HoYoChannel SelectedHoYoChannel { get; set; } = HoYoChannel.Official;
     public string GameId { get; set; } = string.Empty;
 
     public string? DisplayNameOverride { get; set; }

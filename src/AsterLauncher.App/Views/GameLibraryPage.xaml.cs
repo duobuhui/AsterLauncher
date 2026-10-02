@@ -115,6 +115,18 @@ public sealed partial class GameLibraryPage : Page
                 else if (_hoyo.IsSupported) await _hoyo.CheckVersionAsync();
             });
 #if DEBUG
+            if (HoYoMaintenanceUiFixture.Enabled && Content is Grid fixtureHost)
+            {
+                var probeMenu = new Button { Width = 1, Height = 1, Opacity = 0.01, IsTabStop = false,
+                    HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(probeMenu, "验证游戏右键菜单");
+                probeMenu.Click += (_, _) =>
+                {
+                    if (_launcher.CurrentGame is { } game && GameList.ContainerFromItem(game) is FrameworkElement item)
+                        CreateGameContextMenu(game).ShowAt(item);
+                };
+                fixtureHost.Children.Add(probeMenu);
+            }
             if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_EXPANDED") == "1")
                 DispatcherQueue.TryEnqueue(() => SetLaunchExpanded(true));
             if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_CONTEXT") == "1")
@@ -342,6 +354,28 @@ public sealed partial class GameLibraryPage : Page
             menu.Items.Add(channels);
             Add("检查游戏更新", async () => { await SelectContextGameAsync(game); await _endfield.CheckVersionAsync(); });
         }
+        if (HoYoInstallationIdentity.HasChannels(game.Id))
+        {
+            var channels = new MenuFlyoutSubItem { Text = "服务器" };
+            foreach (var channel in new[] { HoYoChannel.Official, HoYoChannel.Bilibili })
+            {
+                var item = new ToggleMenuFlyoutItem { Text = channel == HoYoChannel.Official ? "官服" : "哔哩哔哩服", Tag = channel };
+                item.Click += async (_, _) =>
+                {
+                    await SelectContextGameAsync(game);
+                    await _launcher.SelectHoYoChannelAsync(game, channel);
+                    _hoyo.Refresh(); UpdateEndfieldControls(); await _hoyo.CheckVersionAsync();
+                };
+                channels.Items.Add(item);
+            }
+            menu.Opening += (_, _) =>
+            {
+                foreach (var item in channels.Items.OfType<ToggleMenuFlyoutItem>())
+                    item.IsChecked = item.Tag is HoYoChannel channel && game.State.SelectedHoYoChannel == channel;
+            };
+            menu.Items.Add(channels);
+            Add("检查游戏更新", async () => { await SelectContextGameAsync(game); await _hoyo.CheckVersionAsync(); });
+        }
         if (game.Id is BuiltInGameIds.Endfield or BuiltInGameIds.GenshinImpact
             or BuiltInGameIds.HonkaiStarRail or BuiltInGameIds.ZenlessZoneZero)
             Add("抽卡记录", async () => { await SelectContextGameAsync(game); ShowFeature("gacha"); });
@@ -416,28 +450,38 @@ public sealed partial class GameLibraryPage : Page
 
     private async Task StartEndfieldSyncAsync()
     {
-        try { await _launcher.EnsureEndfieldDefaultRootAsync(); }
-        catch (Exception exception) when (exception is InvalidOperationException or InvalidDataException or IOException)
+        if (_downloadConfirmationOpen || _endfield.IsBusy || !_endfield.HasSelectedChannel) return;
+        var game = _launcher.CurrentGame; var channel = _endfield.Channel;
+        _downloadConfirmationOpen = true;
+        try
         {
-            await ShowMessageAsync("安装目录不可用", exception.Message);
-            return;
-        }
-        var channel = _endfield.Channel;
-        await _endfield.CheckAsync();
-        if (_endfield.Channel != channel || !_endfield.HasTrustedPlan) return;
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = "安装或更新当前渠道？",
-            Content = _endfield.PlanText + "\n将只修改当前渠道的独立目录。大文件下载可能持续较久。",
-            PrimaryButtonText = "开始",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Close
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            var suggested = _launcher.SelectedEndfieldInstallation?.InstallRoot;
+            if (suggested is null && !string.IsNullOrWhiteSpace(_launcher.GameDownloadDirectory))
+                suggested = Path.Combine(_launcher.GameDownloadDirectory, "AsterLauncher", "Endfield", channel == EndfieldChannel.Official ? "Official" : "Bilibili");
+            var path = new TextBox { Header = "安装目录", Text = suggested ?? "", PlaceholderText = "选择或输入当前服的独立目录" };
+            var choose = new Button { Content = "选择目录", Style = (Style)Application.Current.Resources["FloatingButtonStyle"], VerticalAlignment = VerticalAlignment.Bottom };
+            choose.Click += async (_, _) => { var selected = await _filePicker.PickGameDirectoryAsync(App.MainWindow); if (selected is not null) path.Text = selected; };
+            var location = new Grid { ColumnSpacing = 8 };
+            location.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            location.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(choose, 1); location.Children.Add(path); location.Children.Add(choose);
+            var content = new StackPanel { MinWidth = 420, Spacing = 12 };
+            content.Children.Add(new TextBlock { Text = _endfield.ChannelText });
+            content.Children.Add(location);
+            content.Children.Add(new TextBlock { Text = "确认后检查本地文件和所需空间。两服使用独立目录，同卷 NTFS 可自动复用已校验的相同资源；暂停保留进度，取消会清理本次任务的下载缓存。", TextWrapping = TextWrapping.Wrap, FontSize = 12 });
+            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+                Title = game?.IsInstalled == true ? "更新游戏" : "下载游戏", Content = content,
+                PrimaryButtonText = "开始", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary };
+            dialog.PrimaryButtonClick += (_, args) => { if (string.IsNullOrWhiteSpace(path.Text)) { args.Cancel = true; path.Focus(FocusState.Programmatic); } };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || !ReferenceEquals(game, _launcher.CurrentGame) || _endfield.Channel != channel) return;
+            await _endfield.SetRootAsync(path.Text.Trim(), true);
+            if (!ReferenceEquals(game, _launcher.CurrentGame) || _endfield.Channel != channel) return;
+            _downloadConfirmationOpen = false;
             await _endfield.SyncAsync(false);
+        }
+        catch (Exception error) { await ShowMessageAsync("无法开始下载", error is InvalidOperationException or IOException or InvalidDataException ? error.Message : "请检查目录和网络后重试。"); }
+        finally { _downloadConfirmationOpen = false; }
     }
-
     private async void HoYoChooseRoot_OnClick(object sender, RoutedEventArgs e)
     {
         var root = await _filePicker.PickGameDirectoryAsync(App.MainWindow);
@@ -445,6 +489,9 @@ public sealed partial class GameLibraryPage : Page
         try { await _hoyo.SetRootAsync(root); }
         catch (Exception ex) { await ShowMessageAsync("安装目录不可用", ex.Message); }
     }
+    private async void HoYoScanSharing_OnClick(object sender, RoutedEventArgs e) => await _hoyo.ScanSharingAsync();
+    private async void HoYoOptimize_OnClick(object sender, RoutedEventArgs e) => await _hoyo.OptimizeAsync();
+    private async void HoYoUnshare_OnClick(object sender, RoutedEventArgs e) => await _hoyo.OptimizeAsync(true);
     private async void HoYoCheck_OnClick(object sender, RoutedEventArgs e) => await _hoyo.CheckAsync();
     private async void HoYoRepair_OnClick(object sender, RoutedEventArgs e)
     {
@@ -455,8 +502,8 @@ public sealed partial class GameLibraryPage : Page
         if (_hoyo.NeedsChannelConfirmation)
         {
             var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
-                Title = "确认安装渠道", Content = _hoyo.InstallRoot + "\n\n请确认这是国服官服安装。配置中的 channel=1 不能可靠区分所有国际服安装；B 服和国际服请使用对应官方启动器维护。",
-                PrimaryButtonText = "这是国服官服", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
+                Title = "确认安装渠道", Content = _hoyo.InstallRoot + "\n\n请确认这是" + _hoyo.ChannelText + "安装。维护将使用所选渠道的官方资源清单。",
+                PrimaryButtonText = "确认渠道", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close };
             var game = _launcher.CurrentGame;
             if (await dialog.ShowAsync() != ContentDialogResult.Primary || !ReferenceEquals(game, _launcher.CurrentGame)) return false;
             await _hoyo.ConfirmOfficialChannelAsync();
@@ -469,25 +516,72 @@ public sealed partial class GameLibraryPage : Page
         if (await ConfirmHoYoChannelAsync()) await _hoyo.PreloadAsync();
     }
     private async void HoYoCancelPreload_OnClick(object sender, RoutedEventArgs e) => await _hoyo.CancelAsync(true);
+    private bool _downloadConfirmationOpen;
     private async Task StartHoYoSyncAsync()
     {
+        if (_downloadConfirmationOpen || !_hoyo.CanSetRoot) return;
         var game = _launcher.CurrentGame;
-        try { await _hoyo.EnsureDefaultRootAsync(); }
-        catch (Exception ex) { await ShowMessageAsync("无法开始下载", ex.Message); return; }
-        await _hoyo.CheckAsync();
-        if (!ReferenceEquals(game, _launcher.CurrentGame) || !_hoyo.HasPlan) return;
-        var dialog = new ContentDialog
+        var install = game?.State.HoYoInstallation;
+        if (game is null || install is null) return;
+        _downloadConfirmationOpen = true;
+        var confirmationWatch = System.Diagnostics.Stopwatch.StartNew();
+        try
         {
-            XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
-            Title = game!.IsInstalled ? "更新游戏？" : "下载游戏？",
-            Content = _hoyo.InstallRoot + "\n\n" + _hoyo.PlanText + "\n\n此入口维护国服官服，请确认当前安装的渠道；不适用于 B 服或国际服。只下载缺失或校验不符的文件。下载完成后校验并应用；暂停保留进度，取消会删除此任务的下载缓存。",
-            PrimaryButtonText = "开始", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Close
-        };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary && ReferenceEquals(game, _launcher.CurrentGame))
-        {
+            var rootBox = new TextBox { Text = _hoyo.SuggestedRoot, Header = "安装目录", PlaceholderText = "选择或输入独立的游戏目录" };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(rootBox, "下载安装目录");
+            var browse = new Button { Content = "选择目录", Style = (Style)Application.Current.Resources["FloatingButtonStyle"] };
+            browse.Click += async (_, _) =>
+            {
+                var selected = await _filePicker.PickGameDirectoryAsync(App.MainWindow);
+                if (selected is not null) rootBox.Text = selected;
+            };
+            var languages = new[] { ("中文", "zh-cn"), ("英语", "en-us"), ("日语", "ja-jp"), ("韩语", "ko-kr") };
+            var audio = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+            var choices = languages.Select(language => new CheckBox { Content = language.Item1, Tag = language.Item2,
+                IsChecked = install.AudioLanguages.Contains(language.Item2), MinWidth = 0 }).ToArray();
+            foreach (var choice in choices) audio.Children.Add(choice);
+            var share = new CheckBox { Content = "复用另一服的相同资源", IsChecked = install.ShareResources,
+                Visibility = HoYoInstallationIdentity.HasChannels(game.Id) ? Visibility.Visible : Visibility.Collapsed };
+            var content = new StackPanel { Spacing = 10, MinWidth = 420 };
+            content.Children.Add(new TextBlock { Text = _hoyo.ChannelText, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            var location = new Grid { ColumnSpacing = 8 };
+            location.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            location.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            browse.VerticalAlignment = VerticalAlignment.Bottom; Grid.SetColumn(browse, 1);
+            location.Children.Add(rootBox); location.Children.Add(browse); content.Children.Add(location);
+            content.Children.Add(new TextBlock { Text = "下载语音" }); content.Children.Add(audio); content.Children.Add(share);
+            content.Children.Add(new TextBlock { Text = "确认后检查所需文件和磁盘空间，只下载缺失或损坏的内容。暂停保留进度，取消任务会删除不再被其他任务使用的缓存。",
+                TextWrapping = TextWrapping.Wrap, FontSize = 12 });
+            if (HoYoInstallationIdentity.HasChannels(game.Id))
+                content.Children.Add(new TextBlock { Text = "两服使用独立目录。同卷 NTFS 可共享已校验的资源包；登录组件、配置和缓存保持独立。使用官方启动器维护前，请先在“更多”中解除共享。",
+                    TextWrapping = TextWrapping.Wrap, FontSize = 12 });
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+                Title = game.IsInstalled ? "更新游戏" : "下载游戏",
+                Content = content, PrimaryButtonText = "开始", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary
+            };
+#if DEBUG
+            if (Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_HOYO_SLOW_CHECK") == "1")
+                dialog.Opened += (_, _) => _logger.LogInformation("Download confirmation opened after {Milliseconds} ms", confirmationWatch.ElapsedMilliseconds);
+#endif
+            dialog.PrimaryButtonClick += (_, args) =>
+            {
+                if (string.IsNullOrWhiteSpace(rootBox.Text)) { args.Cancel = true; rootBox.Focus(FocusState.Programmatic); }
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || !ReferenceEquals(game, _launcher.CurrentGame)
+                || !ReferenceEquals(install, game.State.HoYoInstallation)) return;
+            await _hoyo.SetRootAsync(rootBox.Text.Trim());
+            if (!ReferenceEquals(install, game.State.HoYoInstallation) || !ReferenceEquals(game, _launcher.CurrentGame)) return;
+            install.AudioLanguages = choices.Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
+            install.ShareResources = share.IsChecked == true;
+            await _hoyo.EnsureDefaultRootAsync();
             await _hoyo.ConfirmOfficialChannelAsync();
+            _downloadConfirmationOpen = false;
             await _hoyo.SyncAsync(false);
         }
+        catch (Exception ex) { await ShowMessageAsync("无法开始下载", ex is InvalidOperationException or IOException or InvalidDataException ? ex.Message : "请检查目录和网络后重试。"); }
+        finally { _downloadConfirmationOpen = false; }
     }
     private async void EndfieldRepair_OnClick(object sender, RoutedEventArgs e) => await _endfield.SyncAsync(true);
     private async void EndfieldCancel_OnClick(object sender, RoutedEventArgs e) { if (_hoyo.IsSupported) await _hoyo.CancelAsync(); else await _endfield.CancelAsync(); }

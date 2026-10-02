@@ -30,7 +30,15 @@ public sealed class GameLibraryViewModel : ObservableObject
         _launcher = launcher;
         _endfield = endfield;
         _hoyo = hoyo;
-        _hoyo.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(LaunchButtonText)); OnPropertyChanged(nameof(PrimaryProgress)); OnPropertyChanged(nameof(PrimaryActionGlyph)); OnPropertyChanged(nameof(PrimaryProgressVisibility)); };
+        _hoyo.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is nameof(HoYoMaintenanceViewModel.PrimaryActionText) or nameof(HoYoMaintenanceViewModel.Progress)
+                or nameof(HoYoMaintenanceViewModel.PrimaryActionGlyph) or nameof(HoYoMaintenanceViewModel.IsPrimaryDownloading))
+            {
+                OnPropertyChanged(nameof(LaunchButtonText)); OnPropertyChanged(nameof(PrimaryProgress));
+                OnPropertyChanged(nameof(PrimaryActionGlyph)); OnPropertyChanged(nameof(PrimaryProgressVisibility));
+            }
+        };
         _endfield.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName is nameof(EndfieldMaintenanceViewModel.PrimaryActionText)

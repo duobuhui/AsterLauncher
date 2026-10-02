@@ -203,24 +203,11 @@ public static class WindowsHardLink
     }
 }
 
-public sealed class EndfieldSharingService
+public class ResourceSharingService
 {
     private readonly Action _commitGuard;
-    public EndfieldSharingService(Action? commitGuard = null) => _commitGuard = commitGuard ?? EndfieldMaintenanceService.EnsureNotRunning;
-    // The inspected Endfield VFS stores large resources under hex-named .chk paths.
-    // Index files, .blc metadata, executables, configuration and user state stay independent.
-    public static bool IsShareable(string relative)
-    {
-        var parts = relative.Replace('\\', '/').Split('/');
-        return parts.Length == 5
-            && parts[0].Equals("Endfield_Data", StringComparison.OrdinalIgnoreCase)
-            && parts[1].Equals("StreamingAssets", StringComparison.OrdinalIgnoreCase)
-            && parts[2].Equals("VFS", StringComparison.OrdinalIgnoreCase)
-            && parts[3].Length == 8 && parts[3].All(Uri.IsHexDigit)
-            && parts[4].EndsWith(".chk", StringComparison.OrdinalIgnoreCase)
-            && parts[4].Length == 36
-            && parts[4][..32].All(Uri.IsHexDigit);
-    }
+    private readonly Func<string, bool> _isShareable;
+    public ResourceSharingService(Func<string, bool> isShareable, Action commitGuard) { _isShareable = isShareable; _commitGuard = commitGuard; }
     public async Task<EndfieldSharingSummary> OptimizeAsync(
         string sourceRoot, string targetRoot,
         IReadOnlyList<EndfieldManifestFile> sourceManifest,
@@ -236,7 +223,7 @@ public sealed class EndfieldSharingService
         var count = 0;
         long bytes = 0;
         long saved = 0;
-        foreach (var target in targetManifest.Where(item => IsShareable(item.Path)))
+        foreach (var target in targetManifest.Where(item => _isShareable(item.Path)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!sourceMap.TryGetValue(target.Path, out var source)
@@ -289,7 +276,7 @@ public sealed class EndfieldSharingService
         var count = 0;
         long bytes = 0;
         long saved = 0;
-        foreach (var file in candidates.Where(item => IsShareable(item.Path)))
+        foreach (var file in candidates.Where(item => _isShareable(item.Path)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var first = SafeGamePath.Resolve(firstRoot, file.Path);
@@ -316,7 +303,7 @@ public sealed class EndfieldSharingService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var relative = Path.GetRelativePath(firstRoot, first).Replace('\\', '/');
-            if (!IsShareable(relative)) continue;
+            if (!_isShareable(relative)) continue;
             var second = SafeGamePath.Resolve(secondRoot, relative);
             if (!File.Exists(second)) continue;
             var firstId = WindowsHardLink.Identity(first);
@@ -351,7 +338,7 @@ public sealed class EndfieldSharingService
 
     private static IEnumerable<string> EnumerateGameFiles(string root)
     {
-        SafeGamePath.Resolve(root, "Endfield.exe");
+        SafeGamePath.Resolve(root, "identity-check");
         if (!Directory.Exists(root)) yield break;
         var options = new EnumerationOptions
         {
@@ -364,5 +351,24 @@ public sealed class EndfieldSharingService
             var relative = Path.GetRelativePath(root, path);
             yield return SafeGamePath.Resolve(root, relative);
         }
+    }
+}
+
+public sealed class EndfieldSharingService : ResourceSharingService
+{
+    public EndfieldSharingService(Action? commitGuard = null) : base(IsShareable, commitGuard ?? EndfieldMaintenanceService.EnsureNotRunning) { }
+    // The inspected Endfield VFS stores large resources under hex-named .chk paths.
+    // Index files, .blc metadata, executables, configuration and user state stay independent.
+    public static bool IsShareable(string relative)
+    {
+        var parts = relative.Replace('\\', '/').Split('/');
+        return parts.Length == 5
+            && parts[0].Equals("Endfield_Data", StringComparison.OrdinalIgnoreCase)
+            && parts[1].Equals("StreamingAssets", StringComparison.OrdinalIgnoreCase)
+            && parts[2].Equals("VFS", StringComparison.OrdinalIgnoreCase)
+            && parts[3].Length == 8 && parts[3].All(Uri.IsHexDigit)
+            && parts[4].EndsWith(".chk", StringComparison.OrdinalIgnoreCase)
+            && parts[4].Length == 36
+            && parts[4][..32].All(Uri.IsHexDigit);
     }
 }

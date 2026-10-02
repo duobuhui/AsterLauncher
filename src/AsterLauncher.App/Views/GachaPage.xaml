@@ -10,6 +10,27 @@
         <views:HistoryCountVisibilityConverter x:Key="HistoryCountVisibilityConverter" />
         <views:SectionHeaderWidthConverter x:Key="SectionHeaderWidthConverter" />
         <views:PortraitImageConverter x:Key="PortraitImageConverter" />
+        <DataTemplate x:Key="SignatureWeaponTemplate" x:DataType="core:EndfieldSignatureWeaponAnalysis">
+            <StackPanel Spacing="6" Margin="0,5,0,0">
+                <Border Height="1" Background="{ThemeResource GlassEdgeBrush}" Margin="0,0,0,4" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock Text="{x:Bind Title}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                </Grid>
+                <ItemsControl ItemsSource="{x:Bind SixStars}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="core:EndfieldWeaponResult">
+                            <Grid ColumnSpacing="8" Margin="0,3">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <StackPanel Spacing="2"><TextBlock Text="{x:Bind DisplayName}" FontSize="12" FontWeight="SemiBold" /><TextBlock Text="{x:Bind DateText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
+                                <TextBlock Grid.Column="1" Text="{x:Bind PositionText}" FontSize="12" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
         <DataTemplate x:Key="SixStarPullTemplate" x:DataType="core:EndfieldSixStarPull">
             <Grid ColumnSpacing="7" MinHeight="40">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -147,7 +168,7 @@
                                         </Border.Background>
                                     </Border>
                                     <StackPanel HorizontalAlignment="Stretch">
-                                        <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                        <Expander AutomationProperties.Name="{x:Bind PoolName}" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                             <Expander.Header>
                                                 <StackPanel Padding="10,6" Spacing="3" HorizontalAlignment="Stretch">
                                                     <Grid ColumnSpacing="8">
@@ -155,15 +176,16 @@
                                                         <TextBlock Text="{x:Bind PoolName}" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
                                                         <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
                                                     </Grid>
+                                                    <TextBlock Text="{x:Bind DateRangeText}" Visibility="{x:Bind DateSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                                     <TextBlock Text="{x:Bind OperatorSummary}" FontSize="12" TextWrapping="Wrap" MaxLines="2" />
-                                                    <TextBlock Text="{x:Bind DetailText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{x:Bind DetailText}" Visibility="{x:Bind DetailSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                             </Expander.Header>
                                             <StackPanel Padding="10,0,10,10" Spacing="7" HorizontalAlignment="Stretch">
-                                                <TextBlock Text="{x:Bind StatusText}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                                 <ItemsControl ItemsSource="{x:Bind SixStarPulls}" ItemTemplate="{StaticResource SixStarPullTemplate}">
                                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Spacing="5" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                                 </ItemsControl>
+                                                <ContentControl Content="{x:Bind SignatureWeapon}" ContentTemplate="{StaticResource SignatureWeaponTemplate}" Visibility="{x:Bind WeaponSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" HorizontalContentAlignment="Stretch" />
                                             </StackPanel>
                                         </Expander>
                                         <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Visibility="{x:Bind PreviousPhaseCount, Converter={StaticResource HistoryCountVisibilityConverter}}">
@@ -180,9 +202,11 @@
                                                                     <TextBlock Text="{x:Bind PoolName}" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
                                                                     <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                                                 </Grid>
-                                                                <TextBlock Text="{x:Bind OperatorSummary}" FontSize="12" TextWrapping="Wrap" MaxLines="2" />
-                                                                <TextBlock Text="{x:Bind DetailText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Text="{x:Bind DateRangeText}" Visibility="{x:Bind DateSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                                                <TextBlock Text="{x:Bind OperatorSummary}" FontSize="12" TextWrapping="Wrap" MaxLines="2" />
+                                                                <TextBlock Text="{x:Bind DetailText}" Visibility="{x:Bind DetailSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
                                                                 <ItemsControl ItemsSource="{x:Bind SixStarPulls}" ItemTemplate="{StaticResource SixStarPullTemplate}" />
+                                                                <ContentControl Content="{x:Bind SignatureWeapon}" ContentTemplate="{StaticResource SignatureWeaponTemplate}" Visibility="{x:Bind WeaponSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" HorizontalContentAlignment="Stretch" />
                                                             </StackPanel>
                                                         </Border>
                                                     </DataTemplate>
