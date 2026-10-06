@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "revision": 2026100601,
+  "publishedAt": "2026-10-06T12:00:00+08:00",
+  "pools": [
+    {
+      "gameId": "endfield",
+      "key": "熔火灼痕",
+      "name": "熔火灼痕",
+      "startsAt": "2026-01-22T11:00:00+08:00",
+      "endsAt": "2026-02-07T11:59:00+08:00",
+      "weaponPool": "熔铸申领",
+      "weapon": "熔铸火焰",
+      "source": "https://www.taptap.cn/moment/762996134376376239"
+    },
+    {
+      "gameId": "endfield",
+      "key": "轻飘飘的信使",
+      "name": "轻飘飘的信使",
+      "startsAt": "2026-02-07T12:00:00+08:00",
+      "endsAt": "2026-02-24T11:59:00+08:00",
+      "weaponPool": "迅行申领",
+      "weapon": "使命必达",
+      "source": "https://www.taptap.cn/moment/768565832493041953"
+    },
+    {
+      "gameId": "endfield",
+      "key": "热烈色彩",
+      "name": "热烈色彩",
+      "startsAt": "2026-02-24T12:00:00+08:00",
+      "endsAt": "2026-03-12T06:00:00+08:00",
+      "weaponPool": "绘涂申领",
+      "weapon": "艺术暴君",
+      "source": "https://www.taptap.cn/moment/774777281615759534"
+    },
+    {
+      "gameId": "endfield",
+      "key": "河流的女儿",
+      "name": "河流的女儿",
+      "startsAt": "2026-03-12T12:00:00+08:00",
+      "endsAt": "2026-03-29T11:59:00+08:00",
+      "weaponPool": "新芽申领",
+      "weapon": "落草",
+      "source": "https://www.taptap.cn/moment/780516140374819093"
+    },
+    {
+      "gameId": "endfield",
+      "key": "狼珀",
+      "name": "狼珀",
+      "startsAt": "2026-03-29T12:00:00+08:00",
+      "endsAt": "2026-04-17T06:00:00+08:00",
+      "weaponPool": "绯珀申领",
+      "weapon": "狼之绯",
+      "source": "https://endfield.hypergryph.com/news/6003"
+    },
+    {
+      "gameId": "endfield",
+      "key": "春雷动，万物生",
+      "name": "春雷动，万物生",
+      "startsAt": "2026-04-17T12:00:00+08:00",
+      "endsAt": "2026-05-22T11:59:00+08:00",
+      "weaponPool": "行舟申领",
+      "weapon": "孤舟",
+      "source": "https://endfield.hypergryph.com/news/9343"
+    },
+    {
+      "gameId": "endfield",
+      "key": "拳出无悔",
+      "name": "拳出无悔",
+      "startsAt": "2026-06-05T12:00:00+08:00",
+      "endsAt": "2026-06-26T11:59:00+08:00",
+      "weaponPool": "绛结申领",
+      "weapon": "赤缨",
+      "source": "https://www.taptap.cn/moment/810964540903653859"
+    },
+    {
+      "gameId": "endfield",
+      "key": "逐罪者",
+      "name": "逐罪者",
+      "startsAt": "2026-06-26T12:00:00+08:00",
+      "endsAt": "2026-07-16T06:00:00+08:00",
+      "weaponPool": "染赤申领",
+      "weapon": "镀红祝福",
+      "source": "https://www.taptap.cn/moment/818960388082109841"
+    },
+    {
+      "gameId": "endfield",
+      "key": "临渊望北",
+      "name": "临渊望北",
+      "startsAt": "2026-07-16T12:00:00+08:00",
+      "endsAt": "2026-08-09T11:59:00+08:00",
+      "weaponPool": "军列申领",
+      "weapon": "四二式·肃阵",
+      "source": "https://www.taptap.cn/moment/826214313340440174"
+    },
+    {
+      "gameId": "endfield",
+      "key": "晨星于此闪耀",
+      "name": "晨星于此闪耀",
+      "startsAt": "2026-08-09T12:00:00+08:00",
+      "endsAt": "2026-09-02T06:00:00+08:00",
+      "weaponPool": "明曜申领",
+      "weapon": "曜夜的首演",
+      "source": "https://endfield.hypergryph.com/news/1165"
+    },
+    {
+      "gameId": "endfield",
+      "key": "冬猎",
+      "name": "冬猎",
+      "startsAt": "2026-09-02T12:00:00+08:00",
+      "endsAt": "2026-09-30T11:59:00+08:00",
+      "weaponPool": "幽寒申领",
+      "weapon": "寒夜幽影",
+      "source": "https://endfield.hypergryph.com/news/2653"
+    },
+    {
+      "gameId": "endfield",
+      "key": "绚丽异彩",
+      "name": "绚丽异彩",
+      "phase": "1",
+      "startsAt": "2026-09-24T12:00:00+08:00",
+      "endsAt": null,
+      "weaponPool": "点绘申领",
+      "weapon": "艺术暴君",
+      "source": "https://endfield.hypergryph.com/news/2653"
+    }
+  ],
+  "images": [
+    {
+      "gameId": "endfield",
+      "kind": "portrait",
+      "key": "伊冯",
+      "aliases": [],
+      "file": "images/endfield/yvonne.png",
+      "sha256": "04cee6d603237d38907961d042a9694d31f4a212fd20cb3a40659e135d550589",
+      "size": 74905,
+      "source": "https://web.hycdn.cn/endfield/official-v4/_next/static/media/yvonne.9695c304.png",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    }
+  ],
+  "announcements": [],
+  "codes": []
+}
