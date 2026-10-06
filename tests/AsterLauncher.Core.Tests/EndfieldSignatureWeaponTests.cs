@@ -69,6 +69,25 @@ public sealed class EndfieldSignatureWeaponTests : IDisposable
         Assert.Equal("2026/09/24 12:00", character.ObtainedAtText);
         Assert.Equal(character.ObtainedAtText, weapon.DateText);
     }
+    private sealed class Resources(Core.ResourceCatalog catalog) : Core.IResourceCatalogProvider
+    {
+        public Core.ResourceCatalog? Current => catalog;
+        public event EventHandler? Updated { add { } remove { } }
+        public string? FindImage(string gameId,string kind,string key)=>null;
+    }
+    [Fact]
+    public async Task ResourceDatesNamesAndWeaponMappingApplyWithoutChangingOriginalArchive()
+    {
+        var archive=new JsonObject { ["characters"]=new JsonArray(new JsonObject{["poolId"]="special-1",["poolName"]="冬猎",["charName"]="提弗洛斯",["rarity"]=6,["seqId"]=1}),
+            ["weapons"]=new JsonArray(Weapon("测试申领","测试专武",1,6)) };
+        var file=Path.Combine(_root,"input.json");await File.WriteAllTextAsync(file,archive.ToJsonString());
+        var catalog=new Core.ResourceCatalog{Revision=1,PublishedAt=DateTimeOffset.Now,Pools=[new(){GameId="endfield",Key="冬猎",Name="更新后的名称",StartsAt=DateTimeOffset.Parse("2026-09-02T04:00:00Z"),EndsAt=DateTimeOffset.Parse("2026-09-30T03:59:00Z"),WeaponPool="测试申领",Weapon="测试专武",Source="https://endfield.hypergryph.com/news/2653"}]};
+        using var service=new EndfieldGachaArchiveService(NullLogger<EndfieldGachaArchiveService>.Instance,new Resources(catalog));
+        Assert.True((await service.ImportAsync(file)).Success);var before=await File.ReadAllBytesAsync(service.ArchivePath);
+        var pool=Assert.Single((await service.GetAnalysisAsync()).Pools);
+        Assert.Equal("更新后的名称",pool.PoolName);Assert.Equal("2026/09/02 12:00 — 2026/09/30 11:59",pool.DateRangeText);
+        Assert.Equal(1,pool.SignatureWeapon!.FeaturedCount);Assert.Equal(before,await File.ReadAllBytesAsync(service.ArchivePath));
+    }
     private static JsonObject Weapon(string pool, string name, int sequence, int rarity, string kind="draw", string? phase=null) =>
         new() { ["poolId"]=pool, ["poolName"]=pool, ["weaponName"]=name, ["seqId"]=sequence, ["rarity"]=rarity, ["kind"]=kind, ["poolVersion"]=phase, ["gachaTs"]=1700000000 + sequence };
     private async Task<Core.EndfieldGachaAnalysis> Analyze(JsonObject archive)

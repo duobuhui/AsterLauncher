@@ -144,8 +144,10 @@ public sealed partial class GameLibraryPage : Page
         }
     }
 
+    private void HideSidebarFlyouts() { SearchButton.Flyout?.Hide(); FilterButton.Flyout?.Hide(); CompactSearchButton.Flyout?.Hide(); CompactFilterButton.Flyout?.Hide(); }
     public void ShowFeature(string tag)
     {
+        HideSidebarFlyouts();
         if (_isLaunchExpanded) SetLaunchExpanded(false);
         UpdateNavigationState(tag);
         var isOverview = tag is "library" or "home" or "overview";
@@ -253,6 +255,23 @@ public sealed partial class GameLibraryPage : Page
         transition.Begin();
     }
 
+    private async void GameRow_OnClick(object sender,RoutedEventArgs e)
+    {
+        if(sender is not FrameworkElement { DataContext: GameCardViewModel game })return;
+        GameList.SelectedItem=game;
+        if(!ReferenceEquals(game,ViewModel.CurrentGame))await ViewModel.SelectGameAsync(game);
+        if(!ReferenceEquals(game,ViewModel.CurrentGame))return;
+        UpdateEndfieldControls();ShowFeature("overview");
+    }
+    private async void GameList_OnItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not GameCardViewModel game) return;
+        if (!ReferenceEquals(game, ViewModel.CurrentGame)) await ViewModel.SelectGameAsync(game);
+        if (!ReferenceEquals(game, ViewModel.CurrentGame)) return;
+        UpdateEndfieldControls();
+        ShowFeature("overview");
+    }
+
     private async void GameList_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         ApplyAllRailItemStates();
@@ -267,8 +286,9 @@ public sealed partial class GameLibraryPage : Page
             await ViewModel.SelectGameAsync(game);
         }
 
+        if (!ReferenceEquals(game, ViewModel.CurrentGame)) return;
         UpdateEndfieldControls();
-        if (!changed && _activeFeatureTag == "add") return;
+
         ShowFeature("overview");
         if (changed && game.Id == BuiltInGameIds.Endfield) await _endfield.CheckVersionAsync();
         else if (changed && _hoyo.IsSupported) await _hoyo.CheckVersionAsync();
@@ -469,7 +489,7 @@ public sealed partial class GameLibraryPage : Page
             content.Children.Add(new TextBlock { Text = _endfield.ChannelText });
             content.Children.Add(location);
             content.Children.Add(new TextBlock { Text = "确认后检查本地文件和所需空间。两服使用独立目录，同卷 NTFS 可自动复用已校验的相同资源；暂停保留进度，取消会清理本次任务的下载缓存。", TextWrapping = TextWrapping.Wrap, FontSize = 12 });
-            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ElementTheme.Dark,
+            var dialog = new ContentDialog { XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
                 Title = game?.IsInstalled == true ? "更新游戏" : "下载游戏", Content = content,
                 PrimaryButtonText = "开始", CloseButtonText = "取消", DefaultButton = ContentDialogButton.Primary };
             dialog.PrimaryButtonClick += (_, args) => { if (string.IsNullOrWhiteSpace(path.Text)) { args.Cancel = true; path.Focus(FocusState.Programmatic); } };
@@ -637,7 +657,7 @@ public sealed partial class GameLibraryPage : Page
 
     private void ClearSearch_OnClick(object sender, RoutedEventArgs e) => ViewModel.ClearSearch();
 
-    private void ClearFilters_OnClick(object sender, RoutedEventArgs e) => ViewModel.ClearFilters();
+    private void ClearFilters_OnClick(object sender, RoutedEventArgs e) { ViewModel.ClearFilters(); HideSidebarFlyouts(); }
 
     private void ToggleRail_OnClick(object sender, RoutedEventArgs e) => SetRailCompact(!_isRailCompact, true);
 
@@ -1294,15 +1314,17 @@ public sealed partial class GameLibraryPage : Page
 
     private void UpdateNavigationState(string tag)
     {
+        FeatureTitleText.Text = tag switch { "gacha" => "抽卡记录", "tools" => "辅助工具", "profiles" => "启动方案", "game-settings" => "游戏设置", "launcher-settings" => "启动器设置", "logs" => "日志", "play-time" => "游戏时长", "" or "add" => "游戏库", _ => "" };
+        FeatureTitleText.Visibility = FeatureTitleText.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var button in SecondaryNavigation.Children.OfType<Button>())
         {
             var selected = string.Equals(button.Tag as string, tag, StringComparison.OrdinalIgnoreCase)
                 || ((tag is "library" or "home") && string.Equals(button.Tag as string, "overview", StringComparison.OrdinalIgnoreCase));
             button.Opacity = 1;
-            button.Foreground = selected
-                ? (Brush)Application.Current.Resources["PageTitleBrush"]
-                : new SolidColorBrush(Colors.White);
-            if (button.Content is IconElement icon) icon.Foreground = button.Foreground;
+            if(selected) button.Foreground = (Brush)Application.Current.Resources["PageTitleBrush"];
+            else button.ClearValue(Control.ForegroundProperty);
+            if (button.Content is IconElement icon)
+                icon.SetBinding(IconElement.ForegroundProperty, new Microsoft.UI.Xaml.Data.Binding { Source = button, Path = new PropertyPath("Foreground") });
             button.Background = selected
                 ? (Brush)Application.Current.Resources["ThemeAccentSoftBrush"]
                 : new SolidColorBrush(Colors.Transparent);

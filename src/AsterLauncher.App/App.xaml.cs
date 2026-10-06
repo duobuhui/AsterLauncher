@@ -32,16 +32,24 @@ public partial class App : Application
         try
         {
             await _services.GetRequiredService<LauncherViewModel>().InitializeAsync();
+            await Task.Run(() => _services.GetRequiredService<ResourceUpdateService>().LoadAsync());
             _window = _services.GetRequiredService<MainWindow>();
             MainWindow = _window;
             _window.Activate();
             _ = RefreshWallpapersAsync();
+            if (_services.GetRequiredService<LauncherViewModel>().ResourceUpdatesEnabled) _ = RefreshResourcesAsync();
         }
         catch (Exception exception)
         {
             _services.GetRequiredService<ILogger<App>>().LogCritical(exception, "Application startup failed");
             throw;
         }
+    }
+
+    private async Task RefreshResourcesAsync()
+    {
+        try { await _services.GetRequiredService<ResourceUpdateService>().RefreshAsync(); }
+        catch (Exception ex) { _services.GetRequiredService<ILogger<App>>().LogWarning("Resource update ended with {ErrorType}; keeping cached/bundled resources", ex.GetType().Name); }
     }
 
     private async Task RefreshWallpapersAsync()
@@ -83,9 +91,11 @@ public partial class App : Application
             services.AddSingleton(typeof(IGameAdapter), adapter);
         }
         services.AddSingleton<IFilePickerService, FilePickerService>();
-        services.AddSingleton<IUigfArchiveService, UigfArchiveService>();
-        services.AddSingleton<IEndfieldGachaArchiveService, EndfieldGachaArchiveService>();
+        services.AddSingleton<IUigfArchiveService>(p => new UigfArchiveService(p.GetRequiredService<ILogger<UigfArchiveService>>(), p.GetRequiredService<IResourceCatalogProvider>()));
+        services.AddSingleton<IEndfieldGachaArchiveService>(p => new EndfieldGachaArchiveService(p.GetRequiredService<ILogger<EndfieldGachaArchiveService>>(), p.GetRequiredService<IResourceCatalogProvider>()));
         services.AddSingleton<LauncherUpdateService>();
+        services.AddSingleton(p => new ResourceUpdateService(new HttpClient(new EndfieldNodeHttpHandler(Path.Combine(AppContext.BaseDirectory, "NetworkRuntime"))) { Timeout = TimeSpan.FromSeconds(40) }, LauncherDataPaths.ResolveDataDirectory()));
+        services.AddSingleton<IResourceCatalogProvider>(p => p.GetRequiredService<ResourceUpdateService>());
         var endfieldNetworkRuntime = Path.Combine(AppContext.BaseDirectory, "NetworkRuntime");
 #if DEBUG
         if (EndfieldMaintenanceUiFixture.Enabled)

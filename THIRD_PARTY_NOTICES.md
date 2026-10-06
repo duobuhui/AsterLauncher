@@ -120,3 +120,6 @@ Bilibili launcher identities and channel SDK metadata fields were checked agains
 
 Game photographs remain user-owned local files. The gallery creates no redistributed media asset.
 Absolute UTC+8 boundaries are derived from the publisher's [launch notice](https://endfield.hypergryph.com/news/7231), [March maintenance](https://www.taptap.cn/moment/780917933311266317), [April maintenance](https://endfield.hypergryph.com/news/9343), [June maintenance](https://www.taptap.cn/moment/811699765564671081), [July maintenance](https://www.taptap.cn/moment/826580172495914096) and [September maintenance](https://endfield.hypergryph.com/news/2653). Unannounced end times are not extrapolated from version cadence.
+
+## Windows typography and resource data
+Ordinary UI text uses the installed Microsoft YaHei UI font; no font file is redistributed. Resource-update protocol, cache and UI integration are original project code and introduce no dependency. Publisher media/provenance in the public resource feed is covered by ASSET_SOURCES.md; image rights are not granted by the project code license.

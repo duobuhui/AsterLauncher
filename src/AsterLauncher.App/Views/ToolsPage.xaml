@@ -5,7 +5,7 @@
     xmlns:core="using:AsterLauncher.Core">
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Padding="28,24" Spacing="16" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="2"><TextBlock Text="辅助工具" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /><TextBlock Text="当前游戏可用的外部工具" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
+
             <ItemsControl ItemsSource="{Binding CurrentCompanionTools}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="core:CompanionTool">

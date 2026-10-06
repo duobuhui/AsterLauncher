@@ -83,7 +83,7 @@ public sealed class LocalStorageService(string dataRoot,string installationRoot,
             {notes.Add(area.Category+"：目录被占用或包含重解析点，已跳过。");}
         }
         if(legacyMaintenance)notes.Add("检测到旧版未完成下载，暂时保留终末地缓存；继续或取消原任务后可再次扫描。");
-        return new(files.DistinctBy(f=>f.Path,StringComparer.OrdinalIgnoreCase).OrderBy(f=>f.Category).ThenBy(f=>f.Path).ToArray(),protectedCount,notes) { EmptyDirectories=directories };
+        return new(files.DistinctBy(f=>f.Path,StringComparer.OrdinalIgnoreCase).OrderBy(f=>f.Category).ThenBy(f=>f.Path).ToArray(),protectedCount,notes) { EmptyDirectories=directories.DistinctBy(d=>d.Path,StringComparer.OrdinalIgnoreCase).ToArray() };
     }
     public Task<StorageDeleteResult> DeleteAsync(IEnumerable<StorageFile> selected,CancellationToken token=default)
         => DeleteAsync(selected,[],token);
@@ -124,12 +124,22 @@ public sealed class LocalStorageService(string dataRoot,string installationRoot,
                 deletedDirectories+=EmptyDirectoryCleanup.Prune(root,p=>protectedPaths.Any(keep=>Overlaps(p,keep)),token);
         return new(deleted,skipped,bytes,freed,deletedDirectories);
     }
+    private HashSet<string> ActiveResourceFiles()
+    {
+        var path = SafeGamePath.Resolve(dataRoot, "resources/catalog.json");
+        try { if (File.Exists(path)) return ResourceUpdateService.Parse(File.ReadAllBytes(path)).Images.Select(i=>i.Sha256.ToLowerInvariant()+Path.GetExtension(i.File).ToLowerInvariant()).ToHashSet(StringComparer.OrdinalIgnoreCase); }
+        catch(Exception ex) when(ex is IOException or InvalidDataException or JsonException) { return Directory.Exists(Path.Combine(dataRoot,"resources","content")) ? Directory.EnumerateFiles(Path.Combine(dataRoot,"resources","content")).Select(Path.GetFileName).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase) : []; }
+        return [];
+    }
     private IEnumerable<Area> Areas()
     {
         yield return new("终末地下载缓存",Path.Combine(dataRoot,"endfield","objects"),false,
             p=>!p.Contains(Path.DirectorySeparatorChar)&&Regex.IsMatch(p,@"\A[0-9a-f]{32}-[0-9]+(?:\.part)?\z"));
         yield return new("米哈游下载缓存",Path.Combine(dataRoot,"hoyo","objects"),false,
             p=>!p.Contains(Path.DirectorySeparatorChar)&&Regex.IsMatch(p,@"\A[0-9a-f]{32}-[0-9]+(?:\.part)?\z"));
+        var activeImages=ActiveResourceFiles();
+        yield return new("旧游戏资料图片",Path.Combine(dataRoot,"resources","content"),false, p => !activeImages.Contains(Path.GetFileName(p)));
+        yield return new("资料更新暂存",Path.Combine(dataRoot,"resources"),false,p=>!p.Contains(Path.DirectorySeparatorChar)&&p.EndsWith(".tmp",StringComparison.OrdinalIgnoreCase));
         yield return new("旧版 OTA 缓存",Path.Combine(dataRoot,"updates"),false,_=>true);
         yield return new("运行日志",Path.Combine(dataRoot,"logs"),false,p=>p.EndsWith(".log",StringComparison.OrdinalIgnoreCase)||p.EndsWith(".txt",StringComparison.OrdinalIgnoreCase));
         yield return new("云壁纸缓存",Path.Combine(dataRoot,"artwork","cloud"),false,

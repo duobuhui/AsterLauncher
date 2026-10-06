@@ -200,11 +200,10 @@ public sealed class GameLibraryViewModel : ObservableObject
         ObserveGames();
 
         var previousPublisher = SelectedPublisher;
-        Publishers.Clear();
-        Publishers.Add("全部发行商");
-        foreach (var publisher in _launcher.Games.Select(game => game.Publisher).Distinct().OrderBy(value => value))
+        var publisherNames = new[] { "全部发行商" }.Concat(_launcher.Games.Select(game=>game.Publisher).Distinct().OrderBy(value=>value)).ToArray();
+        if (!Publishers.SequenceEqual(publisherNames))
         {
-            Publishers.Add(publisher);
+            Publishers.Clear(); foreach(var publisher in publisherNames) Publishers.Add(publisher);
         }
 
         if (!Publishers.Contains(previousPublisher))
@@ -213,35 +212,16 @@ public sealed class GameLibraryViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedPublisher));
         }
 
-        var query = _launcher.Games.AsEnumerable();
-        if (!string.IsNullOrWhiteSpace(SearchText))
+        var desired = _launcher.Games.Where(game => GameLibraryFilter.Matches(game.DisplayName, game.Publisher,
+            game.IsInstalled, game.IsRunning, SearchText, SelectedPublisher, InstalledOnly, RunningOnly)).ToArray();
+        for (var i = FilteredGames.Count - 1; i >= 0; i--)
+            if (!desired.Contains(FilteredGames[i])) FilteredGames.RemoveAt(i);
+        for (var i = 0; i < desired.Length; i++)
         {
-            query = query.Where(game =>
-                game.DisplayName.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-                || game.Publisher.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+            var current = FilteredGames.IndexOf(desired[i]);
+            if (current < 0) FilteredGames.Insert(i, desired[i]);
+            else if (current != i) FilteredGames.Move(current, i);
         }
-
-        if (SelectedPublisher != "全部发行商")
-        {
-            query = query.Where(game => game.Publisher == SelectedPublisher);
-        }
-
-        if (InstalledOnly)
-        {
-            query = query.Where(game => game.IsInstalled);
-        }
-
-        if (RunningOnly)
-        {
-            query = query.Where(game => game.IsRunning);
-        }
-
-        FilteredGames.Clear();
-        foreach (var game in query)
-        {
-            FilteredGames.Add(game);
-        }
-
         OnPropertyChanged(nameof(FilteredCountText));
         OnPropertyChanged(nameof(HasActiveFilters));
 
@@ -276,6 +256,8 @@ public sealed class GameLibraryViewModel : ObservableObject
 
     private void ObservedGameOnPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
+        if (args.PropertyName is nameof(GameCardViewModel.IsInstalled) or nameof(GameCardViewModel.IsRunning))
+        { Refresh(); return; }
         if (ReferenceEquals(sender, CurrentGame)
             || args.PropertyName is nameof(GameCardViewModel.IsInstalled) or nameof(GameCardViewModel.IsRunning))
         {

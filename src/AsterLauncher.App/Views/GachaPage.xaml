@@ -97,9 +97,9 @@
     </Page.Resources>
     <ScrollViewer x:Name="GachaScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" SizeChanged="GachaScrollViewer_OnSizeChanged">
         <StackPanel Padding="28,24" Spacing="10" HorizontalAlignment="Stretch">
-            <Grid ColumnSpacing="12">
+            <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="12" Padding="12,9"><Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                <TextBlock Text="抽卡记录" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" VerticalAlignment="Center" />
+
                 <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                     <TextBlock x:Name="CurrentGameText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="ArchiveSummaryText" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
@@ -107,7 +107,7 @@
                 <ProgressRing x:Name="BusyRing" Grid.Column="2" Width="20" Height="20" VerticalAlignment="Center" IsActive="False" />
                 <Button x:Name="CaptureButton" Grid.Column="3" Content="同步记录" Style="{StaticResource ThemePrimaryButtonStyle}" Click="Capture_OnClick" VerticalAlignment="Center" />
                 <Button x:Name="FullCaptureButton" Grid.Column="4" Content="全量同步" Click="FullCapture_OnClick" VerticalAlignment="Center" Visibility="Collapsed" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" />
-            </Grid>
+            </Grid></Border>
 
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <ToggleButton x:Name="RecordsTab" Content="抽卡记录" IsChecked="True" Click="RecordsTab_OnClick" />
@@ -155,29 +155,20 @@
                                 <Grid>
                                     <Border CornerRadius="12" Opacity="0.94" Height="76" VerticalAlignment="Top">
                                         <Border.Background>
-                                            <ImageBrush Stretch="UniformToFill" ImageSource="{x:Bind BannerAssetFileName, Converter={StaticResource PoolBannerImageConverter}}" />
+                                            <ImageBrush Stretch="UniformToFill" ImageSource="{x:Bind BannerImageKey, Converter={StaticResource PoolBannerImageConverter}}" />
                                         </Border.Background>
                                     </Border>
-                                    <Border CornerRadius="12">
-                                        <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
-                                                <GradientStop Color="#C3162534" Offset="0" />
-                                                <GradientStop Color="#DD162534" Offset="0.5" />
-                                                <GradientStop Color="#F2162534" Offset="1" />
-                                            </LinearGradientBrush>
-                                        </Border.Background>
-                                    </Border>
+                                    <Border CornerRadius="12" Background="{ThemeResource PoolCardOverlayBrush}" />
                                     <StackPanel HorizontalAlignment="Stretch">
                                         <Expander AutomationProperties.Name="{x:Bind PoolName}" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                            <Expander.Resources><SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" /><SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#18FFFFFF" /><SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#28FFFFFF" /></Expander.Resources>
                                             <Expander.Header>
                                                 <StackPanel Padding="10,6" Spacing="3" HorizontalAlignment="Stretch">
                                                     <Grid ColumnSpacing="8">
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                                        <TextBlock Text="{x:Bind PoolName}" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
+                                                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center"><TextBlock Text="{x:Bind PoolName}" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" /><TextBlock Text="{x:Bind DateRangeText}" Visibility="{x:Bind DateSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" /></StackPanel>
                                                         <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
                                                     </Grid>
-                                                    <TextBlock Text="{x:Bind DateRangeText}" Visibility="{x:Bind DateSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                                                    <TextBlock Text="{x:Bind OperatorSummary}" FontSize="12" TextWrapping="Wrap" MaxLines="2" />
                                                     <TextBlock Text="{x:Bind DetailText}" Visibility="{x:Bind DetailSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                             </Expander.Header>
@@ -199,11 +190,9 @@
                                                             <StackPanel Spacing="4">
                                                                 <Grid ColumnSpacing="8">
                                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                                                    <TextBlock Text="{x:Bind PoolName}" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" />
+                                                                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center"><TextBlock Text="{x:Bind PoolName}" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" TextTrimming="CharacterEllipsis" /><TextBlock Text="{x:Bind DateRangeText}" Visibility="{x:Bind DateSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" /></StackPanel>
                                                                     <TextBlock Grid.Column="1" Text="{x:Bind CountText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
                                                                 </Grid>
-                                                                <TextBlock Text="{x:Bind DateRangeText}" Visibility="{x:Bind DateSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                                                                                <TextBlock Text="{x:Bind OperatorSummary}" FontSize="12" TextWrapping="Wrap" MaxLines="2" />
                                                                 <TextBlock Text="{x:Bind DetailText}" Visibility="{x:Bind DetailSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
                                                                 <ItemsControl ItemsSource="{x:Bind SixStarPulls}" ItemTemplate="{StaticResource SixStarPullTemplate}" />
                                                                 <ContentControl Content="{x:Bind SignatureWeapon}" ContentTemplate="{StaticResource SignatureWeaponTemplate}" Visibility="{x:Bind WeaponSectionCount, Converter={StaticResource HistoryCountVisibilityConverter}}" HorizontalContentAlignment="Stretch" />

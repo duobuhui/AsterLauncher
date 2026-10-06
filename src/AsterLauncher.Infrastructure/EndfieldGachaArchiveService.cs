@@ -22,6 +22,8 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
         "ef-webview.gryphline.com"
     };
 
+    private IResourceCatalogProvider? _resources;
+    public EndfieldGachaArchiveService(ILogger<EndfieldGachaArchiveService> logger, IResourceCatalogProvider resources) : this(logger) => _resources = resources;
     private readonly ILogger<EndfieldGachaArchiveService> _logger;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
@@ -99,7 +101,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
         try
         {
             var root = await ReadObjectAsync(ArchivePath, cancellationToken).ConfigureAwait(false);
-            return EndfieldGachaAnalyzer.Analyze(root);
+            return EndfieldGachaAnalyzer.Analyze(root, _resources?.Current);
         }
         catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException)
         {

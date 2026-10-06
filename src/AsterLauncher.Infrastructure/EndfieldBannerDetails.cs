@@ -20,8 +20,11 @@ internal static class EndfieldBannerDetails
         ["晨星于此闪耀"] = new("2026/08/09 12:00 — 2026/09/02 06:00", "明曜申领", "曜夜的首演", "https://endfield.hypergryph.com/news/1165"),
         ["冬猎"] = new("2026/09/02 12:00 — 2026/09/30 11:59", "幽寒申领", "寒夜幽影", "https://endfield.hypergryph.com/news/2653")
     };
-    public static Detail? Resolve(string name, string? phase, EndfieldPoolCategory category)
+    public static Detail? Resolve(string name, string? phase, EndfieldPoolCategory category, ResourceCatalog? resources = null)
     {
+        var item = resources?.Pools.FirstOrDefault(p => p.GameId == BuiltInGameIds.Endfield && p.Key == name &&
+            (category == EndfieldPoolCategory.Refactor ? p.Phase == EndfieldPoolCatalog.RefactorPhaseNumber(name, phase).ToString() : p.Phase is null));
+        if (item is not null) return new(item.DateText, item.WeaponPool ?? "", item.Weapon ?? "", item.Source);
         if (category == EndfieldPoolCategory.Refactor && EndfieldPoolCatalog.RefactorSeriesName(name) == "绚丽异彩")
         {
             var phaseNumber = EndfieldPoolCatalog.RefactorPhaseNumber(name, phase);

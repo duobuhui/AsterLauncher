@@ -29,6 +29,7 @@
                     <AcrylicBrush x:Key="LaunchPanelBrush" TintColor="#101924" TintOpacity="0.82" TintLuminosityOpacity="0.08" FallbackColor="#E0182432" />
                     <SolidColorBrush x:Key="GlassTileBrush" Color="#36DDE8FF" />
                     <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#A0FFFFFF" Offset="0" /><GradientStop Color="#44D9E9FF" Offset="0.46" /><GradientStop Color="#1D9FB8E9" Offset="1" /></LinearGradientBrush>
+                    <SolidColorBrush x:Key="PoolCardOverlayBrush" Color="#96162534" />
                     <SolidColorBrush x:Key="GlassTextBrush" Color="#FFFFFFFF" />
                     <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#EEF1F7" />
                 </ResourceDictionary>
@@ -46,17 +47,20 @@
                     <SolidColorBrush x:Key="AccentForegroundBrush" Color="#5845C7" />
                     <SolidColorBrush x:Key="SuccessBrush" Color="#147A50" />
                     <SolidColorBrush x:Key="WarningBrush" Color="#8B5E00" />
-                    <AcrylicBrush x:Key="FrostedRailBrush" TintColor="#111827" TintOpacity="0.44" TintLuminosityOpacity="0.58" FallbackColor="#D31A2535" />
-                    <AcrylicBrush x:Key="FrostedPanelBrush" TintColor="#182436" TintOpacity="0.38" TintLuminosityOpacity="0.58" FallbackColor="#D8243041" />
-                    <AcrylicBrush x:Key="HeroGlassBrush" TintColor="#111C2B" TintOpacity="0.32" TintLuminosityOpacity="0.58" FallbackColor="#C91B2839" />
-                    <SolidColorBrush x:Key="FeaturePageScrimBrush" Color="#5C08101D" />
-                    <AcrylicBrush x:Key="LaunchPanelBrush" TintColor="#101924" TintOpacity="0.82" TintLuminosityOpacity="0.08" FallbackColor="#E0182432" />
-                    <SolidColorBrush x:Key="GlassTileBrush" Color="#36DDE8FF" />
+                    <AcrylicBrush x:Key="FrostedRailBrush" TintColor="#F2F3F8" TintOpacity="0.72" TintLuminosityOpacity="0.58" FallbackColor="#E9EEF0F6" />
+                    <AcrylicBrush x:Key="FrostedPanelBrush" TintColor="#F4F5FA" TintOpacity="0.72" TintLuminosityOpacity="0.58" FallbackColor="#EAF3F4F8" />
+                    <AcrylicBrush x:Key="HeroGlassBrush" TintColor="#F0F2F8" TintOpacity="0.72" TintLuminosityOpacity="0.58" FallbackColor="#E6EEF0F6" />
+                    <SolidColorBrush x:Key="FeaturePageScrimBrush" Color="#36E8EBF3" />
+                    <AcrylicBrush x:Key="LaunchPanelBrush" TintColor="#F6F6FA" TintOpacity="0.82" TintLuminosityOpacity="0.08" FallbackColor="#F2F0F2F7" />
+                    <SolidColorBrush x:Key="GlassTileBrush" Color="#80FFFFFF" />
                     <LinearGradientBrush x:Key="GlassEdgeBrush" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#A0FFFFFF" Offset="0" /><GradientStop Color="#44D9E9FF" Offset="0.46" /><GradientStop Color="#1D9FB8E9" Offset="1" /></LinearGradientBrush>
-                    <SolidColorBrush x:Key="GlassTextBrush" Color="#FFFFFFFF" />
-                    <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#EEF1F7" />
+                    <SolidColorBrush x:Key="PoolCardOverlayBrush" Color="#ADF0F2F7" />
+                    <SolidColorBrush x:Key="GlassTextBrush" Color="#202332" />
+                    <SolidColorBrush x:Key="GlassMutedTextBrush" Color="#444C60" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
+            <FontFamily x:Key="TextControlThemeFontFamily">Microsoft YaHei UI</FontFamily>
+            <FontFamily x:Key="ContentControlThemeFontFamily">Microsoft YaHei UI</FontFamily>
             <SolidColorBrush x:Key="PageTitleBrush" Color="#C8BFFF" />
             <SolidColorBrush x:Key="LaunchButtonBrush" Color="#8975FF" />
             <SolidColorBrush x:Key="LaunchButtonTextBrush" Color="#FFFFFF" />

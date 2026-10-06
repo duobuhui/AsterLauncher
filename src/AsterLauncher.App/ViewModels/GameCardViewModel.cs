@@ -89,7 +89,7 @@ public sealed class GameCardViewModel : ObservableObject
 
     public Visibility ChannelBadgeVisibility => Id == BuiltInGameIds.Endfield || HoYoInstallationIdentity.HasChannels(Id) ? Visibility.Visible : Visibility.Collapsed;
 
-    public bool IsInstalled => !string.IsNullOrWhiteSpace(EffectiveExecutablePath) && File.Exists(EffectiveExecutablePath);
+    public bool IsInstalled => File.Exists(EffectiveExecutablePath ?? (Id == BuiltInGameIds.Endfield && _endfieldChannel == EndfieldChannel.Unknown ? State.ExecutablePath : null));
 
     public string InstallStatus => IsInstalled ? "已安装" : "未找到";
 

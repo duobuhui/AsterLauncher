@@ -6,7 +6,7 @@ namespace AsterLauncher.Infrastructure;
 
 internal static class EndfieldGachaAnalyzer
 {
-    public static EndfieldGachaAnalysis Analyze(JsonObject archive)
+    public static EndfieldGachaAnalysis Analyze(JsonObject archive, ResourceCatalog? resources = null)
     {
         var draws = new List<DrawRecord>();
         var index = 0;
@@ -144,6 +144,9 @@ internal static class EndfieldGachaAnalyzer
                 var displayName = definition.Category == EndfieldPoolCategory.Refactor
                     ? EndfieldPoolCatalog.RefactorDisplayName(last.PoolName, last.PoolVersion)
                     : last.PoolName;
+                var resource = resources?.Pools.FirstOrDefault(p=>p.GameId==BuiltInGameIds.Endfield && p.Key==last.PoolName &&
+                    (definition.Category==EndfieldPoolCategory.Refactor ? p.Phase==EndfieldPoolCatalog.RefactorPhaseNumber(last.PoolName,last.PoolVersion).ToString() : p.Phase is null));
+                if(resource is not null) displayName = resource.Name + (definition.Category==EndfieldPoolCategory.Refactor ? " #" + EndfieldPoolCatalog.RefactorPhaseNumber(last.PoolName,last.PoolVersion) : "");
                 return new EndfieldPoolAnalysis(
                     last.PoolId,
                     displayName,
@@ -163,10 +166,11 @@ internal static class EndfieldGachaAnalyzer
                     SeriesUpRecorded: seriesUpRecorded,
                     SeriesKey: definition.UpSeries) with
                 {
-                    DateRangeText = EndfieldBannerDetails.Resolve(last.PoolName, last.PoolVersion, definition.Category)?.Dates
+                    BannerResourceKey = last.PoolName,
+                    DateRangeText = EndfieldBannerDetails.Resolve(last.PoolName, last.PoolVersion, definition.Category, resources)?.Dates
                         ?? (definition.Category == EndfieldPoolCategory.Standard ? "常驻" : ""),
-                    AnnouncementUri = EndfieldBannerDetails.Resolve(last.PoolName, last.PoolVersion, definition.Category)?.Source,
-                    SignatureWeapon = AnalyzeSignatureWeapon(archive, last.PoolName, last.PoolVersion, definition.Category)
+                    AnnouncementUri = EndfieldBannerDetails.Resolve(last.PoolName, last.PoolVersion, definition.Category, resources)?.Source,
+                    SignatureWeapon = AnalyzeSignatureWeapon(archive, last.PoolName, last.PoolVersion, definition.Category, resources)
                 };
             })
             .OrderBy(item => item.Category == EndfieldPoolCategory.Standard ? 1 : 0)
@@ -241,9 +245,9 @@ internal static class EndfieldGachaAnalyzer
             pity) { WeaponPools = AnalyzeWeapons(archive) };
     }
 
-    private static EndfieldSignatureWeaponAnalysis? AnalyzeSignatureWeapon(JsonObject archive, string name, string? version, EndfieldPoolCategory category)
+    private static EndfieldSignatureWeaponAnalysis? AnalyzeSignatureWeapon(JsonObject archive, string name, string? version, EndfieldPoolCategory category, ResourceCatalog? resources)
     {
-        var detail = EndfieldBannerDetails.Resolve(name, version, category);
+        var detail = EndfieldBannerDetails.Resolve(name, version, category, resources);
         if (detail is null) return null;
         var isRefactor = category == EndfieldPoolCategory.Refactor;
         var records = (archive["weapons"] as JsonArray ?? []).OfType<JsonObject>()

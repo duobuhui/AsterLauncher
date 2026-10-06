@@ -11,7 +11,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <Grid>
-            <StackPanel Spacing="2"><TextBlock Text="日志" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /><TextBlock Text="扫描 · 配置 · 启动" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
+
             <Button Content="刷新" HorizontalAlignment="Right" VerticalAlignment="Center" Click="Refresh_OnClick" />
         </Grid>
         <Border Grid.Row="1" Margin="0,14,0,10" Background="{ThemeResource HeroGlassBrush}" CornerRadius="12" Padding="10,6"><TextBlock Text="{Binding LogPath}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" /></Border>

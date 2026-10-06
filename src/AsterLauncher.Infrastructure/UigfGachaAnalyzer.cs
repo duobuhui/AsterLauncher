@@ -6,7 +6,7 @@ namespace AsterLauncher.Infrastructure;
 
 internal static class UigfGachaAnalyzer
 {
-    public static UigfGachaAnalysis Analyze(JsonObject root, string gameId)
+    public static UigfGachaAnalysis Analyze(JsonObject root, string gameId, ResourceCatalog? resources = null)
     {
         var (key, high, middle, low, categories) = Definition(gameId);
         var highLabel = gameId == BuiltInGameIds.ZenlessZoneZero ? "S级" : "五星";
@@ -50,8 +50,9 @@ internal static class UigfGachaAnalyzer
                     {
                         var items = group.ToArray();
                         var first = DateLabel(items[0].Time); var last = DateLabel(items[^1].Time);
-                        return new UigfBannerAnalysis(group.Key, $"卡池记录 · {last}",
-                            first == last ? last : $"{first} — {last}", items.Length, highLabel,
+                        var resource = resources?.Pools.FirstOrDefault(p=>p.GameId==gameId && p.Key==group.Key && p.Phase is null);
+                        return new UigfBannerAnalysis(group.Key, resource?.Name ?? $"卡池记录 · {last}",
+                            resource?.DateText is { Length: > 0 } dates ? dates : first == last ? last : $"{first} — {last}", items.Length, highLabel,
                             items.Where(pulls.ContainsKey).Select(r => pulls[r]).Reverse().ToArray());
                     }).ToArray();
                 sections.Add(new UigfPoolSection(category.Type, category.Title, sorted.Length,

@@ -217,6 +217,8 @@ public sealed record EndfieldPoolAnalysis(
     string SeriesKey = "",
     IReadOnlyList<EndfieldPoolAnalysis>? PreviousPhases = null)
 {
+    public string BannerResourceKey { get; init; } = "";
+    public string BannerImageKey => BannerResourceKey + "\u001F" + BannerAssetFileName;
     public string DateRangeText { get; init; } = "";
     public int DateSectionCount => string.IsNullOrEmpty(DateRangeText) ? 0 : 1;
     public int DetailSectionCount => string.IsNullOrEmpty(DetailText) ? 0 : 1;

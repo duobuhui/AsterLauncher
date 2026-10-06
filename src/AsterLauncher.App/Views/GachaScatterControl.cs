@@ -24,8 +24,8 @@ public sealed class GachaScatterControl : UserControl
         _body.Children.Add(_plot);
         _body.Children.Add(_detail);
         Content = new Border { Child = _body, Padding = new(14), CornerRadius = new(12),
-            Background = (Brush)Application.Current.Resources["HeroGlassBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["GlassEdgeBrush"], BorderThickness = new(1) };
+            Background = AsterLauncher.App.Services.AppearanceBrushes.Get("HeroGlassBrush"),
+            BorderBrush = AsterLauncher.App.Services.AppearanceBrushes.Get("GlassEdgeBrush"), BorderThickness = new(1) };
         SizeChanged += (_, _) => Draw();
     }
 
@@ -47,8 +47,8 @@ public sealed class GachaScatterControl : UserControl
         const double baseline = 62;
         const double dotCenter = 48;
         double X(double value) => left + Math.Clamp((value - 1) / (_maximum - 1), 0, 1) * (width - 18);
-        var muted = (Brush)Application.Current.Resources["GlassMutedTextBrush"];
-        var accent = (Brush)Application.Current.Resources["ThemeAccentBrush"];
+        var muted = AsterLauncher.App.Services.AppearanceBrushes.Get("GlassMutedTextBrush");
+        var accent = AsterLauncher.App.Services.AppearanceBrushes.Get("ThemeAccentBrush");
         _plot.Children.Add(new Line { X1 = left, X2 = width - 9, Y1 = baseline, Y2 = baseline,
             Stroke = muted, StrokeThickness = 1 });
         foreach (var tick in new[] { 1, Math.Max(2, _maximum / 4), _maximum / 2, _maximum * 3 / 4, _maximum }.Distinct())

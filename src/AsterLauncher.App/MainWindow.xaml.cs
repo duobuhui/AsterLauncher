@@ -72,6 +72,7 @@ public sealed partial class MainWindow : Window
             _trayIcon.Dispose();
         };
         _launcher.ThemeChanged += (_, _) => ApplyTheme();
+        RootGrid.ActualThemeChanged += (_, _) => ApplyTheme();
         _launcher.PropertyChanged += Launcher_OnPropertyChanged;
         UpdateWallpaper();
     }
@@ -142,13 +143,27 @@ public sealed partial class MainWindow : Window
             _ => ElementTheme.Default
         };
 
-        var (title, button, buttonText, glass, backing, accent, soft, stroke) = _launcher.ThemePreference switch
+        var (title, button, buttonText, glass, backing, accent, soft, stroke) = _launcher.AccentPreference switch
         {
-            LauncherThemePreference.TyphonPurple => ("#CBB9FF", "#7452B7", "#FFFFFF", "#AA3B2764", "#99513B7E", "#B99CFF", "#665A3999", "#A78364CB"),
-            LauncherThemePreference.ElysiaPink => ("#FFC1DE", "#DB6AA6", "#23141E", "#AA65304D", "#995F304B", "#FF9ACB", "#667C3A60", "#A8E891BD"),
-            LauncherThemePreference.PaimonWhite => ("#FFF4D9", "#F7F0DE", "#2D2A37", "#AA666977", "#99818491", "#FFF0CD", "#667C7983", "#A8E6DFCE"),
+            LauncherAccentPreference.Purple => ("#CBB9FF", "#7452B7", "#FFFFFF", "#AA3B2764", "#99513B7E", "#B99CFF", "#665A3999", "#A78364CB"),
+            LauncherAccentPreference.Pink => ("#FFC1DE", "#DB6AA6", "#23141E", "#AA65304D", "#995F304B", "#FF9ACB", "#667C3A60", "#A8E891BD"),
+            LauncherAccentPreference.Cream => ("#FFF4D9", "#F7F0DE", "#2D2A37", "#AA666977", "#99818491", "#FFF0CD", "#667C7983", "#A8E6DFCE"),
             _ => ("#C8BFFF", "#8975FF", "#FFFFFF", "#991B173A", "#664A3C88", "#A797FF", "#558975FF", "#889E8BFF")
         };
+        var light = RootGrid.ActualTheme == ElementTheme.Light;
+        if (light)
+        {
+            title = accent = _launcher.AccentPreference switch { LauncherAccentPreference.Pink => "#8A295F", LauncherAccentPreference.Cream => "#69522B", LauncherAccentPreference.Purple => "#614090", _ => "#5541A8" };
+            glass = "#38FFFFFF"; backing = "#18FFFFFF"; soft = _launcher.AccentPreference switch { LauncherAccentPreference.Pink => "#30DB6AA6", LauncherAccentPreference.Cream => "#50D0BD8B", _ => "#308975FF" };
+        }
+        SetPaletteBrush("ControlStrokeBrush", light ? "#33202332" : "#33FFFFFF");
+        SetPaletteBrush("ControlSurfaceBrush", light ? "#6FFFFFFF" : "#1FFFFFFF");
+        SetPaletteBrush("ControlHoverBrush", light ? "#AFFFFFFF" : "#33FFFFFF");
+        SetPaletteBrush("ControlPressedBrush", light ? "#18202332" : "#14FFFFFF");
+        SetPaletteBrush("ControlDisabledBrush", light ? "#10202332" : "#0FFFFFFF");
+        SetPaletteBrush("ControlDisabledTextBrush", light ? "#77202332" : "#77FFFFFF");
+        SetPaletteBrush("LibraryRowBrush", light ? "#50FFFFFF" : "#16FFFFFF");
+        AppearanceBrushes.Refresh(RootGrid.ActualTheme);
         SetPaletteBrush("PageTitleBrush", title);
         SetPaletteBrush("LaunchButtonBrush", button);
         SetPaletteBrush("LaunchButtonTextBrush", buttonText);

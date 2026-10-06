@@ -6,15 +6,20 @@
     Loaded="Page_OnLoaded">
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Padding="28,24" Spacing="16" HorizontalAlignment="Stretch">
-            <StackPanel Spacing="4">
-                <TextBlock Text="游戏设置" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
-                <TextBlock Text="画面设置、游戏照片和展示信息" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" />
-            </StackPanel>
 
+
+            <Border x:Name="ServerPanel" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="安装服务器" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="选择已有游戏目录所属的服务器。仅登记安装信息，不修改游戏文件；切换到另一服请使用游戏图标的右键菜单。" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" />
+                    <TextBox x:Name="ServerExecutableBox" IsReadOnly="True" AutomationProperties.Name="服务器安装 EXE" />
+                    <StackPanel Orientation="Horizontal" Spacing="8"><ComboBox x:Name="ServerBox" Width="150" AutomationProperties.Name="安装服务器"><ComboBoxItem Content="请选择" /><ComboBoxItem Content="官服" /><ComboBoxItem Content="哔哩哔哩服" /></ComboBox><Button Content="选择 EXE" Click="SelectServerExecutable_OnClick" /><Button Content="确认服务器" Style="{StaticResource ThemePrimaryButtonStyle}" Click="ConfirmServer_OnClick" /></StackPanel>
+                </StackPanel>
+            </Border>
             <Border Visibility="{x:Bind EndfieldSettings.Visibility, Mode=OneWay}" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
                 <StackPanel Spacing="12">
                     <Grid><TextBlock Text="终末地画面设置" FontSize="20" FontWeight="SemiBold" /><Button Content="重新读取" HorizontalAlignment="Right" Click="ReadDisplay_OnClick" /></Grid>
-                    <TextBlock Text="官服和 B服共用画面设置。请先关闭两服游戏；保存后在下次启动生效。" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="13" />
+                    <TextBlock Text="两服共用。关闭游戏后修改，下次启动生效。" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="13" />
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <NumberBox Header="宽度" Value="{x:Bind EndfieldSettings.Width, Mode=TwoWay}" Minimum="640" Maximum="16384" Width="140" SpinButtonPlacementMode="Compact" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
                         <NumberBox Header="高度" Value="{x:Bind EndfieldSettings.Height, Mode=TwoWay}" Minimum="480" Maximum="16384" Width="140" SpinButtonPlacementMode="Compact" IsEnabled="{x:Bind EndfieldSettings.CanEdit, Mode=OneWay}" />
@@ -37,7 +42,7 @@
                 <StackPanel Spacing="10">
                     <Grid><TextBlock Text="游戏照片" FontSize="20" FontWeight="SemiBold" /><StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"><Button Content="选择文件夹" Click="SelectPhotoDirectory_OnClick" /><Button Content="打开文件夹" Click="OpenPhotoDirectory_OnClick" /><Button Content="刷新" Click="ReadDisplay_OnClick" /></StackPanel></Grid>
                     <TextBlock Text="{x:Bind EndfieldSettings.PhotoDirectory, Mode=OneWay}" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
-                    <TextBlock Text="默认读取两服共用的照片目录。选择其他文件夹只改变本渠道的展示来源，原照片保持原样。点击照片用系统图片查看器打开。" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                    <TextBlock Text="点击照片在系统图片查看器中打开。" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
                     <TextBlock Text="{x:Bind EndfieldSettings.PhotoSummary, Mode=OneWay}" FontSize="13" />
                     <GridView MaxHeight="400" ItemsSource="{x:Bind EndfieldSettings.Photos, Mode=OneWay}" IsItemClickEnabled="True" ItemClick="Photo_OnClick" SelectionMode="None" HorizontalAlignment="Stretch">
                         <GridView.ItemTemplate><DataTemplate x:DataType="infra:EndfieldPhoto"><StackPanel Width="220" Spacing="5" Margin="0,0,8,8"><Border CornerRadius="8" Background="{ThemeResource HeroGlassBrush}"><Image Height="124" Stretch="Uniform" Loaded="PhotoImage_OnLoaded" Unloaded="PhotoImage_OnUnloaded" /></Border><TextBlock Text="{x:Bind Name}" FontSize="12" TextTrimming="CharacterEllipsis" /><TextBlock Text="{x:Bind DateText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel></DataTemplate></GridView.ItemTemplate>

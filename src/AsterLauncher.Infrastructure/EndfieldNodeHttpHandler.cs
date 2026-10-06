@@ -103,13 +103,16 @@ public sealed class EndfieldNodeHttpHandler : HttpMessageHandler
     {
         var host = uri.Host;
         return uri.Scheme == Uri.UriSchemeHttps && uri.UserInfo.Length == 0 && (uri.IsDefaultPort || uri.Port == 443)
-            && (host.Equals("launcher.hypergryph.com", StringComparison.OrdinalIgnoreCase)
+            && (requestGitHub(uri)
+                || host.Equals("launcher.hypergryph.com", StringComparison.OrdinalIgnoreCase)
                 || host.EndsWith(".hycdn.cn", StringComparison.OrdinalIgnoreCase)
                 || host.EndsWith(".hypergryph.com", StringComparison.OrdinalIgnoreCase)
                 || host.EndsWith(".gryphline.com", StringComparison.OrdinalIgnoreCase)
                 || new[] { "mihoyo.com", "yuanshen.com", "bhsr.com", "bh3.com", "juequling.com" }.Any(domain => host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)));
     }
 
+    private static bool requestGitHub(Uri uri) => uri.Host.Equals("raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
+        && uri.AbsolutePath.StartsWith("/duobuhui/AsterLauncher/main/resources/", StringComparison.Ordinal) && uri.Query.Length == 0;
     private static void Kill(Process process)
     {
         try { if (!process.HasExited) process.Kill(entireProcessTree: true); }

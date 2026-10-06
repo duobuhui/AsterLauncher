@@ -40,6 +40,8 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
                 ["1", "2", "3", "5", "102", "103"])
         };
 
+    private IResourceCatalogProvider? _resources;
+    public UigfArchiveService(ILogger<UigfArchiveService> logger, IResourceCatalogProvider resources) : this(logger) => _resources = resources;
     private readonly ILogger<UigfArchiveService> _logger;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
@@ -113,7 +115,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         try
         {
             var root = File.Exists(ArchivePath) ? await ReadRootAsync(ArchivePath, cancellationToken).ConfigureAwait(false) : NewRoot();
-            return UigfGachaAnalyzer.Analyze(root, gameId);
+            return UigfGachaAnalyzer.Analyze(root, gameId, _resources?.Current);
         }
         catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException)
         {

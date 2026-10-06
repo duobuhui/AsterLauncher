@@ -22,6 +22,8 @@ public enum LauncherThemePreference
     PaimonWhite
 }
 
+public enum LauncherAccentPreference { Default, Purple, Pink, Cream }
+
 public enum CloseButtonBehavior
 {
     Exit,
@@ -240,6 +242,8 @@ public sealed class LauncherConfiguration
     public int SchemaVersion { get; set; } = 4;
 
     public LauncherThemePreference ThemePreference { get; set; } = LauncherThemePreference.System;
+    public LauncherAccentPreference? AccentPreference { get; set; }
+    public bool ResourceUpdatesEnabled { get; set; } = true;
 
     public CloseButtonBehavior CloseButtonBehavior { get; set; } = CloseButtonBehavior.Exit;
 

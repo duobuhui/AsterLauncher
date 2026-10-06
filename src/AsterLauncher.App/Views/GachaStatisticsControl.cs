@@ -185,7 +185,7 @@ public sealed class GachaStatisticsControl : UserControl
         catch(Exception ex) when(ex is IOException or InvalidDataException){_correctionInfo.Text="校对未保存，请检查数据目录权限及校对文件。";}
     }
     private static string Mean(double? value)=>value is double mean?$"{mean:0.0} 抽":"—";
-    private static Brush Brush(string name)=>(Brush)Application.Current.Resources[name];
+    private static Brush Brush(string name)=>AsterLauncher.App.Services.AppearanceBrushes.Get(name);
     private static HashSet<string> ReadKnownItems(string game)
     {
         var result=new HashSet<string>(StringComparer.Ordinal);

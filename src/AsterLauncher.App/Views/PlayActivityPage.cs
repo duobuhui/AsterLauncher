@@ -17,7 +17,7 @@ public sealed class PlayActivityPage : Page
     private readonly TextBlock _summary = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _selected = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _legacy = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
-    private readonly TextBlock _title = new() { FontSize = 27, Foreground = (Brush)Application.Current.Resources["PageTitleBrush"], FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+    private readonly TextBlock _title = new() { FontSize = 27, Foreground = AsterLauncher.App.Services.AppearanceBrushes.Get("PageTitleBrush"), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
     private readonly List<Border> _legendCells = [];
     private bool _setting;
 
@@ -28,6 +28,7 @@ public sealed class PlayActivityPage : Page
         heading.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         _title.Text = "游玩记录";
+        _title.Visibility = Visibility.Collapsed;
         heading.Children.Add(_title);
         Grid.SetColumn(_period, 1); heading.Children.Add(_period);
         AutomationProperties.SetName(_period, "游玩记录年份");
@@ -111,7 +112,7 @@ public sealed class PlayActivityPage : Page
         }
         _selected.Text = $"{from:yyyy/MM/dd} — {through:yyyy/MM/dd}";
     }
-    private static Brush Brush(string name) => (Brush)Application.Current.Resources[name];
+    private static Brush Brush(string name) => AsterLauncher.App.Services.AppearanceBrushes.Get(name);
     private static Brush Shade(int level)
     {
         var accent = ((SolidColorBrush)Application.Current.Resources["ThemeAccentBrush"]).Color;

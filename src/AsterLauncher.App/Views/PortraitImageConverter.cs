@@ -1,10 +1,12 @@
 using System.Text.Json;
+using AsterLauncher.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace AsterLauncher.App.Views;
 
-/// <summary>Resolves only the publisher portraits bundled with this release.</summary>
+/// <summary>Resolves verified cached resource images, with bundled publisher portraits as fallback.</summary>
 public sealed class PortraitImageConverter : IValueConverter
 {
     private static readonly Lazy<IReadOnlyDictionary<string, string>> Paths = new(ReadPaths);
@@ -18,14 +20,16 @@ public sealed class PortraitImageConverter : IValueConverter
         }
 
         var key = parameter is string gameId ? gameId + "\u001F" + name : name;
-        if (!Paths.Value.TryGetValue(key, out var relativePath))
+        var remote = ((App)Microsoft.UI.Xaml.Application.Current).Services.GetRequiredService<IResourceCatalogProvider>().FindImage(parameter as string ?? "", "portrait", name);
+        if (!Paths.Value.TryGetValue(key, out var relativePath) && remote is null)
         {
             return null!;
         }
 
+        relativePath = remote ?? relativePath!;
         if (!Images.TryGetValue(relativePath, out var image))
         {
-            var fullPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Games", "Gacha",
+            var fullPath = remote ?? Path.Combine(AppContext.BaseDirectory, "Assets", "Games", "Gacha",
                 "Portraits", relativePath.Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(fullPath))
             {

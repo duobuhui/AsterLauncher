@@ -149,7 +149,7 @@ public sealed class LauncherViewModel : ObservableObject
         private set => SetProperty(ref _scanStatus, value);
     }
 
-    public bool CanLaunch => CurrentGame?.IsInstalled == true && SelectedProfile is not null && !IsLaunching
+    public bool CanLaunch => CurrentGame?.IsInstalled == true && CurrentGame.EffectiveExecutablePath is not null && SelectedProfile is not null && !IsLaunching
         && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldInstallation?.MaintenanceInProgress != true)
         && !HasHoYoMaintenance(CurrentGame);
 
@@ -160,6 +160,8 @@ public sealed class LauncherViewModel : ObservableObject
     public string ConfigurationPath => _configurationStore.ConfigurationPath;
 
     public LauncherThemePreference ThemePreference => _configuration.ThemePreference;
+    public LauncherAccentPreference AccentPreference => _configuration.AccentPreference ?? LauncherAccentPreference.Default;
+    public bool ResourceUpdatesEnabled => _configuration.ResourceUpdatesEnabled;
 
     public CloseButtonBehavior CloseButtonBehavior => _configuration.CloseButtonBehavior;
 
@@ -597,6 +599,8 @@ public sealed class LauncherViewModel : ObservableObject
             StatusText = "当前渠道的维护任务尚未完成，请继续更新或修复。";
             return null;
         }
+        if(CurrentGame.Id == BuiltInGameIds.Endfield && SelectedEndfieldChannel == EndfieldChannel.Unknown)
+        { StatusText = "请在游戏设置中确认已有安装的服务器。"; return null; }
         if (!CurrentGame.IsInstalled)
         {
             StatusText = "游戏路径无效，请先手动指定游戏 EXE。";
@@ -783,6 +787,20 @@ public sealed class LauncherViewModel : ObservableObject
         OnPropertyChanged(nameof(CurrentCompanionTools));
     }
 
+    public async Task SetAccentPreferenceAsync(LauncherAccentPreference preference)
+    {
+        _configuration.AccentPreference = preference;
+        OnPropertyChanged(nameof(AccentPreference));
+        ThemeChanged?.Invoke(this, EventArgs.Empty);
+        await _configurationStore.SaveAsync(_configuration);
+    }
+    public async Task SetResourceUpdatesEnabledAsync(bool enabled)
+    {
+        _configuration.ResourceUpdatesEnabled = enabled;
+        OnPropertyChanged(nameof(ResourceUpdatesEnabled));
+        await _configurationStore.SaveAsync(_configuration);
+    }
+
     public async Task SetThemePreferenceAsync(LauncherThemePreference preference)
     {
         if (_configuration.ThemePreference == preference)
@@ -924,7 +942,7 @@ public sealed class LauncherViewModel : ObservableObject
             {
                 var running = game.IsInstalled && await game.Adapter.ProcessDetector.IsRunningAsync(
                     game.Adapter.Definition,
-                    game.EffectiveExecutablePath);
+                    game.EffectiveExecutablePath ?? game.State.ExecutablePath);
                 game.SetRunning(running);
             }
             catch (Exception exception)
@@ -982,6 +1000,73 @@ public sealed class LauncherViewModel : ObservableObject
         _configuration.EndfieldInstallations.Add(installation);
         EndfieldInstallationProfiles.Ensure(_configuration, installation);
         return installation;
+    }
+
+    public async Task ConfirmInstalledServerAsync(GameCardViewModel game, bool bilibili, string executable)
+    {
+        if (!ReferenceEquals(game, CurrentGame)) throw new InvalidOperationException("请重新选择游戏。");
+        if (game.IsRunning || game.State.HoYoInstallations.Any(i=>i.MaintenanceInProgress) ||
+            _configuration.EndfieldInstallations.Any(i=>i.MaintenanceInProgress && game.Id == BuiltInGameIds.Endfield))
+            throw new InvalidOperationException("请先关闭游戏并结束维护任务。");
+        var fullExe = Path.GetFullPath(executable); var root = Path.GetDirectoryName(fullExe)!;
+        if (!File.Exists(fullExe) || !game.Adapter.Definition.ExecutableNames.Contains(Path.GetFileName(fullExe), StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException("请选择当前游戏的 EXE。");
+        SafeGamePath.Resolve(root, Path.GetFileName(fullExe));
+        var paths = game.Id == BuiltInGameIds.Endfield
+            ? _configuration.EndfieldInstallations.Select(i=>i.ExecutablePath).Append(fullExe)
+            : game.State.HoYoInstallations.Select(i=>i.ExecutablePath).Append(fullExe);
+        foreach(var path in paths.Where(p=>p is not null).Distinct(StringComparer.OrdinalIgnoreCase))
+            if(await Task.Run(()=>game.Adapter.ProcessDetector.IsRunningAsync(game.Adapter.Definition,path)))
+                throw new InvalidOperationException("请先关闭此游戏的所有服务器客户端。");
+        if (File.Exists(SafeGamePath.Resolve(root, ".aster-maintenance.json")) || File.Exists(SafeGamePath.Resolve(root, ".aster-hoyo-maintenance.json")))
+            throw new InvalidOperationException("此目录有未完成维护，请先恢复或取消任务。");
+        if (game.Id == BuiltInGameIds.Endfield)
+        {
+            var channel = bilibili ? EndfieldChannel.Bilibili : EndfieldChannel.Official;
+            var info = await Task.Run(()=>EndfieldInstallationInfo.ReadAsync(root));
+            if (info is { } trusted && trusted.Channel != channel) throw new InvalidOperationException("安装信息属于另一服务器。");
+            var existing = _configuration.EndfieldInstallations.FirstOrDefault(i=>i.Channel == channel);
+            if (existing?.InstallRoot is { } occupied && !Path.GetFullPath(occupied).Equals(root,StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("此服务器已绑定其他目录，请先在安装与维护中更改目录。");
+            foreach(var peer in _configuration.EndfieldInstallations.Where(i=>i != existing && i.Channel != EndfieldChannel.Unknown))
+                HoYoSharingPolicy.ValidateIndependent(root,peer.InstallRoot);
+            var unknown = _configuration.EndfieldInstallations.FirstOrDefault(i=>i.Channel == EndfieldChannel.Unknown && i.ExecutablePath == fullExe);
+            if (unknown is not null && existing is null) { unknown.Channel = channel; existing = unknown; }
+            existing ??= GetOrCreateEndfieldInstallation(channel);
+            existing.InstallRoot = root; existing.ExecutablePath = fullExe; existing.InstalledVersion = info?.Version;
+            if(unknown is not null && unknown != existing)
+            {
+                foreach(var profile in _configuration.LaunchProfiles.Where(p=>p.GameId==game.Id && p.EndfieldInstallationId==unknown.InstallationId)) profile.EndfieldInstallationId=existing.InstallationId;
+                existing.SelectedLaunchProfileId=unknown.SelectedLaunchProfileId??existing.SelectedLaunchProfileId;
+                unknown.InstallRoot=unknown.ExecutablePath=null;
+            }
+            _configuration.SelectedEndfieldChannel = channel; EndfieldInstallationProfiles.Ensure(_configuration,existing);
+            ApplyEndfieldSelection(); OnPropertyChanged(nameof(SelectedEndfieldChannel)); OnPropertyChanged(nameof(SelectedEndfieldInstallation));
+        }
+        else if (HoYoInstallationIdentity.HasChannels(game.Id))
+        {
+            var channel = bilibili ? HoYoChannel.Bilibili : HoYoChannel.Official;
+            await Task.Run(()=>InstalledServerDeclaration.ValidateHoYo(root,Path.GetFileName(fullExe),channel));
+            var existing = game.State.HoYoInstallations.FirstOrDefault(i=>i.Channel == channel);
+            if (existing?.InstallRoot is { } occupied && !Path.GetFullPath(occupied).Equals(root,StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("此服务器已绑定其他目录，请先在安装与维护中更改目录。");
+            foreach(var peer in game.State.HoYoInstallations.Where(i=>i != existing && i.Channel != HoYoChannel.Unknown))
+                HoYoSharingPolicy.ValidateIndependent(root,peer.InstallRoot);
+            var unidentified = game.State.HoYoInstallations.FirstOrDefault(i=>i.Channel==HoYoChannel.Unknown && i.ExecutablePath is { } path && Path.GetFullPath(path).Equals(fullExe,StringComparison.OrdinalIgnoreCase));
+            var install = InstallationChannelAssignment.Confirm(game.State,channel,fullExe);
+            if(unidentified is not null && unidentified!=install)
+            {
+                foreach(var profile in _configuration.LaunchProfiles.Where(p=>p.GameId==game.Id && p.HoYoInstallationId==unidentified.InstallationId))profile.HoYoInstallationId=install.InstallationId;
+                install.SelectedLaunchProfileId=unidentified.SelectedLaunchProfileId??install.SelectedLaunchProfileId;
+            }
+            install.InstalledVersion = await Task.Run(()=>HoYoMaintenanceService.ReadVersion(root));
+            HoYoInstallationIdentity.EnsureProfile(_configuration,game.State,install);
+            UpdateSavedPath(game); game.Refresh(); OnPropertyChanged(nameof(CurrentGame));
+        }
+        else throw new InvalidOperationException("此游戏在客户端内选择服务器。");
+        RefreshProfiles(); RefreshLaunchSequence(); OnPropertyChanged(nameof(CanLaunch));
+        await _configurationStore.SaveAsync(_configuration);
+        await RefreshRunningStateAsync();
     }
 
     public async Task SelectEndfieldChannelAsync(EndfieldChannel channel)

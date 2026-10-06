@@ -66,9 +66,28 @@ public sealed partial class GameSettingsPage : Page
     }
     private void PhotoImage_OnUnloaded(object sender, RoutedEventArgs e) { if (sender is Image image) image.Source = null; }
 
+    private async void SelectServerExecutable_OnClick(object sender,RoutedEventArgs e)
+    {
+        var path = await _filePicker.PickExecutableAsync(App.MainWindow);
+        if(path is not null) ServerExecutableBox.Text = path;
+    }
+    private async void ConfirmServer_OnClick(object sender,RoutedEventArgs e)
+    {
+        var game = _viewModel.CurrentGame;
+        if(game is null || ServerBox.SelectedIndex is not (1 or 2)) { ResultInfo.Message = "请选择服务器。"; ResultInfo.IsOpen = true; return; }
+        try
+        {
+            await _viewModel.ConfirmInstalledServerAsync(game,ServerBox.SelectedIndex == 2,ServerExecutableBox.Text);
+            ResultInfo.Title = "服务器已保存"; ResultInfo.Message = ""; ResultInfo.IsOpen = true; RefreshForm();
+        }
+        catch(Exception ex) { ResultInfo.Title = "服务器未保存"; ResultInfo.Message = ex.Message; ResultInfo.IsOpen = true; }
+    }
     private void RefreshForm()
     {
         var game = _viewModel.CurrentGame;
+        ServerPanel.Visibility = game is not null && (game.Id == Core.BuiltInGameIds.Endfield || Core.HoYoInstallationIdentity.HasChannels(game.Id)) ? Visibility.Visible : Visibility.Collapsed;
+        ServerExecutableBox.Text = game?.EffectiveExecutablePath ?? game?.State.ExecutablePath ?? "";
+        ServerBox.SelectedIndex = game?.Id == Core.BuiltInGameIds.Endfield ? (int)_viewModel.SelectedEndfieldChannel : game?.State.SelectedHoYoChannel switch { Core.HoYoChannel.Official => 1, Core.HoYoChannel.Bilibili => 2, _ => 0 };
         PresentationExpander.IsExpanded = game?.Id != Core.BuiltInGameIds.Endfield;
         GameNameText.Text = game?.DisplayName ?? "未选择游戏";
         ExecutablePathBox.Text = game?.State.ExecutablePath ?? string.Empty;

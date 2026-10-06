@@ -8,7 +8,7 @@ function allowed(raw) {
   const uri = new URL(raw);
   const host = uri.hostname.toLowerCase();
   if (uri.protocol !== 'https:' || uri.username || uri.password || (uri.port && uri.port !== '443') ||
-      !(host === 'launcher.hypergryph.com' || host.endsWith('.hycdn.cn') ||
+      !(host === 'raw.githubusercontent.com' && uri.pathname.startsWith('/duobuhui/AsterLauncher/main/resources/') && !uri.search || host === 'launcher.hypergryph.com' || host.endsWith('.hycdn.cn') ||
         host.endsWith('.hypergryph.com') || host.endsWith('.gryphline.com') ||
         ['mihoyo.com', 'yuanshen.com', 'bhsr.com', 'bh3.com', 'juequling.com'].some(domain => host.endsWith('.' + domain)))) {
     throw new Error('untrusted_host');

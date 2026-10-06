@@ -22,9 +22,14 @@ public sealed partial class GachaPage : Page
     private bool _showStatistics;
     private int _refreshRevision;
 
-    public GachaPage(LauncherViewModel launcher, IUigfArchiveService archive, IEndfieldGachaArchiveService endfieldArchive, IFilePickerService filePicker)
+    private readonly IResourceCatalogProvider _resources;
+    private void Resource_OnUpdated(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(async () => { if (IsLoaded) await RefreshAsync(); });
+    public GachaPage(LauncherViewModel launcher, IUigfArchiveService archive, IEndfieldGachaArchiveService endfieldArchive, IFilePickerService filePicker, IResourceCatalogProvider resources)
     {
         _launcher = launcher;
+        _resources = resources;
+        Loaded += (_, _) => _resources.Updated += Resource_OnUpdated;
+        Unloaded += (_, _) => _resources.Updated -= Resource_OnUpdated;
         _archive = archive;
         _endfieldArchive = endfieldArchive;
         _filePicker = filePicker;

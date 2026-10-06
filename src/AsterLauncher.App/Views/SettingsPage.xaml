@@ -4,7 +4,7 @@
     xmlns:views="using:AsterLauncher.App.Views">
     <Grid Padding="28,24" RowSpacing="14">
         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-        <StackPanel Spacing="2"><TextBlock Text="启动器设置" FontSize="27" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" /><TextBlock Text="应用信息、外观、窗口与游戏路径" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="13" /></StackPanel>
+
         <TabView Grid.Row="1" IsAddTabButtonVisible="False" TabWidthMode="SizeToContent">
             <TabViewItem IsClosable="False" AutomationProperties.Name="首页"><TabViewItem.Header><TextBlock Text="首页" Foreground="{ThemeResource PageTitleBrush}" /></TabViewItem.Header>
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><Grid Padding="0,16,16,16" ColumnSpacing="14">
@@ -15,6 +15,13 @@
                     <StackPanel Grid.Column="1" Spacing="14">
                         <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18"><StackPanel Spacing="8"><TextBlock Text="项目主页" FontSize="16" FontWeight="SemiBold" /><TextBlock Text="github.com/duobuhui/AsterLauncher" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" /><Button Content="打开 GitHub" Click="OpenRepository_OnClick" /></StackPanel></Border>
                         <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18"><StackPanel Spacing="8"><TextBlock Text="启动器更新" FontSize="16" FontWeight="SemiBold" /><TextBlock x:Name="UpdateStatusText" Text="可从 GitHub Releases 检查新版本" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" /><StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdate_OnClick" /><Button x:Name="InstallUpdateButton" Content="下载并安装" IsEnabled="False" Style="{StaticResource ThemeActionButtonStyle}" Click="InstallUpdate_OnClick" /></StackPanel></StackPanel></Border>
+                        <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18"><StackPanel Spacing="8">
+                            <TextBlock Text="游戏资料更新" FontSize="16" FontWeight="SemiBold" />
+                            <TextBlock Text="卡池名称与时间、角色和卡池图片。来自项目的公开 GitHub 资源目录，独立于启动器更新。" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                            <CheckBox x:Name="ResourceUpdatesBox" Content="启动时检查资料更新" Click="ResourceUpdates_OnClick" />
+                            <TextBlock x:Name="ResourceStatusText" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                            <Button x:Name="ResourceUpdateButton" Content="更新游戏资料" Click="ResourceUpdate_OnClick" HorizontalAlignment="Left" />
+                        </StackPanel></Border>
                     </StackPanel>
                 </Grid></ScrollViewer>
             </TabViewItem>
@@ -22,11 +29,16 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Padding="0,16,16,16" Spacing="14">
                     <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="16">
                         <Grid ColumnSpacing="20"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock Text="应用主题" FontSize="16" FontWeight="SemiBold" /><TextBlock Text="主题色用于按钮、玻璃遮罩和页面标题" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
-                            <ComboBox x:Name="ThemeBox" Grid.Column="1" Width="220" VerticalAlignment="Center" AutomationProperties.Name="应用主题" SelectionChanged="ThemeBox_OnSelectionChanged">
+                            <StackPanel VerticalAlignment="Center" Spacing="3"><TextBlock Text="卡片明暗" FontSize="16" FontWeight="SemiBold" /><TextBlock Text="独立于主题颜色" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></StackPanel>
+                            <ComboBox x:Name="ThemeBox" Grid.Column="1" Width="220" VerticalAlignment="Center" AutomationProperties.Name="卡片明暗" SelectionChanged="ThemeBox_OnSelectionChanged">
                                 <ComboBoxItem Content="跟随 Windows" Tag="System" /><ComboBoxItem Content="深色" Tag="Dark" /><ComboBoxItem Content="浅色" Tag="Light" />
-                                <ComboBoxItem Content="提丰紫" Tag="TyphonPurple" /><ComboBoxItem Content="爱莉粉" Tag="ElysiaPink" /><ComboBoxItem Content="派蒙白" Tag="PaimonWhite" />
                             </ComboBox>
+                        </Grid>
+                    </Border>
+                    <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="16">
+                        <Grid ColumnSpacing="20"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="主题颜色" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <ComboBox x:Name="AccentBox" Grid.Column="1" Width="220" AutomationProperties.Name="主题颜色" SelectionChanged="AccentBox_OnSelectionChanged"><ComboBoxItem Content="星芒紫" Tag="Default" /><ComboBoxItem Content="提丰紫" Tag="Purple" /><ComboBoxItem Content="爱莉粉" Tag="Pink" /><ComboBoxItem Content="派蒙白" Tag="Cream" /></ComboBox>
                         </Grid>
                     </Border>
                 </StackPanel></ScrollViewer>
@@ -43,7 +55,7 @@
                     </Border>
                     <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="16"><StackPanel Spacing="8">
                         <TextBlock Text="游戏目录" FontSize="16" FontWeight="SemiBold" />
-                        <TextBlock Text="自动查找会在此目录及子目录搜索游戏。终末地新安装默认在此目录下创建独立的官服和 B 服文件夹；其他游戏使用官方安装器。" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                        <TextBlock Text="自动查找此目录及子目录中的游戏。新下载的游戏会在此处创建独立的官服和 B 服文件夹。" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
                         <Grid ColumnSpacing="8"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <TextBox x:Name="DirectoryBox" AutomationProperties.Name="游戏目录" />
                             <Button Grid.Column="1" Content="浏览…" Click="BrowseDirectory_OnClick" />

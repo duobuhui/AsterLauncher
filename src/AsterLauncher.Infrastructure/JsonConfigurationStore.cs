@@ -29,6 +29,7 @@ public sealed class JsonConfigurationStore : IConfigurationStore
         if (!File.Exists(ConfigurationPath))
         {
             var initial = CreateInitialConfiguration();
+            LauncherAppearance.Normalize(initial);
             await SaveAsync(initial, cancellationToken).ConfigureAwait(false);
             return initial;
         }
@@ -40,7 +41,9 @@ public sealed class JsonConfigurationStore : IConfigurationStore
                 stream,
                 SerializerOptions,
                 cancellationToken).ConfigureAwait(false);
-            return configuration ?? CreateInitialConfiguration();
+            configuration ??= CreateInitialConfiguration();
+            LauncherAppearance.Normalize(configuration);
+            return configuration;
         }
         catch (JsonException exception)
         {

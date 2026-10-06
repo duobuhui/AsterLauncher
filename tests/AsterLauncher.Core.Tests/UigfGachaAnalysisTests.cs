@@ -6,6 +6,17 @@ namespace AsterLauncher.Core.Tests;
 
 public sealed class UigfGachaAnalysisTests
 {
+    [Theory]
+    [InlineData(BuiltInGameIds.GenshinImpact,"hk4e","301")]
+    [InlineData(BuiltInGameIds.HonkaiStarRail,"hkrpg","11")]
+    [InlineData(BuiltInGameIds.ZenlessZoneZero,"nap","2")]
+    public void PublicResourcePoolNamesAndDatesUseStableBannerIdentity(string game,string key,string type)
+    {
+        var root=Root(key,User("100000001",Pull("1",type,"5","角色","banner-resource")));
+        var catalog=new ResourceCatalog{Revision=1,PublishedAt=DateTimeOffset.Now,Pools=[new(){GameId=game,Key="banner-resource",Name="公开卡池资料",StartsAt=DateTimeOffset.Parse("2026-10-01T00:00:00Z"),EndsAt=DateTimeOffset.Parse("2026-10-15T00:00:00Z"),Source="https://www.mihoyo.com/"}]};
+        var banner=Assert.Single(Assert.Single(Assert.Single(UigfGachaAnalyzer.Analyze(root,game,catalog).Accounts).Sections).Banners);
+        Assert.Equal("公开卡池资料",banner.Title);Assert.Equal("2026/10/01 08:00 — 2026/10/15 08:00",banner.DateText);
+    }
     [Fact]
     public void PityIndicator_DistinguishesLocalLowerBound_MissingRecords_AndUnknownRules()
     {
