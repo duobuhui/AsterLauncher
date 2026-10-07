@@ -90,6 +90,37 @@ public sealed class ResourceCalendarTests
         foreach (var bad in new[] { good with { Category = "unknown" }, good with { FeaturedOperator = "" }, good with { Category = "refactor" }, good with { GameId = BuiltInGameIds.HonkaiStarRail } })
             Assert.Throws<InvalidDataException>(() => ResourceUpdateService.Parse(JsonSerializer.SerializeToUtf8Bytes(new ResourceCatalog { Revision = 1, PublishedAt = DateTimeOffset.Now, Pools = [bad] }, ResourceUpdateService.JsonOptions)));
     }
+    [Fact]
+    public async Task LegacyCacheWithDroppedOptionalFieldsRecoversOnNextFeedRevision()
+    {
+        var catalog = ResourceUpdateService.Parse(File.ReadAllBytes(Path.Combine(Fixture, "catalog.json")));
+        var legacy = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(Fixture, "catalog.json")))!;
+        legacy["revision"] = catalog.Revision - 1;
+        foreach (var pool in legacy["pools"]!.AsArray().OfType<System.Text.Json.Nodes.JsonObject>())
+            foreach (var field in new[] { "startsOn", "endsOn", "category", "featuredOperator" }) pool.Remove(field);
+        var root = Path.Combine(Environment.GetEnvironmentVariable("ASTERLAUNCHER_TEST_TEMP_ROOT") ?? Path.GetTempPath(), "resource-upgrade-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var cache = Path.Combine(root, "resources");
+            Directory.CreateDirectory(Path.Combine(cache, "content"));
+            await File.WriteAllTextAsync(Path.Combine(cache, "catalog.json"), legacy.ToJsonString());
+            foreach (var image in catalog.Images)
+                File.Copy(Path.Combine(Fixture, image.File), Path.Combine(cache, "content", image.Sha256 + Path.GetExtension(image.File)), true);
+            using var http = new HttpClient(new FeedHandler());
+            var service = new ResourceUpdateService(http, root);
+            await service.LoadAsync();
+            var stale = Assert.Single(service.Current!.Pools, p => p.Key == "绚丽异彩");
+            Assert.Null(stale.EndsOn);
+            Assert.Equal("2026/09/24 12:00 — 未公布", stale.DateText);
+            Assert.True(await service.RefreshAsync());
+            Assert.Equal(catalog.Revision, service.Current!.Revision);
+            Assert.Equal("2026/09/24 — 2026/10/15", Assert.Single(service.Current.Pools, p => p.Key == "绚丽异彩").DateText);
+            var restarted = new ResourceUpdateService(http, root);
+            await restarted.LoadAsync();
+            Assert.Equal(new DateOnly(2026, 10, 15), Assert.Single(restarted.Current!.Pools, p => p.Key == "绚丽异彩").EndsOn);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
     private sealed class FeedHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
