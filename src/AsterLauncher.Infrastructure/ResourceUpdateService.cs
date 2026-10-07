@@ -112,7 +112,7 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
         keys.Clear();
         foreach (var pool in value.Pools)
             if (pool is null || !Game(pool.GameId) || !Text(pool.Key) || !Text(pool.Name) || !PublicSource(pool.Source) ||
-                !keys.Add(pool.GameId + ":" + pool.Key + ":" + pool.Phase) || pool.EndsAt is not null && (pool.StartsAt is null || pool.EndsAt <= pool.StartsAt) ||
+                !keys.Add(pool.GameId + ":" + pool.Key + ":" + pool.Phase) || !ValidPoolDates(pool) || !ValidPoolDefinition(pool) ||
                 pool.Weapon?.Length > 160 || pool.WeaponPool?.Length > 160)
                 throw new InvalidDataException("卡池信息无效。");
         foreach (var item in value.Announcements)
@@ -123,6 +123,22 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
                 item.Platforms is null || item.Platforms.Count > 10 || item.Platforms.Any(p => !Text(p)) || !PublicSource(item.Source))
                 throw new InvalidDataException("兑换码信息无效。");
         return value;
+    }
+    private static bool ValidPoolDefinition(ResourcePool pool)
+    {
+        if (pool.Category is null && pool.FeaturedOperator is null) return true;
+        return pool.GameId == BuiltInGameIds.Endfield && Text(pool.FeaturedOperator) &&
+            (pool.Category == "chartered" && pool.Phase is null ||
+             pool.Category == "refactor" && int.TryParse(pool.Phase, out var phase) && phase > 0);
+    }
+    private static bool ValidPoolDates(ResourcePool pool)
+    {
+        if (pool.StartsAt is not null && pool.StartsOn is not null || pool.EndsAt is not null && pool.EndsOn is not null ||
+            pool.StartsOn == default(DateOnly) || pool.EndsOn == default(DateOnly)) return false;
+        var start = pool.StartsOn ?? (pool.StartsAt is { } a ? DateOnly.FromDateTime(a.ToOffset(TimeSpan.FromHours(8)).DateTime) : (DateOnly?)null);
+        var end = pool.EndsOn ?? (pool.EndsAt is { } b ? DateOnly.FromDateTime(b.ToOffset(TimeSpan.FromHours(8)).DateTime) : (DateOnly?)null);
+        if (end is not null && (start is null || end < start)) return false;
+        return pool.StartsAt is not { } exactStart || pool.EndsAt is not { } exactEnd || exactEnd > exactStart;
     }
     private static bool Game(string value) => value is BuiltInGameIds.Endfield or BuiltInGameIds.GenshinImpact or BuiltInGameIds.HonkaiStarRail or BuiltInGameIds.ZenlessZoneZero or BuiltInGameIds.HonkaiImpact3rd or BuiltInGameIds.Arknights or BuiltInGameIds.PetitPlanet;
     private static bool Text(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 160 && !value.Any(char.IsControl);

@@ -19,15 +19,25 @@ public sealed record ResourcePool
     public string? Phase { get; init; }
     public DateTimeOffset? StartsAt { get; init; }
     public DateTimeOffset? EndsAt { get; init; }
+    public DateOnly? StartsOn { get; init; }
+    public DateOnly? EndsOn { get; init; }
+    public string? Category { get; init; }
+    public string? FeaturedOperator { get; init; }
     public string? WeaponPool { get; init; }
     public string? Weapon { get; init; }
     public string Source { get; init; } = "";
-    public string DateText => (StartsAt, EndsAt) switch
+    // Date-only boundaries are not fabricated midnight timestamps. Use a consistent date range if either boundary has day precision.
+    public string DateText => StartsOn is not null || EndsOn is not null
+        ? $"{FormatDate(StartsOn, StartsAt)} — {FormatDate(EndsOn, EndsAt)}"
+        : (StartsAt, EndsAt) switch
     {
         ({ } start, { } end) => $"{Format(start)} — {Format(end)}",
         ({ } start, null) => $"{Format(start)} — 未公布",
         _ => ""
     };
+    private static string FormatDate(DateOnly? date, DateTimeOffset? time) =>
+        (date ?? (time is { } value ? DateOnly.FromDateTime(value.ToOffset(TimeSpan.FromHours(8)).DateTime) : null))
+        ?.ToString("yyyy/MM/dd", System.Globalization.CultureInfo.InvariantCulture) ?? "未公布";
     private static string Format(DateTimeOffset value) => value.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy/MM/dd HH:mm");
 }
 public sealed record ResourceImage

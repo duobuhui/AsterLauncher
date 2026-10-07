@@ -1,6 +1,6 @@
 # AsterLauncher
 
-独立开发的 Windows 游戏启动器，使用 .NET 10、Windows App SDK 2.4 和 WinUI 3。当前版本：**0.2.0-beta**。
+独立开发的 Windows 游戏启动器，使用 .NET 10、Windows App SDK 2.4 和 WinUI 3。当前版本：**0.2.0-beta.1**。
 
 [下载](https://github.com/duobuhui/AsterLauncher/releases) · [反馈问题](https://github.com/duobuhui/AsterLauncher/issues)
 

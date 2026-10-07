@@ -26,7 +26,7 @@ internal static class EndfieldGachaAnalyzer
                 ?? "未分类卡池";
             var poolName = ReadText(record, "poolName", "pool_name") ?? poolId;
             var poolVersion = ReadText(record, "poolVersion", "pool_version");
-            var definition = EndfieldPoolCatalog.Resolve(poolId, poolName);
+            var definition = EndfieldPoolCatalog.Resolve(poolId, poolName, resources, poolVersion);
             // The observed rerun record includes poolVersion; later phases may reuse poolId/name.
             // Without a version, a distinct suffixed name is the only safe fallback.
             var poolKey = definition.Category == EndfieldPoolCategory.Refactor

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026100601,
-  "publishedAt": "2026-10-06T12:00:00+08:00",
+  "revision": 2026100701,
+  "publishedAt": "2026-10-07T05:42:56.246Z",
   "pools": [
     {
       "gameId": "endfield",
@@ -122,7 +122,48 @@
       "endsAt": null,
       "weaponPool": "点绘申领",
       "weapon": "艺术暴君",
-      "source": "https://endfield.hypergryph.com/news/2653"
+      "source": "https://endfield.hypergryph.com/news/3805",
+      "endsOn": "2026-10-15"
+    },
+    {
+      "gameId": "endfield",
+      "key": "万物更新",
+      "name": "万物更新",
+      "startsAt": null,
+      "endsAt": null,
+      "weaponPool": "篆玉申领",
+      "weapon": "玉中身",
+      "source": "https://www.taptap.cn/moment/856621354630254004",
+      "startsOn": "2026-10-15",
+      "endsOn": "2026-11-05",
+      "category": "chartered",
+      "featuredOperator": "祀"
+    },
+    {
+      "gameId": "endfield",
+      "key": "烟火邀星河",
+      "name": "烟火邀星河",
+      "startsAt": "2026-11-05T12:00:00+08:00",
+      "endsAt": null,
+      "weaponPool": "月映申领",
+      "weapon": "唤月",
+      "source": "https://www.taptap.cn/moment/856621354630254004",
+      "endsOn": "2026-11-26",
+      "category": "chartered",
+      "featuredOperator": "明河"
+    },
+    {
+      "gameId": "endfield",
+      "key": "祖泉的新流",
+      "name": "祖泉的新流",
+      "phase": "1",
+      "startsAt": "2026-10-29T12:00:00+08:00",
+      "endsAt": "2026-11-19T11:59:00+08:00",
+      "weaponPool": "细枝申领",
+      "weapon": "遗忘",
+      "source": "https://www.taptap.cn/moment/856621354630254004",
+      "category": "refactor",
+      "featuredOperator": "汤汤"
     }
   ],
   "images": [
@@ -135,6 +176,50 @@
       "sha256": "04cee6d603237d38907961d042a9694d31f4a212fd20cb3a40659e135d550589",
       "size": 74905,
       "source": "https://web.hycdn.cn/endfield/official-v4/_next/static/media/yvonne.9695c304.png",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "portrait",
+      "key": "祀",
+      "aliases": [],
+      "file": "images/endfield/si.jpg",
+      "sha256": "cd556da845e749eec07072d3e0e7843c66d603ad4e03ee2a753e2ee7eaf9a8d1",
+      "size": 28891,
+      "source": "https://web.hycdn.cn/endfield/webview/_version_briefing/v1d6/assets/imgs/thumbnail.96f116.jpg",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "portrait",
+      "key": "明河",
+      "aliases": [],
+      "file": "images/endfield/starry-flow.png",
+      "sha256": "4bdd820f1d808f336a64daa77bf061cf909077c63f84965d75636dd78e116ab1",
+      "size": 63446,
+      "source": "https://web.hycdn.cn/endfield/webview/_version_briefing/v1d6/assets/imgs/thumbnail.e7113d.png",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "banner",
+      "key": "万物更新",
+      "aliases": [],
+      "file": "images/endfield/rejuvenation.jpg",
+      "sha256": "5dae89f542350513e4ecd357cc490306150eece4b519301fb84f45ab2870160d",
+      "size": 150370,
+      "source": "https://web.hycdn.cn/endfield/webview/_version_briefing/v1d6/assets/imgs/visual.639032.jpg",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "banner",
+      "key": "烟火邀星河",
+      "aliases": [],
+      "file": "images/endfield/starry-flow.png",
+      "sha256": "4bdd820f1d808f336a64daa77bf061cf909077c63f84965d75636dd78e116ab1",
+      "size": 63446,
+      "source": "https://web.hycdn.cn/endfield/webview/_version_briefing/v1d6/assets/imgs/thumbnail.e7113d.png",
       "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
     }
   ],

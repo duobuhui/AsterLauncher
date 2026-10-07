@@ -2,7 +2,7 @@ using AsterLauncher.Core;
 
 namespace AsterLauncher.Infrastructure;
 
-// Publisher-announced operator pools through 2026-09-24. Unknown pools still display
+// Bundled operator pools through 2026-09-24; verified resource definitions extend this list. Unknown pools still display
 // their recorded draws, but receive no inferred featured operator or guarantee rule.
 internal static class EndfieldPoolCatalog
 {
@@ -55,8 +55,18 @@ internal static class EndfieldPoolCatalog
             : 0;
     }
 
-    public static EndfieldPoolDefinition Resolve(string poolId, string poolName)
+    public static EndfieldPoolDefinition Resolve(string poolId, string poolName, ResourceCatalog? resources = null, string? phase = null)
     {
+        var resource = resources?.Pools.FirstOrDefault(p => p.GameId == BuiltInGameIds.Endfield && p.Key == poolName &&
+            (p.Category == "chartered" && p.Phase is null || p.Category == "refactor" &&
+             p.Phase == RefactorPhaseNumber(poolName, phase).ToString()));
+        if (resource?.FeaturedOperator is { Length: > 0 } featuredOperator)
+        {
+            var refactor = resource.Category == "refactor";
+            return new(refactor ? EndfieldPoolCategory.Refactor : EndfieldPoolCategory.Chartered,
+                featuredOperator, refactor ? "refactor" : "chartered",
+                refactor ? $"refactor:{RefactorSeriesName(poolName)}" : poolId, "endfield-pool-card.svg");
+        }
         if (poolId.Equals("standard", StringComparison.OrdinalIgnoreCase)
             || poolName.Equals("基础寻访", StringComparison.Ordinal))
         {
