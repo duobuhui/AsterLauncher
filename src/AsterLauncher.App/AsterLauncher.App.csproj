@@ -24,6 +24,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\Games\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\resources\catalog.json" Link="ResourceFeed\catalog.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Services\ApplyUpdate.ps1" LogicalName="AsterLauncher.ApplyUpdate.ps1" />
     <Content Include="NetworkRuntime\hoyo-zstd.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="NetworkRuntime\endfield-https.js" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -17,6 +17,7 @@ public sealed record ResourcePool
     public string Key { get; init; } = "";
     public string Name { get; init; } = "";
     public string? Phase { get; init; }
+    public string? Version { get; init; }
     public DateTimeOffset? StartsAt { get; init; }
     public DateTimeOffset? EndsAt { get; init; }
     public DateOnly? StartsOn { get; init; }
@@ -55,9 +56,15 @@ public sealed record ResourceImage
 public sealed record ResourceAnnouncement
 {
     public string GameId { get; init; } = "";
-    public string Kind { get; init; } = ""; // event, maintenance, livestream
+    public string Kind { get; init; } = ""; // event, maintenance, livestream, version
+    public string? Key { get; init; }
+    public string? Version { get; init; }
+    public string? Description { get; init; }
     public string Title { get; init; } = "";
-    public DateTimeOffset StartsAt { get; init; }
+    public DateTimeOffset? StartsAt { get; init; }
+    public DateOnly? StartsOn { get; init; }
+    public DateOnly? EndsOn { get; init; }
+    public IReadOnlyList<string> Platforms { get; init; } = [];
     public DateTimeOffset? EndsAt { get; init; }
     public string Url { get; init; } = "";
     public string Region { get; init; } = "CN";
@@ -67,6 +74,10 @@ public sealed record ResourceCode
     public string GameId { get; init; } = "";
     public string Code { get; init; } = "";
     public string Reward { get; init; } = "";
+    public string? Version { get; init; }
+    public DateTimeOffset? StartsAt { get; init; }
+    public DateOnly? StartsOn { get; init; }
+    public DateOnly? ExpiresOn { get; init; }
     public DateTimeOffset? ExpiresAt { get; init; }
     public string Region { get; init; } = "CN";
     public IReadOnlyList<string> Platforms { get; init; } = [];

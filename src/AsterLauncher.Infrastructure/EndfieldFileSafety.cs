@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using System.Security.Cryptography;
+using System.Buffers;
+using System.Diagnostics;
 using AsterLauncher.Core;
 
 namespace AsterLauncher.Infrastructure;
@@ -65,18 +67,58 @@ public static class SafeGamePath
 public sealed class VerifiedFileCommit
 {
     public static async Task<bool> MatchesAsync(string path, EndfieldManifestFile file,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IProgress<long>? byteProgress = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(path) || new FileInfo(path).Length != file.Size) return false;
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var actual = await MD5.HashDataAsync(stream, cancellationToken);
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        if (byteProgress is null)
+        {
+            var hash = await MD5.HashDataAsync(stream, cancellationToken);
+            return hash.AsSpan().SequenceEqual(Convert.FromHexString(file.Md5));
+        }
+        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+        var buffer = ArrayPool<byte>.Shared.Rent(128 * 1024);
+        long processed = 0, lastReport = 0;
+        byte[] actual;
+        try
+        {
+            byteProgress.Report(0);
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = await stream.ReadAsync(buffer.AsMemory(0, 128 * 1024), cancellationToken);
+                if (read == 0) break;
+                digest.AppendData(buffer, 0, read);
+                processed += read;
+                var now = Stopwatch.GetTimestamp();
+                if (lastReport == 0 || now - lastReport >= Stopwatch.Frequency / 10)
+                {
+                    byteProgress.Report(processed);
+                    lastReport = now;
+                }
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            actual = digest.GetHashAndReset();
+            byteProgress.Report(processed);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        finally { ArrayPool<byte>.Shared.Return(buffer); }
         return actual.AsSpan().SequenceEqual(Convert.FromHexString(file.Md5));
     }
 
-    public static async Task CommitAsync(string verifiedSource, string destination,
-        EndfieldManifestFile file, CancellationToken cancellationToken = default)
+    private sealed class CommitByteProgress(Action<long> report) : IProgress<long>
     {
-        if (!await MatchesAsync(verifiedSource, file, cancellationToken))
+        public void Report(long value) => report(value);
+    }
+
+    public static async Task CommitAsync(string verifiedSource, string destination,
+        EndfieldManifestFile file, CancellationToken cancellationToken = default, IProgress<long>? byteProgress = null)
+    {
+        IProgress<long>? Phase(int phase) => byteProgress is null ? null
+            : new CommitByteProgress(value => byteProgress.Report(file.Size / 3 * phase + value / 3));
+        if (!await MatchesAsync(verifiedSource, file, cancellationToken, Phase(0)))
             throw new InvalidDataException("Staged game file failed integrity verification.");
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var temporary = destination + ".aster-" + Guid.NewGuid().ToString("N") + ".tmp";
@@ -85,11 +127,34 @@ public sealed class VerifiedFileCommit
             await using (var source = new FileStream(verifiedSource, FileMode.Open, FileAccess.Read, FileShare.Read))
             await using (var target = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                await source.CopyToAsync(target, cancellationToken);
+                if (byteProgress is null) await source.CopyToAsync(target, cancellationToken);
+                else
+                {
+                    var buffer = ArrayPool<byte>.Shared.Rent(128 * 1024);
+                    var copyProgress = Phase(1)!;
+                    long copied = 0, lastReport = 0;
+                    try
+                    {
+                        int read;
+                        while ((read = await source.ReadAsync(buffer.AsMemory(0, 128 * 1024), cancellationToken)) > 0)
+                        {
+                            await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                            copied += read;
+                            var now = Stopwatch.GetTimestamp();
+                            if (lastReport == 0 || now - lastReport >= Stopwatch.Frequency / 10)
+                            {
+                                copyProgress.Report(copied);
+                                lastReport = now;
+                            }
+                        }
+                        copyProgress.Report(copied);
+                    }
+                    finally { ArrayPool<byte>.Shared.Return(buffer); }
+                }
                 await target.FlushAsync(cancellationToken);
                 target.Flush(true);
             }
-            if (!await MatchesAsync(temporary, file, cancellationToken))
+            if (!await MatchesAsync(temporary, file, cancellationToken, Phase(2)))
                 throw new InvalidDataException("Temporary game file failed integrity verification.");
             File.Move(temporary, destination, overwrite: true);
         }
@@ -212,7 +277,7 @@ public class ResourceSharingService
         string sourceRoot, string targetRoot,
         IReadOnlyList<EndfieldManifestFile> sourceManifest,
         IReadOnlyList<EndfieldManifestFile> targetManifest,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IProgress<long>? byteProgress = null)
     {
         if (Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(targetRoot), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Channels require independent install directories.");
@@ -231,8 +296,11 @@ public class ResourceSharingService
                 continue;
             var sourcePath = SafeGamePath.Resolve(sourceRoot, source.Path);
             var targetPath = SafeGamePath.Resolve(targetRoot, target.Path);
-            if (!await VerifiedFileCommit.MatchesAsync(sourcePath, source, cancellationToken)) continue;
-            if (File.Exists(targetPath) && !await VerifiedFileCommit.MatchesAsync(targetPath, target, cancellationToken)) continue;
+            // Report logical progress through the four verification passes for the current file.
+            IProgress<long>? Phase(int phase) => byteProgress is null ? null
+                : new SharingByteProgress(value => byteProgress.Report(target.Size / 4 * phase + value / 4));
+            if (!await VerifiedFileCommit.MatchesAsync(sourcePath, source, cancellationToken, Phase(0))) continue;
+            if (File.Exists(targetPath) && !await VerifiedFileCommit.MatchesAsync(targetPath, target, cancellationToken, Phase(1))) continue;
 
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
             var temporary = targetPath + ".aster-link-" + Guid.NewGuid().ToString("N");
@@ -240,7 +308,7 @@ public class ResourceSharingService
             {
                 // Keep the source open without write sharing until the new directory entry is committed.
                 using var held = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                if (!await VerifiedFileCommit.MatchesAsync(sourcePath, source, cancellationToken)) continue;
+                if (!await VerifiedFileCommit.MatchesAsync(sourcePath, source, cancellationToken, Phase(2))) continue;
                 var sourceId = WindowsHardLink.Identity(sourcePath);
                 if (File.Exists(targetPath) && sourceId.SameFile(WindowsHardLink.Identity(targetPath)))
                 {
@@ -255,7 +323,7 @@ public class ResourceSharingService
                 _commitGuard();
                 File.Move(temporary, targetPath, overwrite: true);
                 if (!sourceId.SameFile(WindowsHardLink.Identity(targetPath))
-                    || !await VerifiedFileCommit.MatchesAsync(targetPath, target, cancellationToken))
+                    || !await VerifiedFileCommit.MatchesAsync(targetPath, target, cancellationToken, Phase(3)))
                     throw new IOException("Committed hard-link verification failed.");
                 count++;
                 bytes += target.Size;
@@ -267,6 +335,11 @@ public class ResourceSharingService
             }
         }
         return new EndfieldSharingSummary(count, bytes, saved);
+    }
+
+    private sealed class SharingByteProgress(Action<long> report) : IProgress<long>
+    {
+        public void Report(long value) => report(value);
     }
 
     public async Task<EndfieldSharingSummary> ScanAsync(

@@ -49,11 +49,14 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         var package = await PreparePackageAsync(gameId, install, preload, progress, token);
         if (package.Release.GameId != gameId) throw new InvalidDataException("官方清单游戏身份不符。");
         var missing = new List<HoYoFile>(); var corrupt = new List<HoYoFile>();
+        var localProgress = new FileProgress(progress, "正在检查本地文件", package.Files.Count, package.Files.Sum(f => f.Size));
         foreach (var file in package.Files)
         {
             token.ThrowIfCancellationRequested();
+            localProgress.Begin(file.Path);
             if (install.InstallRoot is not { Length: > 0 } root || !File.Exists(SafeGamePath.Resolve(root, file.Path))) missing.Add(file);
-            else if (!await VerifiedFileCommit.MatchesAsync(SafeGamePath.Resolve(root, file.Path), file.Integrity, token)) corrupt.Add(file);
+            else if (!await VerifiedFileCommit.MatchesAsync(SafeGamePath.Resolve(root, file.Path), file.Integrity, token, localProgress)) corrupt.Add(file);
+            localProgress.Complete(file.Size);
         }
         var targets = missing.Concat(corrupt).ToArray();
         var reused = new List<HoYoReusableFile>(); string? fallback = null;
@@ -63,22 +66,35 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
             if (!WindowsHardLink.CanShareVolume(sourceRoot, targetRoot)) fallback = "跨卷或非 NTFS，使用独立文件。";
             else
             {
+                progress?.Report(new("正在读取另一服资源清单", 0, 0, 0, 0));
                 var sourcePackage = await provider.GetPackageAsync(gameId, peer.Channel, peer.AudioLanguages, false, token);
                 var sourceFiles = sourcePackage.Files.ToDictionary(f => f.Path, StringComparer.OrdinalIgnoreCase);
-                foreach (var file in targets.Where(f => HoYoSharingPolicy.IsShareable(gameId, f.Path)))
-                    if (sourceFiles.TryGetValue(file.Path, out var other) && other.Size == file.Size && other.Md5.Equals(file.Md5, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var path = SafeGamePath.Resolve(sourceRoot, file.Path);
-                        if (await VerifiedFileCommit.MatchesAsync(path, file.Integrity, token)) reused.Add(new(file, path));
-                    }
+                var candidates = targets.Where(f => HoYoSharingPolicy.IsShareable(gameId, f.Path)
+                    && sourceFiles.TryGetValue(f.Path, out var other) && other.Size == f.Size
+                    && other.Md5.Equals(f.Md5, StringComparison.OrdinalIgnoreCase)).ToArray();
+                var reuseProgress = new FileProgress(progress, "正在校验另一服可复用资源", candidates.Length, candidates.Sum(f => f.Size));
+                foreach (var file in candidates)
+                {
+                    token.ThrowIfCancellationRequested();
+                    reuseProgress.Begin(file.Path);
+                    var path = SafeGamePath.Resolve(sourceRoot, file.Path);
+                    if (await VerifiedFileCommit.MatchesAsync(path, file.Integrity, token, reuseProgress)) reused.Add(new(file, path));
+                    reuseProgress.Complete(file.Size);
+                }
             }
         }
         var reusablePaths = reused.Select(f => f.File.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var chunks = UniqueChunks(targets.Where(f => !reusablePaths.Contains(f.Path)));
         long remaining = 0;
+        var cacheProgress = new FileProgress(progress, "正在检查下载缓存", chunks.Count, chunks.Sum(c => c.CompressedSize));
         foreach (var chunk in chunks)
-            if (!await EndfieldDownloadService.MatchesAsync(CachePath(chunk), chunk.CompressedSize, chunk.CompressedMd5, token))
+        {
+            token.ThrowIfCancellationRequested();
+            cacheProgress.Begin(null);
+            if (!await EndfieldDownloadService.MatchesAsync(CachePath(chunk), chunk.CompressedSize, chunk.CompressedMd5, token, cacheProgress))
                 remaining = checked(remaining + chunk.CompressedSize);
+            cacheProgress.Complete(chunk.CompressedSize);
+        }
         var outputBytes = targets.Where(f => !reusablePaths.Contains(f.Path)).Sum(f => f.Size);
         var peak = checked(chunks.Sum(c => c.CompressedSize) + outputBytes + targets.Select(f => f.Size).DefaultIfEmpty().Max());
         return new(package, missing, corrupt, remaining, peak, reused, fallback);
@@ -128,11 +144,15 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         if (plan.Reusable is { Count: > 0 } reusable && peer?.InstallRoot is { } peerRoot)
         {
             var engine = SharingEngine(gameId);
+            var reuseProgress = new FileProgress(progress, "正在复用另一服资源", reusable.Count, reusable.Sum(f => f.File.Size));
             foreach (var item in reusable)
             {
+                token.ThrowIfCancellationRequested();
+                reuseProgress.Begin(item.File.Path);
                 EnsureNotRunning(gameId);
-                var linked = await engine.OptimizeAsync(peerRoot, root, [item.File.Integrity], [item.File.Integrity], token);
+                var linked = await engine.OptimizeAsync(peerRoot, root, [item.File.Integrity], [item.File.Integrity], token, reuseProgress);
                 if (linked.FileCount > 0) sharedPaths.Add(item.File.Path);
+                reuseProgress.Complete(item.File.Size);
             }
         }
         files = files.Where(f => !sharedPaths.Contains(f.Path)).ToArray();
@@ -148,29 +168,34 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
             var fresh = await PreparePackageAsync(gameId, install, false, progress, token);
             if (fresh.Release.Version != plan.Package.Release.Version || fresh.ContentHash != plan.Package.ContentHash) throw new InvalidOperationException("下载期间官方版本已变化，请重新检查后继续。");
             // Stage every output before modifying any game directory entry.
-            var count = 0;
+            var assemblyProgress = new FileProgress(progress, "正在组装并校验文件", files.Length, files.Sum(f => f.Size));
             foreach (var file in files)
             {
                 token.ThrowIfCancellationRequested();
-                progress?.Report(new("正在组装并校验文件", count++, files.Length, 0, 0));
+                assemblyProgress.Begin(file.Path);
                 var output = SafeGamePath.Resolve(stage, file.Path);
-                await AssembleAsync(file, output, token);
+                await AssembleAsync(file, output, token, assemblyProgress);
+                assemblyProgress.Complete(file.Size);
             }
-            count = 0;
+            var applyProgress = new FileProgress(progress, "正在应用文件", files.Length, files.Sum(f => f.Size));
             foreach (var file in files)
             {
+                token.ThrowIfCancellationRequested();
+                applyProgress.Begin(file.Path);
                 EnsureNotRunning(gameId);
-                progress?.Report(new("正在应用文件", count++, files.Length, 0, 0));
-                await VerifiedFileCommit.CommitAsync(SafeGamePath.Resolve(stage, file.Path), SafeGamePath.Resolve(root, file.Path), file.Integrity, token);
+                await VerifiedFileCommit.CommitAsync(SafeGamePath.Resolve(stage, file.Path), SafeGamePath.Resolve(root, file.Path), file.Integrity, token, applyProgress);
                 // Release the committed staging copy so staged + installed outputs stay within the planned peak.
                 File.Delete(SafeGamePath.Resolve(stage, file.Path));
+                applyProgress.Complete(file.Size);
             }
-            count = 0;
+            var finalProgress = new FileProgress(progress, "正在最终校验", plan.Package.Files.Count, plan.Package.Files.Sum(f => f.Size));
             foreach (var file in plan.Package.Files)
             {
-                progress?.Report(new("正在最终校验", count++, plan.Package.Files.Count, 0, 0));
-                if (!await VerifiedFileCommit.MatchesAsync(SafeGamePath.Resolve(root, file.Path), file.Integrity, token))
+                token.ThrowIfCancellationRequested();
+                finalProgress.Begin(file.Path);
+                if (!await VerifiedFileCommit.MatchesAsync(SafeGamePath.Resolve(root, file.Path), file.Integrity, token, finalProgress))
                     throw new InvalidDataException("最终校验失败，安装状态仍为未完成。");
+                finalProgress.Complete(file.Size);
             }
             EnsureNotRunning(gameId);
             if (plan.Package.Release.AudioRecordPath is { } audioPath)
@@ -211,12 +236,14 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         var task = TaskName(install, true);
         await _tasks.TrackAsync(task, chunks.Select(c => DownloadTaskCache.ContentKey(c.CompressedMd5, c.CompressedSize)), token);
         await DownloadChunksAsync(gameId, install, plan.Package, chunks, true, progress, token);
+        var verifyProgress = new FileProgress(progress, "正在校验预下载内容", chunks.Count, chunks.Sum(c => c.CompressedSize));
         foreach (var chunk in chunks)
         {
             token.ThrowIfCancellationRequested();
             var decoded = await codec.DecodeAsync(await File.ReadAllBytesAsync(CachePath(chunk), token), chunk.Size, chunk.Compression, token);
             if (!Convert.ToHexString(MD5.HashData(decoded)).Equals(chunk.Md5, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("预下载分块校验失败。");
+            verifyProgress.Complete(chunk.CompressedSize);
         }
         var current = await PreparePackageAsync(gameId, install, true, progress, token);
         if (current.ContentHash != plan.Package.ContentHash || current.Release.Version != plan.Package.Release.Version)
@@ -229,8 +256,11 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
     private async Task DownloadChunksAsync(string gameId, HoYoInstallation install, HoYoPackage package,
         IReadOnlyList<HoYoChunk> chunks, bool preload, IProgress<HoYoProgress>? progress, CancellationToken token)
     {
-        var values = new ConcurrentDictionary<string, long>();
-        var total = chunks.Sum(c => c.CompressedSize); var completed = 0; long completedBytes = 0;
+        if (chunks.Count == 0) return;
+        var values = new Dictionary<string, long>();
+        var progressGate = new object();
+        var total = chunks.Sum(c => c.CompressedSize); var completed = 0; long completedBytes = 0, transferredBytes = 0;
+        progress?.Report(new("正在下载", 0, chunks.Count, 0, total, IsNetworkTransfer: true, TransferredBytes: 0));
         HoYoPackage? refreshed = null; using var refreshGate = new SemaphoreSlim(1, 1);
         await Parallel.ForEachAsync(chunks, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = token }, async (chunk, ct) =>
         {
@@ -248,14 +278,23 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
                 finally { refreshGate.Release(); }
             }, new ByteProgress(value =>
             {
-                var previous = values.GetValueOrDefault(key); values[key] = value;
-                var bytes = Interlocked.Add(ref completedBytes, value - previous);
-                progress?.Report(new("正在下载", Volatile.Read(ref completed), chunks.Count, bytes, total));
-            }), ct);
-            Interlocked.Increment(ref completed);
+                lock (progressGate)
+                {
+                    var previous = values.GetValueOrDefault(key); values[key] = value;
+                    completedBytes += value - previous;
+                    progress?.Report(new("正在下载", completed, chunks.Count, completedBytes, total,
+                        IsNetworkTransfer: true, TransferredBytes: transferredBytes));
+                }
+            }), ct, new ByteProgress(bytes => { lock (progressGate) transferredBytes += bytes; }));
+            lock (progressGate)
+            {
+                completed++;
+                progress?.Report(new("正在下载", completed, chunks.Count, completedBytes, total,
+                    IsNetworkTransfer: true, TransferredBytes: transferredBytes));
+            }
         });
     }
-    public async Task AssembleAsync(HoYoFile file, string output, CancellationToken token = default)
+    public async Task AssembleAsync(HoYoFile file, string output, CancellationToken token = default, IProgress<long>? byteProgress = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);
         try
@@ -264,6 +303,7 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
                 await HoYoSdkArchive.ExtractAsync(SafeGamePath.Resolve(dataRoot, "hoyo/objects/" + sdkFile.CacheKey), file, output, token);
             else await using (var stream = new FileStream(output, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
+                long assembled = 0;
                 foreach (var chunk in file.Chunks)
                 {
                     var path = CachePath(chunk);
@@ -273,10 +313,14 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
                     if (!Convert.ToHexString(MD5.HashData(decoded)).Equals(chunk.Md5, StringComparison.OrdinalIgnoreCase))
                         throw new InvalidDataException("官方分块解压后校验失败。");
                     await stream.WriteAsync(decoded, token);
+                    assembled += decoded.Length;
+                    byteProgress?.Report(assembled / 2);
                 }
                 await stream.FlushAsync(token); stream.Flush(true);
             }
-            if (!await VerifiedFileCommit.MatchesAsync(output, file.Integrity, token)) throw new InvalidDataException("组装文件校验失败。");
+            if (!await VerifiedFileCommit.MatchesAsync(output, file.Integrity, token,
+                byteProgress is null ? null : new ByteProgress(bytes => byteProgress.Report(file.Size / 2 + bytes / 2))))
+                throw new InvalidDataException("组装文件校验失败。");
         }
         catch { if (File.Exists(output)) File.Delete(output); throw; }
     }
@@ -347,21 +391,27 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
         IProgress<HoYoProgress>? progress, CancellationToken token)
     {
         if (installation.Channel == HoYoChannel.Unknown) throw new InvalidOperationException("请在游戏右键菜单中选择安装渠道。");
+        progress?.Report(new("正在读取官方资源清单", 0, 0, 0, 0));
         var package = await provider.GetPackageAsync(gameId, installation.Channel, installation.AudioLanguages, preload, token);
         if (package.Sdk is not { } sdk) return package;
         var key = DownloadTaskCache.ContentKey(sdk.Md5, sdk.Size);
         var path = SafeGamePath.Resolve(dataRoot, "hoyo/objects/" + key);
         CheckSpace(dataRoot, sdk.Size);
         await _tasks.TrackAsync(TaskName(installation, preload), [key], token);
+        long sdkTransferred = 0;
+        progress?.Report(new("正在下载渠道组件", 0, 1, 0, sdk.Size, IsNetworkTransfer: true, TransferredBytes: 0));
         await download.DownloadAsync(sdk.Uri, sdk.Md5, sdk.Size, async refreshToken =>
         {
             var refreshed = await provider.GetPackageAsync(gameId, installation.Channel, installation.AudioLanguages, preload, refreshToken);
             if (refreshed.Sdk is not { } replacement || replacement.Md5 != sdk.Md5 || replacement.Size != sdk.Size)
                 throw new InvalidOperationException("渠道组件已变化，请重新检查。");
             return replacement.Uri;
-        }, new ByteProgress(bytes => progress?.Report(new("正在下载渠道组件", 0, 1, bytes, sdk.Size))), token);
-        progress?.Report(new("正在校验渠道组件", 0, 1, 0, 0));
-        var components = await HoYoSdkArchive.ReadAsync(path, sdk, token);
+        }, new ByteProgress(bytes => progress?.Report(new("正在下载渠道组件", 0, 1, bytes, sdk.Size,
+            IsNetworkTransfer: true, TransferredBytes: sdkTransferred))), token,
+            new ByteProgress(bytes => sdkTransferred += bytes));
+        var sdkProgress = new FileProgress(progress, "正在校验渠道组件", 1, sdk.Size);
+        var components = await HoYoSdkArchive.ReadAsync(path, sdk, token, sdkProgress);
+        sdkProgress.Complete(sdk.Size);
         var files = package.Files.ToDictionary(f => f.Path, StringComparer.OrdinalIgnoreCase);
         var removed = HoYoSdkArchive.ReadRemovedFiles(path);
         var prefix = Path.GetFileNameWithoutExtension(package.Release.ExecutableName) + "_Data/Plugins/";
@@ -416,6 +466,27 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
     private sealed class RootLeases(List<Lease> leases) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync() { foreach (var lease in leases.AsEnumerable().Reverse()) await lease.DisposeAsync(); }
+    }
+    // Bytes measure work completed in this stage; skipped/missing files still count as inspected.
+    private sealed class FileProgress : IProgress<long>
+    {
+        private readonly IProgress<HoYoProgress>? _progress;
+        private readonly string _stage;
+        private readonly int _totalFiles;
+        private readonly long _totalBytes;
+        private int _completedFiles;
+        private long _completedBytes;
+        private string? _file;
+
+        public FileProgress(IProgress<HoYoProgress>? progress, string stage, int totalFiles, long totalBytes)
+        {
+            _progress = progress; _stage = stage; _totalFiles = totalFiles; _totalBytes = totalBytes;
+            Report(0);
+        }
+        public void Begin(string? file) { _file = file; Report(0); }
+        public void Report(long bytes) => _progress?.Report(new(_stage, _completedFiles, _totalFiles,
+            Math.Min(_totalBytes, _completedBytes + bytes), _totalBytes, _file));
+        public void Complete(long size) { _completedFiles++; _completedBytes += size; Report(0); }
     }
     private sealed class ByteProgress(Action<long> action) : IProgress<long> { public void Report(long value) => action(value); }
 }

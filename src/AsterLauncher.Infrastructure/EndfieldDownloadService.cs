@@ -37,7 +37,8 @@ public sealed class EndfieldDownloadService
 
     public async Task<string> DownloadAsync(Uri initialUri, string md5, long size,
         Func<CancellationToken, Task<Uri>>? refreshUri = null,
-        IProgress<long>? byteProgress = null, CancellationToken cancellationToken = default)
+        IProgress<long>? byteProgress = null, CancellationToken cancellationToken = default,
+        IProgress<long>? transferredBytes = null)
     {
         if (md5.Length != 32 || !md5.All(Uri.IsHexDigit) || size < 0)
             throw new ArgumentException("Invalid content identity.");
@@ -61,7 +62,7 @@ public sealed class EndfieldDownloadService
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    await TransferAttemptAsync(uri, partial, size, byteProgress, cancellationToken);
+                    await TransferAttemptAsync(uri, partial, size, byteProgress, cancellationToken, transferredBytes);
                     if (await MatchesAsync(partial, size, md5, cancellationToken))
                     {
                         File.Move(partial, final, overwrite: true);
@@ -94,7 +95,7 @@ public sealed class EndfieldDownloadService
     }
 
     private async Task TransferAttemptAsync(Uri uri, string partial, long expected,
-        IProgress<long>? progress, CancellationToken cancellationToken)
+        IProgress<long>? progress, CancellationToken cancellationToken, IProgress<long>? transferredBytes)
     {
         var existing = File.Exists(partial) ? new FileInfo(partial).Length : 0;
         if (existing > expected)
@@ -140,6 +141,8 @@ public sealed class EndfieldDownloadService
         while ((read = await network.ReadAsync(buffer, cancellationToken)) > 0)
         {
             await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            // Count only newly transferred bytes: cached objects and resumed prefixes are not network traffic.
+            transferredBytes?.Report(read);
             progress?.Report(target.Length);
             if (target.Length > expected) throw new InvalidDataException("Download exceeded expected size.");
         }
@@ -148,12 +151,7 @@ public sealed class EndfieldDownloadService
         if (target.Length != expected) throw new IOException("Download ended before expected size.");
     }
 
-    public static async Task<bool> MatchesAsync(string path, long size, string md5,
-        CancellationToken cancellationToken = default)
-    {
-        if (!File.Exists(path) || new FileInfo(path).Length != size) return false;
-        await using var stream = File.OpenRead(path);
-        var actual = await MD5.HashDataAsync(stream, cancellationToken);
-        return actual.AsSpan().SequenceEqual(Convert.FromHexString(md5));
-    }
+    public static Task<bool> MatchesAsync(string path, long size, string md5,
+        CancellationToken cancellationToken = default, IProgress<long>? byteProgress = null)
+        => VerifiedFileCommit.MatchesAsync(path, new(Path.GetFileName(path), size, md5), cancellationToken, byteProgress);
 }

@@ -11,7 +11,7 @@
         </Grid.RowDefinitions>
 
 
-        <Border Grid.Row="1" Margin="0,16,0,12" Padding="16" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16">
+        <Border Grid.Row="1" Margin="0,16,0,12" Style="{StaticResource CommunitySurfaceStyle}" Background="{ThemeResource HeroGlassBrush}">
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                 <Grid ColumnSpacing="12">
@@ -49,7 +49,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="vm:LaunchSequenceItem">
-                    <Border Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource ThemeStrokeBrush}" BorderThickness="0,0,0,1" CornerRadius="12" Padding="12" Margin="0,3" HorizontalAlignment="Stretch">
+                    <Border Style="{StaticResource CommunitySurfaceStyle}" Padding="12" Margin="0,4" HorizontalAlignment="Stretch">
                         <Grid ColumnSpacing="16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="48" />
@@ -59,13 +59,13 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Bind Number}" Foreground="{ThemeResource PageTitleBrush}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Center" />
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Bind Title}" FontSize="16" FontWeight="SemiBold" />
-                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource MutedTextStyle}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource SectionHeadingStyle}" />
+                                <TextBlock Text="{x:Bind Detail}" Style="{StaticResource CaptionTextStyle}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                 <TextBlock Text="{x:Bind Stage}" FontWeight="SemiBold" />
                             </StackPanel>
-                            <Button Grid.Column="3" Content="移除" Tag="{x:Bind Step}" Visibility="{x:Bind RemoveVisibility}" Click="RemoveStep_OnClick" VerticalAlignment="Center" />
+                            <Button Grid.Column="3" Content="移除" Style="{StaticResource SubtleButtonStyle}" Tag="{x:Bind Step}" Visibility="{x:Bind RemoveVisibility}" Click="RemoveStep_OnClick" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
                 </DataTemplate>

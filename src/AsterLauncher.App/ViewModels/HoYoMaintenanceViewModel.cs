@@ -11,13 +11,12 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         public HoYoRelease? Release;
         public HoYoPlan? Plan;
         public string Remote = "尚未检查", Stage = "", PlanText = "检查文件后显示缺失、损坏数量和下载量。", Preload = "尚未检查";
-        public string Download = "", Speed = "", Sharing = "尚未扫描共享资源";
+        public string Download = "", Sharing = "尚未扫描共享资源";
+        public readonly HoYoProgressDisplay Display = new();
         public double Progress;
-        public bool Busy, Checking, Downloading, Preloading, Cleaning, ReadImportedAudio, Paused, LastWasPreload;
+        public bool Busy, Checking, Downloading, Preloading, Cleaning, ReadImportedAudio, Paused, PauseRequested, Failed, LastWasPreload, LastWasRepair;
         public CancellationTokenSource? Cancellation;
         public TaskCompletionSource? Completion;
-        public DateTimeOffset LastProgress = DateTimeOffset.MinValue, LastSpeed = DateTimeOffset.UtcNow;
-        public long LastBytes;
         public long Revision;
     }
     private readonly LauncherViewModel _launcher;
@@ -57,19 +56,30 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     public string PlanText => Current.PlanText;
     public string PreloadText => Current.Preload;
     public string DownloadText => Current.Download;
-    public string SpeedText => Current.Speed;
+    public string SpeedText => Current.Busy && !Current.PauseRequested && !Current.Cleaning ? Current.Display.SpeedText : "";
+    public string CurrentFileText => Current.Busy && !Current.Cleaning ? Current.Display.CurrentFile : "";
+    public string DetailText => Current.Busy && !Current.Cleaning && !Current.PauseRequested ? Current.Display.DetailText : "";
+    public Visibility CurrentFileVisibility => CurrentFileText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility DetailVisibility => DetailText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public bool CanResume => (Current.Paused || Current.Failed) && !Current.Busy && !Current.Cleaning;
+    public bool CanPauseOrResume => !Current.Cleaning && !Current.PauseRequested && (CanResume || Current.Busy && (Current.Downloading || Current.Preloading));
+    public bool CanCancel => !Current.Cleaning && (Current.Downloading || Current.Preloading || Current.Paused || Current.Failed);
+    public string PauseActionText => Current.PauseRequested ? "正在暂停…" : Current.Failed ? "重试" : Current.Paused ? "继续" : "暂停";
     public double Progress => Current.Progress;
+    public bool IsBusy => Current.Busy || Current.Cleaning;
     public bool CanSetRoot => !Current.Busy && !Current.Cleaning;
     public bool CanRepair => !Current.Busy && !Current.Cleaning && _launcher.CurrentGame?.IsInstalled == true;
     public bool CanPreload => !Current.Busy && !Current.Cleaning && Current.Release?.PreloadVersion is not null;
-    public bool IsPrimaryDownloading => Current.Downloading;
-    public Visibility DownloadVisibility => IsSupported && (Current.Downloading || Current.Preloading || Current.Paused) ? Visibility.Visible : Visibility.Collapsed;
-    public bool IsIndeterminate => Current.Busy && !Current.Stage.StartsWith("正在下载");
-    public string PrimaryActionGlyph => Current.Downloading ? "\uE769" : StartsMaintenance ? "\uE896" : "\uE768";
+    public bool IsPrimaryDownloading => Current.Downloading || Current.Preloading;
+    public Visibility DownloadVisibility => IsSupported && (Current.Downloading || Current.Preloading || Current.Paused || Current.Failed || Current.Cleaning) ? Visibility.Visible : Visibility.Collapsed;
+    public bool IsIndeterminate => Current.Cleaning || Current.Busy && !Current.Display.HasTotal;
+    public string PrimaryActionGlyph => IsPrimaryDownloading ? "\uE769" : CanResume ? "\uE768" : StartsMaintenance ? "\uE896" : "\uE768";
     public bool StartsMaintenance => IsSupported && !Current.Busy && !Current.Cleaning && _launcher.CurrentGame is { } game
         && (!game.IsInstalled || Installation(game).MaintenanceInProgress || Installation(game).AudioSelectionPending || Current.Release is { } release && LocalVersion != release.Version);
-    public string PrimaryActionText => Current.Downloading ? Current.Stage.StartsWith("正在下载") ? $"暂停下载 {Progress:0}%" : Current.Stage
-        : Current.Paused ? "继续下载"
+    public string PrimaryActionText => Current.Cleaning ? "正在取消任务…" : Current.PauseRequested ? "正在暂停…"
+        : IsPrimaryDownloading ? Current.Display.IsNetworkTransfer ? $"暂停下载 {Progress:0}%" : Current.Stage
+        : Current.Failed ? Current.LastWasPreload ? "重试预下载" : "重试下载"
+        : Current.Paused ? Current.LastWasPreload ? "继续预下载" : "继续下载"
         : _launcher.CurrentGame is { } game && Installation(game).MaintenanceInProgress ? "继续下载"
         : _launcher.CurrentGame is { } audioGame && Installation(audioGame).AudioSelectionPending && gameInstalled() ? "下载所选语音"
         : Current.Release is { } release && gameInstalled() && LocalVersion != release.Version ? "更新游戏"
@@ -204,6 +214,7 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         var install = Installation(game); var state = GetState(install); var peer = _launcher.OtherHoYoInstallation(game);
         await RunAsync(game, install, true, false, async token =>
         {
+            state.LastWasRepair = repair;
             await _launcher.PersistHoYoInstallationAsync(game, install);
             try
             {
@@ -238,47 +249,93 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         return new MaintenanceProgress<HoYoProgress>(p =>
         {
             if (token.IsCancellationRequested || revision != state.Revision) return;
-            var now = DateTimeOffset.UtcNow;
-            if ((now - state.LastProgress).TotalMilliseconds < 100 && p.CompletedFiles != p.TotalFiles) return;
-            state.LastProgress = now;
-            state.Stage = p.Stage + (p.TotalFiles > 0 ? $" · {p.CompletedFiles}/{p.TotalFiles}" : "");
-            state.Download = p.TotalBytes > 0 ? $"{Bytes(p.CompletedBytes)} / {Bytes(p.TotalBytes)}" : "";
-            state.Progress = p.TotalBytes > 0 ? Math.Clamp(100d * p.CompletedBytes / p.TotalBytes, 0, 100) : p.TotalFiles > 0 ? 100d * p.CompletedFiles / p.TotalFiles : 0;
-            var seconds = (now - state.LastSpeed).TotalSeconds;
-            if (seconds >= 1) { state.Speed = p.TotalBytes > 0 ? $"{Bytes((long)(Math.Max(0, p.CompletedBytes - state.LastBytes) / seconds))}/s" : ""; state.LastBytes = p.CompletedBytes; state.LastSpeed = now; }
+            state.Display.Apply(p, DateTimeOffset.UtcNow);
+            state.Stage = state.Display.StageText;
+            state.Download = state.Display.AmountText;
+            state.Progress = state.Display.Progress;
             if (IsSelected(game, install)) Refresh();
-        }, p => p.Stage);
+        }, p => p.Stage + ":" + p.IsNetworkTransfer,
+            p => p.TotalFiles > 0 && p.CompletedFiles >= p.TotalFiles || p.TotalBytes > 0 && p.CompletedBytes >= p.TotalBytes);
     }
     private async Task RunAsync(GameCardViewModel game, HoYoInstallation install, bool downloading, bool preloading, Func<CancellationToken, Task> action)
     {
         var state = GetState(install); if (state.Busy || state.Cleaning) return;
-        state.Busy = true; state.Paused = false; state.LastWasPreload = preloading; state.Downloading = downloading; state.Preloading = preloading; state.Revision++;
+        state.Busy = true; state.Paused = state.PauseRequested = state.Failed = false; state.LastWasPreload = preloading; state.Downloading = downloading; state.Preloading = preloading; state.Revision++;
         state.Cancellation = new(); state.Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        state.LastBytes = 0; state.LastSpeed = DateTimeOffset.UtcNow; state.Stage = "正在检查";
+        state.Display.Reset(); state.Download = ""; state.Progress = 0; state.Stage = "正在准备任务…";
         if (IsSelected(game, install)) Refresh();
         try { await action(state.Cancellation.Token); }
-        catch (OperationCanceledException) { state.Paused = downloading || preloading; state.Stage = "已暂停，继续时复用已校验的下载内容。"; }
-        catch (Exception ex) { state.Stage = ex is IOException or InvalidOperationException or InvalidDataException ? ex.Message : "维护未完成，请重新检查后继续。"; }
+        catch (OperationCanceledException) when (state.Cancellation.IsCancellationRequested) { state.Paused = !state.Cleaning && (downloading || preloading); state.Stage = state.Cleaning ? "正在取消任务，清理未使用的缓存…" : "已暂停，继续时复用已校验的下载内容。"; }
+        catch (Exception ex) { state.Failed = downloading || preloading; state.Stage = ex is IOException or InvalidOperationException or InvalidDataException ? ex.Message : "维护未完成，请重新检查后继续。"; }
         finally
         {
-            state.Revision++; state.Busy = state.Downloading = state.Preloading = false;
+            state.Revision++; state.Busy = state.Downloading = state.Preloading = state.PauseRequested = false;
+            state.Display.Stop();
             state.Cancellation.Dispose(); state.Cancellation = null; state.Completion.TrySetResult();
             if (IsSelected(game, install)) Refresh();
         }
     }
-    public void Pause() => Current.Cancellation?.Cancel();
+#if DEBUG
+    private string? _progressFixture;
+    internal void ApplyProgressFixture(string mode)
+    {
+        if (!Services.HoYoMaintenanceUiFixture.Enabled || !IsSupported || mode is not ("verify" or "download" or "paused" or "failed")) return;
+        _progressFixture = mode;
+        var state = Current;
+        state.Display.Reset(); state.PauseRequested = state.Cleaning = state.Preloading = false;
+        state.Failed = mode == "failed"; state.Paused = mode == "paused";
+        state.Busy = state.Downloading = !state.Paused && !state.Failed;
+        var now = DateTimeOffset.UtcNow;
+        var file = "StarRail_Data/StreamingAssets/AssetBundles/Windows/blocks/07d284b8aab74d9d.bundle";
+        const long total = 74L * 1024 * 1024 * 1024;
+        const long completed = 28L * 1024 * 1024 * 1024;
+        var report = new HoYoProgress(mode == "verify" ? "正在校验另一服可复用资源" : "正在下载游戏资源",
+            428, 1128, completed, total, file, mode != "verify", 0);
+        state.Display.Apply(report, now.AddSeconds(-2));
+        if (mode != "verify") state.Display.Apply(report with { TransferredBytes = 48L * 1024 * 1024 }, now);
+        state.Stage = state.Paused ? "已暂停，继续时复用已校验的下载内容。"
+            : state.Failed ? "文件读写失败；请检查目标卷空间和目录权限后重试。" : state.Display.StageText;
+        state.Download = state.Display.AmountText; state.Progress = state.Display.Progress;
+        Refresh();
+    }
+#endif
+    public void Pause()
+    {
+#if DEBUG
+        if (_progressFixture is not null) { ApplyProgressFixture("paused"); return; }
+#endif
+        var state = Current;
+        if (!state.Busy || state.Cleaning || state.PauseRequested || state.Cancellation is null) return;
+        state.PauseRequested = true; state.Stage = "正在暂停，保留已完成的进度…"; state.Display.Stop();
+        state.Cancellation.Cancel(); Refresh();
+    }
+    public async Task ResumeAsync()
+    {
+        if (!CanResume) return;
+#if DEBUG
+        if (_progressFixture is not null) { ApplyProgressFixture("download"); return; }
+#endif
+        if (Current.LastWasPreload) await PreloadAsync();
+        else await SyncAsync(Current.LastWasRepair);
+    }
     public async Task CancelAsync(bool preload = false)
     {
+#if DEBUG
+        if (_progressFixture is not null) { ApplyProgressFixture("paused"); return; }
+#endif
         if (_launcher.CurrentGame is not { } game) return;
         var install = Installation(game); var state = GetState(install);
         if (state.Cleaning) return;
-        state.Cleaning = true; preload |= state.Preloading || state.Paused && state.LastWasPreload; state.Cancellation?.Cancel();
+        state.Cleaning = true; preload |= state.Preloading || (state.Paused || state.Failed) && state.LastWasPreload;
+        state.Stage = "正在取消任务，清理未使用的缓存…"; state.Display.Stop();
+        state.Cancellation?.Cancel();
+        if (IsSelected(game, install)) Refresh();
         if (state.Completion is { } completion) await completion.Task;
         try
         {
             var result = await Task.Run(() => _service.CancelAsync(install, preload));
             if (preload) { var i = install; i.PreloadContentHash = i.PreloadSourceVersion = i.PreloadVersion = null; state.Preload = "缓存已删除"; }
-            state.Paused = false; state.Progress = 0; state.Download = state.Speed = "";
+            state.Paused = state.PauseRequested = state.Failed = false; state.Progress = 0; state.Download = ""; state.Display.Reset();
             state.Stage = $"已删除 {result.DeletedFiles} 个缓存文件，释放 {Bytes(result.DeletedBytes)}。";
             await _launcher.PersistHoYoInstallationAsync(game, install);
         }
@@ -318,7 +375,7 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     }
     public void Refresh()
     {
-        foreach (var name in new[] { nameof(ChannelText), nameof(SharingText), nameof(Title), nameof(InstallRoot), nameof(LocalVersion), nameof(RemoteVersion), nameof(StageText), nameof(PlanText), nameof(PreloadText), nameof(Progress), nameof(DownloadText), nameof(SpeedText), nameof(CanSetRoot), nameof(CanRepair), nameof(CanPreload), nameof(IsPrimaryDownloading), nameof(DownloadVisibility), nameof(IsIndeterminate), nameof(PrimaryActionText), nameof(PrimaryActionGlyph), nameof(StartsMaintenance), nameof(ChineseAudio), nameof(EnglishAudio), nameof(JapaneseAudio), nameof(KoreanAudio) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(ChannelText), nameof(SharingText), nameof(Title), nameof(InstallRoot), nameof(LocalVersion), nameof(RemoteVersion), nameof(StageText), nameof(PlanText), nameof(PreloadText), nameof(Progress), nameof(DownloadText), nameof(SpeedText), nameof(CurrentFileText), nameof(CurrentFileVisibility), nameof(DetailText), nameof(DetailVisibility), nameof(CanResume), nameof(CanPauseOrResume), nameof(CanCancel), nameof(PauseActionText), nameof(IsBusy), nameof(CanSetRoot), nameof(CanRepair), nameof(CanPreload), nameof(IsPrimaryDownloading), nameof(DownloadVisibility), nameof(IsIndeterminate), nameof(PrimaryActionText), nameof(PrimaryActionGlyph), nameof(StartsMaintenance), nameof(ChineseAudio), nameof(EnglishAudio), nameof(JapaneseAudio), nameof(KoreanAudio) }) OnPropertyChanged(name);
     }
     private static string Bytes(long value) => value >= 1073741824 ? $"{value / 1073741824d:0.00} GiB" : value >= 1048576 ? $"{value / 1048576d:0.0} MiB" : value >= 1024 ? $"{value / 1024d:0.0} KiB" : $"{value} B";
 }

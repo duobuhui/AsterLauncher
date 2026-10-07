@@ -58,7 +58,11 @@ public sealed partial class GameLibraryPage : Page
         DataContext = ViewModel;
         EndfieldPanel.DataContext = _endfield;
         HoYoPanel.DataContext = _hoyo;
-        _hoyo.PropertyChanged += (_, _) => DispatcherQueue.TryEnqueue(RefreshLaunchSurfaceLayout);
+        _hoyo.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(HoYoMaintenanceViewModel.StageText))
+                DispatcherQueue.TryEnqueue(RefreshLaunchSurfaceLayout);
+        };
         DownloadStatusPanel.DataContext = _endfield;
         DownloadStatusPanel.SetBinding(VisibilityProperty, new Microsoft.UI.Xaml.Data.Binding { Source=_endfield, Path=new PropertyPath(nameof(EndfieldMaintenanceViewModel.DownloadVisibility)) });
         _endfield.PropertyChanged += (_, args) =>
@@ -113,6 +117,10 @@ public sealed partial class GameLibraryPage : Page
                 if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
                     await _endfield.CheckVersionAsync();
                 else if (_hoyo.IsSupported) await _hoyo.CheckVersionAsync();
+#if DEBUG
+                if (HoYoMaintenanceUiFixture.Enabled && Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_HOYO_PROGRESS") is { } mode)
+                    _hoyo.ApplyProgressFixture(mode);
+#endif
             });
 #if DEBUG
             if (HoYoMaintenanceUiFixture.Enabled && Content is Grid fixtureHost)
@@ -147,6 +155,7 @@ public sealed partial class GameLibraryPage : Page
     private void HideSidebarFlyouts() { SearchButton.Flyout?.Hide(); FilterButton.Flyout?.Hide(); CompactSearchButton.Flyout?.Hide(); CompactFilterButton.Flyout?.Hide(); }
     public void ShowFeature(string tag)
     {
+        if (tag == "calendar" && _launcher.CurrentGame?.Id != BuiltInGameIds.Endfield) tag = "overview";
         HideSidebarFlyouts();
         if (_isLaunchExpanded) SetLaunchExpanded(false);
         UpdateNavigationState(tag);
@@ -196,6 +205,7 @@ public sealed partial class GameLibraryPage : Page
                     "profiles" => _services.GetRequiredService<LaunchProfilesPage>(),
                     "tools" => _services.GetRequiredService<ToolsPage>(),
                     "gacha" => _services.GetRequiredService<GachaPage>(),
+                    "calendar" => _services.GetRequiredService<EndfieldCommunityPage>(),
                     "play-time" => _services.GetRequiredService<PlayActivityPage>(),
                     "game-settings" => _services.GetRequiredService<GameSettingsPage>(),
                     "launcher-settings" => _services.GetRequiredService<SettingsPage>(),
@@ -306,6 +316,7 @@ public sealed partial class GameLibraryPage : Page
     private void UpdateEndfieldControls()
     {
         var selected = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
+        EndfieldCalendarNavigation.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
         EndfieldPanel.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
         HoYoPanel.Visibility = _hoyo.IsSupported ? Visibility.Visible : Visibility.Collapsed;
         var maintenance = selected || _hoyo.IsSupported;
@@ -399,6 +410,8 @@ public sealed partial class GameLibraryPage : Page
         if (game.Id is BuiltInGameIds.Endfield or BuiltInGameIds.GenshinImpact
             or BuiltInGameIds.HonkaiStarRail or BuiltInGameIds.ZenlessZoneZero)
             Add("抽卡记录", async () => { await SelectContextGameAsync(game); ShowFeature("gacha"); });
+        if (game.Id == BuiltInGameIds.Endfield)
+            Add("版本日历与兑换码", async () => { await SelectContextGameAsync(game); ShowFeature("calendar"); });
         Add("启动方案", async () => { await SelectContextGameAsync(game); ShowFeature("profiles"); });
         menu.Items.Add(new MenuFlyoutSeparator());
         var folder = Add("打开安装目录", async () =>
@@ -573,7 +586,7 @@ public sealed partial class GameLibraryPage : Page
             content.Children.Add(new TextBlock { Text = "确认后检查所需文件和磁盘空间，只下载缺失或损坏的内容。暂停保留进度，取消任务会删除不再被其他任务使用的缓存。",
                 TextWrapping = TextWrapping.Wrap, FontSize = 12 });
             if (HoYoInstallationIdentity.HasChannels(game.Id))
-                content.Children.Add(new TextBlock { Text = "两服使用独立目录。同卷 NTFS 可共享已校验的资源包；登录组件、配置和缓存保持独立。使用官方启动器维护前，请先在“更多”中解除共享。",
+                content.Children.Add(new TextBlock { Text = "复用前需要读取并校验另一服的资源，大型游戏可能耗时较久，任务卡片会显示校验进度。两服使用独立目录；同卷 NTFS 可共享已校验的资源包。使用官方启动器维护前，请先在“更多”中解除共享。",
                     TextWrapping = TextWrapping.Wrap, FontSize = 12 });
             var dialog = new ContentDialog
             {
@@ -606,7 +619,15 @@ public sealed partial class GameLibraryPage : Page
     private async void EndfieldRepair_OnClick(object sender, RoutedEventArgs e) => await _endfield.SyncAsync(true);
     private async void EndfieldCancel_OnClick(object sender, RoutedEventArgs e) { if (_hoyo.IsSupported) await _hoyo.CancelAsync(); else await _endfield.CancelAsync(); }
     private async void EndfieldCancelPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.CancelAsync(true);
-    private void EndfieldPause_OnClick(object sender, RoutedEventArgs e) { if (_hoyo.IsSupported) _hoyo.Pause(); else _endfield.Pause(); }
+    private async void EndfieldPause_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_hoyo.IsSupported)
+        {
+            if (_hoyo.CanResume) await _hoyo.ResumeAsync();
+            else _hoyo.Pause();
+        }
+        else _endfield.Pause();
+    }
     private async void EndfieldCheckPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.CheckPreloadAsync();
     private async void EndfieldPreload_OnClick(object sender, RoutedEventArgs e) => await _endfield.PreloadAsync();
     private async void EndfieldOptimize_OnClick(object sender, RoutedEventArgs e) => await _endfield.OptimizeAsync();
@@ -701,6 +722,8 @@ public sealed partial class GameLibraryPage : Page
             if (_hoyo.IsSupported)
             {
                 if (_hoyo.IsPrimaryDownloading) { _hoyo.Pause(); return; }
+                if (_hoyo.IsBusy) return;
+                if (_hoyo.CanResume) { await _hoyo.ResumeAsync(); return; }
                 if (_hoyo.StartsMaintenance) { await StartHoYoSyncAsync(); return; }
             }
             if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
@@ -1314,7 +1337,7 @@ public sealed partial class GameLibraryPage : Page
 
     private void UpdateNavigationState(string tag)
     {
-        FeatureTitleText.Text = tag switch { "gacha" => "抽卡记录", "tools" => "辅助工具", "profiles" => "启动方案", "game-settings" => "游戏设置", "launcher-settings" => "启动器设置", "logs" => "日志", "play-time" => "游戏时长", "" or "add" => "游戏库", _ => "" };
+        FeatureTitleText.Text = tag switch { "calendar" => "版本日历", "gacha" => "抽卡记录", "tools" => "辅助工具", "profiles" => "启动方案", "game-settings" => "游戏设置", "launcher-settings" => "启动器设置", "logs" => "日志", "play-time" => "游戏时长", "" or "add" => "游戏库", _ => "" };
         FeatureTitleText.Visibility = FeatureTitleText.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var button in SecondaryNavigation.Children.OfType<Button>())
         {

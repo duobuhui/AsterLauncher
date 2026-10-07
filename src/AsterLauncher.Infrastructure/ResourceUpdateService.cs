@@ -14,29 +14,64 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
     private readonly HttpClient _http;
     private readonly string _dataRoot;
     private readonly string _root;
+    private readonly string? _bundledCatalogPath;
+    private sealed record CatalogSnapshot(ResourceCatalog Catalog, bool IsBundled, IReadOnlySet<string> VerifiedImagePaths);
     private readonly SemaphoreSlim _gate = new(1);
-    private ResourceCatalog? _current;
-    public ResourceCatalog? Current => Volatile.Read(ref _current);
+    private CatalogSnapshot? _snapshot;
+    public ResourceCatalog? Current => Volatile.Read(ref _snapshot)?.Catalog;
     public event EventHandler? Updated;
-    public ResourceUpdateService(HttpClient http, string dataRoot)
+    public ResourceUpdateService(HttpClient http, string dataRoot, string? bundledCatalogPath = null)
     {
         _http = http; _dataRoot = Path.GetFullPath(dataRoot); _root = Path.Combine(_dataRoot, "resources");
+        _bundledCatalogPath = bundledCatalogPath is null ? null : Path.GetFullPath(bundledCatalogPath);
     }
     public async Task LoadAsync(CancellationToken token = default)
     {
         await _gate.WaitAsync(token).ConfigureAwait(false);
         try
         {
-            var path = SafeGamePath.Resolve(_root, "catalog.json");
-            if (!File.Exists(path)) return;
+            var cached = await ReadCachedCatalogAsync(token).ConfigureAwait(false);
+            var bundled = _bundledCatalogPath is null ? null : await ReadLocalCatalogAsync(_bundledCatalogPath, requireAllImages: false, token).ConfigureAwait(false);
+            var candidate = bundled is not null && (cached is null || bundled.Catalog.Revision > cached.Catalog.Revision) ? bundled : cached;
+            if (candidate is not null && (Current is null || candidate.Catalog.Revision >= Current.Revision))
+                Volatile.Write(ref _snapshot, candidate);
+        }
+        finally { _gate.Release(); }
+    }
+    private async Task<CatalogSnapshot?> ReadCachedCatalogAsync(CancellationToken token)
+    {
+        try
+        {
+            return await ReadLocalCatalogAsync(SafeGamePath.Resolve(_root, "catalog.json"), requireAllImages: true, token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException) { return null; }
+    }
+    private async Task<CatalogSnapshot?> ReadLocalCatalogAsync(string path, bool requireAllImages, CancellationToken token)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
             var bytes = await ReadBoundedAsync(File.OpenRead(path), 1024 * 1024, token).ConfigureAwait(false);
             var catalog = Parse(bytes);
+            var verifiedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var image in catalog.Images)
-                if (!await VerifyAsync(ImagePath(image), image, token).ConfigureAwait(false)) return;
-            Volatile.Write(ref _current, catalog);
+            {
+                var verified = await TryVerifyImageAsync(image, token).ConfigureAwait(false);
+                if (verified is not null) verifiedPaths.Add(verified);
+                else if (requireAllImages) return null;
+            }
+            return new(catalog, !requireAllImages, verifiedPaths);
         }
-        catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException) { }
-        finally { _gate.Release(); }
+        catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException) { return null; }
+    }
+    private async Task<string?> TryVerifyImageAsync(ResourceImage image, CancellationToken token)
+    {
+        try
+        {
+            var path = ImagePath(image);
+            return await VerifyAsync(path, image, token).ConfigureAwait(false) ? path : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException) { return null; }
     }
     public async Task<bool> RefreshAsync(CancellationToken token = default)
     {
@@ -47,7 +82,8 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
             using var lease = LocalStorageGate.BeginOperation(_dataRoot);
             var bytes = await DownloadAsync(new Uri(FeedUrl), 1024 * 1024, token).ConfigureAwait(false);
             var catalog = Parse(bytes);
-            var current = Current;
+            var currentSnapshot = Volatile.Read(ref _snapshot);
+            var current = currentSnapshot?.Catalog;
             if (current is not null && catalog.Revision < current.Revision)
                 throw new InvalidDataException("资源版本低于本地缓存，已保留当前资源。");
             if (current is not null && catalog.Revision == current.Revision &&
@@ -55,24 +91,31 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
                 throw new InvalidDataException("同一资源版本的内容发生变化，请发布新的资源版本。");
             Directory.CreateDirectory(_root);
             var content = SafeGamePath.Resolve(_root, "content"); Directory.CreateDirectory(content);
+            var verifiedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var image in catalog.Images)
             {
                 var path = ImagePath(image);
-                if (await VerifyAsync(path, image, token).ConfigureAwait(false)) continue;
+                if (await VerifyAsync(path, image, token).ConfigureAwait(false)) { verifiedPaths.Add(path); continue; }
                 var contentBytes = await DownloadAsync(new Uri(RepositoryRoot, image.File), checked((int)image.Size), token).ConfigureAwait(false);
                 if (contentBytes.LongLength != image.Size || !Hash(contentBytes).Equals(image.Sha256, StringComparison.OrdinalIgnoreCase) || !IsImage(contentBytes, Path.GetExtension(image.File)))
                     throw new InvalidDataException("资源图片校验失败。");
                 temporary = SafeGamePath.Resolve(content, Guid.NewGuid().ToString("N") + ".tmp");
                 await File.WriteAllBytesAsync(temporary, contentBytes, token).ConfigureAwait(false);
                 File.Move(temporary, path, true); temporary = null;
+                verifiedPaths.Add(path);
             }
-            if (current is not null && catalog.Revision == current.Revision) { Updated?.Invoke(this, EventArgs.Empty); return false; } // verified/repaired cache without redownloading healthy images
+            if (current is not null && catalog.Revision == current.Revision && !currentSnapshot!.IsBundled)
+            {
+                Volatile.Write(ref _snapshot, new(catalog, false, verifiedPaths));
+                Updated?.Invoke(this, EventArgs.Empty); return false;
+            } // verified/repaired cache without redownloading healthy images
             temporary = SafeGamePath.Resolve(_root, Guid.NewGuid().ToString("N") + ".tmp");
             await File.WriteAllBytesAsync(temporary, JsonSerializer.SerializeToUtf8Bytes(catalog, JsonOptions), token).ConfigureAwait(false);
             File.Move(temporary, SafeGamePath.Resolve(_root, "catalog.json"), true); temporary = null;
-            Volatile.Write(ref _current, catalog);
+
+            Volatile.Write(ref _snapshot, new(catalog, false, verifiedPaths));
             Updated?.Invoke(this, EventArgs.Empty);
-            return true;
+            return current is null || current.Revision != catalog.Revision;
         }
         finally
         {
@@ -82,11 +125,16 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
     }
     public string? FindImage(string gameId, string kind, string key)
     {
-        var image = Current?.Images.FirstOrDefault(i => i.GameId == gameId && i.Kind == kind &&
+        var snapshot = Volatile.Read(ref _snapshot);
+        var image = snapshot?.Catalog.Images.FirstOrDefault(i => i.GameId == gameId && i.Kind == kind &&
             (i.Key == key || i.Aliases.Contains(key, StringComparer.OrdinalIgnoreCase)));
         if (image is null) return null;
-        var path = ImagePath(image);
-        return File.Exists(path) ? path : null;
+        try
+        {
+            var path = ImagePath(image);
+            return snapshot!.VerifiedImagePaths.Contains(path) && File.Exists(path) ? path : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException) { return null; }
     }
     private string ImagePath(ResourceImage image) => SafeGamePath.Resolve(_root, "content/" + image.Sha256.ToLowerInvariant() + Path.GetExtension(image.File).ToLowerInvariant());
     public static ResourceCatalog Parse(byte[] bytes)
@@ -113,14 +161,25 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
         foreach (var pool in value.Pools)
             if (pool is null || !Game(pool.GameId) || !Text(pool.Key) || !Text(pool.Name) || !PublicSource(pool.Source) ||
                 !keys.Add(pool.GameId + ":" + pool.Key + ":" + pool.Phase) || !ValidPoolDates(pool) || !ValidPoolDefinition(pool) ||
-                pool.Weapon?.Length > 160 || pool.WeaponPool?.Length > 160)
+                pool.Weapon?.Length > 160 || pool.WeaponPool?.Length > 160 || !OptionalText(pool.Version))
                 throw new InvalidDataException("卡池信息无效。");
+        keys.Clear();
         foreach (var item in value.Announcements)
-            if (item is null || !Game(item.GameId) || !Text(item.Title) || !Text(item.Region) || item.Kind is not ("event" or "maintenance" or "livestream") ||
-                item.StartsAt == default || item.EndsAt <= item.StartsAt || !PublicSource(item.Url)) throw new InvalidDataException("活动信息无效。");
+        {
+            if (item is null || !Game(item.GameId) || !Text(item.Title) || !Text(item.Region) ||
+                item.Kind is not ("event" or "maintenance" or "livestream" or "version") ||
+                !OptionalText(item.Key) || !OptionalText(item.Version) || !OptionalText(item.Description, 600) ||
+                !Platforms(item.Platforms) || !ValidDates(item.StartsAt, item.EndsAt, item.StartsOn, item.EndsOn, requireStart: true) ||
+                !PublicSource(item.Url) || !keys.Add(item.GameId + ":" + item.Region + ":" +
+                    (item.Key ?? item.Kind + ":" + item.Title + ":" + item.StartsAt + ":" + item.StartsOn)))
+                throw new InvalidDataException("活动信息无效。");
+        }
+        keys.Clear();
         foreach (var item in value.Codes)
             if (item is null || !Game(item.GameId) || !Text(item.Code) || !Text(item.Reward) || !Text(item.Region) ||
-                item.Platforms is null || item.Platforms.Count > 10 || item.Platforms.Any(p => !Text(p)) || !PublicSource(item.Source))
+                !OptionalText(item.Version) || !Platforms(item.Platforms) ||
+                !ValidDates(item.StartsAt, item.ExpiresAt, item.StartsOn, item.ExpiresOn, requireStart: false) ||
+                !keys.Add(item.GameId + ":" + item.Region + ":" + item.Code) || !PublicSource(item.Source))
                 throw new InvalidDataException("兑换码信息无效。");
         return value;
     }
@@ -140,6 +199,21 @@ public sealed class ResourceUpdateService : IResourceCatalogProvider
         if (end is not null && (start is null || end < start)) return false;
         return pool.StartsAt is not { } exactStart || pool.EndsAt is not { } exactEnd || exactEnd > exactStart;
     }
+    private static bool ValidDates(DateTimeOffset? startsAt, DateTimeOffset? endsAt, DateOnly? startsOn, DateOnly? endsOn, bool requireStart)
+    {
+        if (requireStart && startsAt is null && startsOn is null ||
+            startsAt is not null && startsOn is not null || endsAt is not null && endsOn is not null ||
+            startsAt == default(DateTimeOffset) || endsAt == default(DateTimeOffset) ||
+            startsOn == default(DateOnly) || endsOn == default(DateOnly)) return false;
+        var start = startsOn ?? (startsAt is { } a ? DateOnly.FromDateTime(a.ToOffset(TimeSpan.FromHours(8)).DateTime) : (DateOnly?)null);
+        var end = endsOn ?? (endsAt is { } b ? DateOnly.FromDateTime(b.ToOffset(TimeSpan.FromHours(8)).DateTime) : (DateOnly?)null);
+        if (start is not null && end is not null && end < start) return false;
+        return startsAt is not { } exactStart || endsAt is not { } exactEnd || exactEnd > exactStart;
+    }
+    private static bool Platforms(IReadOnlyList<string>? values) => values is not null && values.Count <= 10 &&
+        values.All(Text) && values.Distinct(StringComparer.OrdinalIgnoreCase).Count() == values.Count;
+    private static bool OptionalText(string? value, int maxLength = 160) => value is null ||
+        !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength && !value.Any(char.IsControl);
     private static bool Game(string value) => value is BuiltInGameIds.Endfield or BuiltInGameIds.GenshinImpact or BuiltInGameIds.HonkaiStarRail or BuiltInGameIds.ZenlessZoneZero or BuiltInGameIds.HonkaiImpact3rd or BuiltInGameIds.Arknights or BuiltInGameIds.PetitPlanet;
     private static bool Text(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 160 && !value.Any(char.IsControl);
     private static bool PublicSource(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == "https" &&

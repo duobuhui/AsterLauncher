@@ -38,7 +38,8 @@ public sealed record HoYoPlan(HoYoPackage Package, IReadOnlyList<HoYoFile> Missi
     IReadOnlyList<HoYoFile> Corrupt, long DownloadBytes, long RequiredFreeBytes,
     IReadOnlyList<HoYoReusableFile>? Reusable = null, string? SharingFallback = null);
 public sealed record HoYoProgress(string Stage, int CompletedFiles, int TotalFiles,
-    long CompletedBytes, long TotalBytes);
+    long CompletedBytes, long TotalBytes, string? CurrentFile = null, bool IsNetworkTransfer = false,
+    long? TransferredBytes = null);
 public interface IHoYoDistributionProvider
 {
     Task<HoYoRelease?> GetReleaseAsync(string gameId, CancellationToken token = default);

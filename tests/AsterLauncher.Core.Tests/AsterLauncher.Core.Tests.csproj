@@ -13,4 +13,10 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup><None Include="..\..\resources\**\*" Link="ResourceFeed\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\AsterLauncher.App\ViewModels\EndfieldCommunityViewModel.cs" Link="ViewModels\EndfieldCommunityViewModel.cs" />
+    <Compile Include="..\..\src\AsterLauncher.App\ViewModels\ObservableObject.cs" Link="ViewModels\ObservableObject.cs" />
+    <Compile Include="..\..\src\AsterLauncher.App\ViewModels\HoYoProgressDisplay.cs" Link="ViewModels\HoYoProgressDisplay.cs" />
+    <Compile Include="..\..\src\AsterLauncher.App\ViewModels\MaintenanceProgress.cs" Link="ViewModels\MaintenanceProgress.cs" />
+  </ItemGroup>
 </Project>

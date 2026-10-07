@@ -94,7 +94,7 @@ public partial class App : Application
         services.AddSingleton<IUigfArchiveService>(p => new UigfArchiveService(p.GetRequiredService<ILogger<UigfArchiveService>>(), p.GetRequiredService<IResourceCatalogProvider>()));
         services.AddSingleton<IEndfieldGachaArchiveService>(p => new EndfieldGachaArchiveService(p.GetRequiredService<ILogger<EndfieldGachaArchiveService>>(), p.GetRequiredService<IResourceCatalogProvider>()));
         services.AddSingleton<LauncherUpdateService>();
-        services.AddSingleton(p => new ResourceUpdateService(new HttpClient(new EndfieldNodeHttpHandler(Path.Combine(AppContext.BaseDirectory, "NetworkRuntime"))) { Timeout = TimeSpan.FromSeconds(40) }, LauncherDataPaths.ResolveDataDirectory()));
+        services.AddSingleton(p => new ResourceUpdateService(new HttpClient(new EndfieldNodeHttpHandler(Path.Combine(AppContext.BaseDirectory, "NetworkRuntime"))) { Timeout = TimeSpan.FromSeconds(40) }, LauncherDataPaths.ResolveDataDirectory(), Path.Combine(AppContext.BaseDirectory, "ResourceFeed", "catalog.json")));
         services.AddSingleton<IResourceCatalogProvider>(p => p.GetRequiredService<ResourceUpdateService>());
         var endfieldNetworkRuntime = Path.Combine(AppContext.BaseDirectory, "NetworkRuntime");
 #if DEBUG
@@ -157,6 +157,7 @@ public partial class App : Application
         services.AddSingleton(provider => new EndfieldDisplayService(provider.GetRequiredService<IEndfieldDisplayStore>(), LauncherDataPaths.ResolveDataDirectory()));
         services.AddSingleton<LauncherViewModel>();
         services.AddSingleton<GameLibraryViewModel>();
+        services.AddSingleton<EndfieldCommunityViewModel>();
         services.AddSingleton<LogViewModel>();
 
         services.AddSingleton<MainWindow>();
@@ -166,6 +167,7 @@ public partial class App : Application
         services.AddTransient<ToolsPage>();
         services.AddTransient<GachaPage>();
         services.AddTransient<PlayActivityPage>();
+        services.AddTransient<EndfieldCommunityPage>();
         services.AddTransient<GameSettingsPage>();
         services.AddTransient<SettingsPage>();
         services.AddTransient<LogsPage>();

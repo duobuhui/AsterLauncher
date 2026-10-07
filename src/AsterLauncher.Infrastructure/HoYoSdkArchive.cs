@@ -6,9 +6,9 @@ namespace AsterLauncher.Infrastructure;
 
 public static class HoYoSdkArchive
 {
-    public static async Task<IReadOnlyList<HoYoFile>> ReadAsync(string archivePath, HoYoSdk sdk, CancellationToken token)
+    public static async Task<IReadOnlyList<HoYoFile>> ReadAsync(string archivePath, HoYoSdk sdk, CancellationToken token, IProgress<long>? byteProgress = null)
     {
-        if (!await EndfieldDownloadService.MatchesAsync(archivePath, sdk.Size, sdk.Md5, token)) throw new InvalidDataException("渠道组件压缩包校验失败。");
+        if (!await EndfieldDownloadService.MatchesAsync(archivePath, sdk.Size, sdk.Md5, token, byteProgress)) throw new InvalidDataException("渠道组件压缩包校验失败。");
         using var archive = ZipFile.OpenRead(archivePath);
         if (archive.Entries.Count is 0 or > 2048) throw new InvalidDataException("渠道组件文件数量无效。");
         var entries = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase); long expanded = 0;
