@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026100702,
-  "publishedAt": "2026-10-07T06:19:20.1170616+00:00",
+  "revision": 2026100703,
+  "publishedAt": "2026-10-07T12:24:18.4240225+00:00",
   "pools": [
     {
       "gameId": "endfield",
@@ -122,8 +122,10 @@
       "endsAt": null,
       "weaponPool": "点绘申领",
       "weapon": "艺术暴君",
-      "source": "https://endfield.hypergryph.com/news/3805",
-      "endsOn": "2026-10-15"
+      "source": "https://endfield.hypergryph.com/news/2651",
+      "endsOn": "2026-10-15",
+      "category": "refactor",
+      "featuredOperator": "伊冯"
     },
     {
       "gameId": "endfield",
@@ -223,6 +225,71 @@
       "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
     }
   ],
-  "announcements": [],
+  "announcements": [
+    {
+      "gameId": "endfield",
+      "key": "endfield-danqingdu-version",
+      "kind": "version",
+      "title": "丹青渡",
+      "version": "丹青渡",
+      "startsOn": "2026-10-15",
+      "endsOn": "2026-11-26",
+      "url": "https://endfield.hypergryph.com/version_briefing/latest",
+      "region": "CN",
+      "platforms": [],
+      "description": "核心章节版本将于10月15日更新后开启，祀、明河依次登场。版本边界按官方已公布日期显示，维护的具体小时尚未确认。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-danqingdu-guide-reward",
+      "kind": "event",
+      "title": "版本导览奖励",
+      "version": "丹青渡",
+      "startsOn": "2026-10-06",
+      "endsOn": "2026-10-15",
+      "url": "https://www.taptap.cn/moment/856624663952884885",
+      "region": "CN",
+      "platforms": [],
+      "description": "在官方新版本导览网页领取嵌晶玉×1000、折金票×10000、初级认知载体×8、武器检查套组×4。需登录游戏账号并已创建角色，每个账号仅可领取一次。请在10月15日版本更新维护前领取；这是网页领取活动，无需兑换码。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-tian-di-mo-xian-202610",
+      "kind": "event",
+      "title": "天地墨显",
+      "version": "雪凇幽梦",
+      "startsAt": "2026-10-08T12:00:00+08:00",
+      "endsOn": "2026-10-15",
+      "url": "https://www.taptap.cn/moment/856667432545159118",
+      "region": "CN",
+      "platforms": [],
+      "description": "完成3日签到可累计领取基础寻访凭证×2、嵌晶玉×500等奖励。需先完成主线任务「第一章 - 进程Ⅰ - 基地解围」。请在10月15日版本更新维护前完成签到，维护具体小时尚未确认。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-shan-tuan-tuan-202610",
+      "kind": "event",
+      "title": "融合！山团团！",
+      "version": "雪凇幽梦",
+      "startsAt": "2026-10-01T12:00:00+08:00",
+      "endsOn": "2026-10-15",
+      "url": "https://www.taptap.cn/moment/854133303182100693",
+      "region": "CN",
+      "platforms": [],
+      "description": "参与网页活动，融合相同的山团团获取积分，可领取嵌晶玉、折金票等奖励。需完成主线任务「第一章 - 进程Ⅱ - 开拓前路」。活动于10月15日版本更新维护前结束，详情见游戏内活动中心。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-danqingdu-preview-20261006",
+      "kind": "livestream",
+      "title": "丹青渡版本前瞻特别节目",
+      "version": "丹青渡",
+      "startsAt": "2026-10-06T19:30:00+08:00",
+      "url": "https://www.taptap.cn/moment/854131362418920116",
+      "region": "CN",
+      "platforms": [],
+      "description": "前瞻特别节目已于10月6日19:30播出，介绍「丹青渡」版本内容。"
+    }
+  ],
   "codes": []
 }
