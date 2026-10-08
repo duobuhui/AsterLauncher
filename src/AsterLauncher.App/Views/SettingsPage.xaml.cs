@@ -25,7 +25,7 @@ public sealed partial class SettingsPage : Page
         _resources = resources;
         InitializeComponent();
         DataContext = viewModel;
-        VersionText.Text = $"版本 Beta {_updateService.CurrentVersion.Replace("-beta", "", StringComparison.OrdinalIgnoreCase)}";
+        VersionText.Text = $"版本 {_updateService.CurrentVersion}";
         Loaded += Page_OnLoaded;
     }
 
@@ -128,7 +128,7 @@ public sealed partial class SettingsPage : Page
 
     private async void OpenRepository_OnClick(object sender, RoutedEventArgs e)
     {
-        await Windows.System.Launcher.LaunchUriAsync(new Uri(LauncherUpdateService.RepositoryUrl));
+        await ExternalBrowserService.OpenAsync(new Uri(LauncherUpdateService.RepositoryUrl), XamlRoot);
     }
 
     private async void CheckUpdate_OnClick(object sender, RoutedEventArgs e)

@@ -149,7 +149,9 @@ public sealed class LauncherViewModel : ObservableObject
         private set => SetProperty(ref _scanStatus, value);
     }
 
-    public bool CanLaunch => CurrentGame?.IsInstalled == true && CurrentGame.EffectiveExecutablePath is not null && SelectedProfile is not null && !IsLaunching
+    public GameLaunchTarget SelectedLaunchTarget => CurrentGame?.LaunchTarget ?? GameLaunchTarget.Local;
+
+    public bool CanLaunch => CurrentGame?.IsExternalLaunch == true || CurrentGame?.IsInstalled == true && CurrentGame.EffectiveExecutablePath is not null && SelectedProfile is not null && !IsLaunching
         && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldInstallation?.MaintenanceInProgress != true)
         && !HasHoYoMaintenance(CurrentGame);
 
@@ -534,7 +536,7 @@ public sealed class LauncherViewModel : ObservableObject
         await _configurationStore.SaveAsync(_configuration);
     }
 
-    public IReadOnlyList<GameCardViewModel> GetUninstalledGames() => Games.Where(game => !game.IsInstalled).ToArray();
+    public IReadOnlyList<GameCardViewModel> GetUninstalledGames() => Games.Where(game => !game.IsExternalLaunch && !game.IsInstalled).ToArray();
 
     public async Task<int> ClearUninstalledGamesAsync()
     {
@@ -582,8 +584,37 @@ public sealed class LauncherViewModel : ObservableObject
         GamesChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public async Task SelectLaunchTargetAsync(GameCardViewModel game, GameLaunchTarget target, string? emulatorExecutable = null)
+    {
+        if (GameLaunchTargets.Normalize(game.Id, target) != target)
+            throw new InvalidOperationException("当前游戏不支持此启动入口。");
+        if (emulatorExecutable is not null)
+        {
+            if (!Path.IsPathFullyQualified(emulatorExecutable) || !File.Exists(emulatorExecutable)
+                || !string.Equals(Path.GetExtension(emulatorExecutable), ".exe", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("请选择有效的模拟器 EXE。");
+            game.State.EmulatorExecutablePath = Path.GetFullPath(emulatorExecutable);
+        }
+        game.State.LaunchTarget = target;
+        game.SetRunning(false);
+        game.Refresh();
+        OnPropertyChanged(nameof(SelectedLaunchTarget));
+        OnPropertyChanged(nameof(CurrentGame));
+        OnPropertyChanged(nameof(CanLaunch));
+        OnPropertyChanged(nameof(IsLaunching));
+        await _configurationStore.SaveAsync(_configuration);
+        await RefreshRunningStateAsync();
+    }
+
+    public void ReportExternalLaunch(string message) => StatusText = message;
+
     public async Task<LaunchSessionResult?> LaunchSelectedAsync()
     {
+        if (CurrentGame?.IsExternalLaunch == true)
+        {
+            StatusText = "请从主页打开所选外部入口。";
+            return null;
+        }
         if (IsLaunching)
         {
             StatusText = "游戏正在启动或运行中。";
@@ -1074,9 +1105,12 @@ public sealed class LauncherViewModel : ObservableObject
         if (channel is not (EndfieldChannel.Unknown or EndfieldChannel.Official or EndfieldChannel.Bilibili))
             throw new ArgumentOutOfRangeException(nameof(channel));
         if (channel != EndfieldChannel.Unknown) GetOrCreateEndfieldInstallation(channel);
+        if (_allGames.FirstOrDefault(game => game.Id == BuiltInGameIds.Endfield) is { } endfield)
+            endfield.State.LaunchTarget = GameLaunchTarget.Local;
         _configuration.SelectedEndfieldChannel = channel;
         ApplyEndfieldSelection();
         RefreshProfiles();
+        OnPropertyChanged(nameof(SelectedLaunchTarget));
         OnPropertyChanged(nameof(SelectedEndfieldChannel));
         OnPropertyChanged(nameof(SelectedEndfieldInstallation));
         OnPropertyChanged(nameof(OtherEndfieldInstallation));
@@ -1172,6 +1206,7 @@ SafeGamePath.Resolve(root, "Endfield.exe");
     public async Task SelectHoYoChannelAsync(GameCardViewModel game, HoYoChannel channel)
     {
         if (!HoYoInstallationIdentity.HasChannels(game.Id)) return;
+        game.State.LaunchTarget = GameLaunchTarget.Local;
         game.State.SelectedHoYoChannel = channel;
         game.State.HoYoInstallation = HoYoInstallationIdentity.Get(game.State, channel);
         game.State.ExecutablePath = game.State.HoYoInstallation.ExecutablePath;
@@ -1179,6 +1214,7 @@ SafeGamePath.Resolve(root, "Endfield.exe");
         if (ReferenceEquals(CurrentGame, game))
         {
             RefreshProfiles(); RefreshLaunchSequence(); OnPropertyChanged(nameof(CanLaunch));
+            OnPropertyChanged(nameof(SelectedLaunchTarget));
             OnPropertyChanged(nameof(CurrentGame)); OnPropertyChanged(nameof(LaunchButtonText));
         }
         await _configurationStore.SaveAsync(_configuration);

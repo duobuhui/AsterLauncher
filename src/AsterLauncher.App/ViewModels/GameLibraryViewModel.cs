@@ -140,9 +140,9 @@ public sealed class GameLibraryViewModel : ObservableObject
         || InstalledOnly
         || RunningOnly;
 
-    public string ProfileSummary => _launcher.LaunchOrderText;
+    public string ProfileSummary => CurrentGame?.IsExternalLaunch == true ? ExternalLaunchDescription : _launcher.LaunchOrderText;
 
-    public string EndfieldChannelText => _launcher.SelectedEndfieldChannel switch
+    public string EndfieldChannelText => CurrentGame?.IsOfficialCloud == true ? "官方云游戏" : _launcher.SelectedEndfieldChannel switch
     {
         EndfieldChannel.Official => "官服",
         EndfieldChannel.Bilibili => "哔哩哔哩服",
@@ -167,11 +167,18 @@ public sealed class GameLibraryViewModel : ObservableObject
 
     public bool CanLaunch => _launcher.CanLaunch;
 
-    public string LaunchButtonText => _hoyo.IsSupported ? _hoyo.PrimaryActionText : _endfield.PrimaryActionText;
-    public double PrimaryProgress => _hoyo.IsSupported ? _hoyo.Progress : _endfield.PrimaryProgress;
-    public string PrimaryActionGlyph => _hoyo.IsSupported ? _hoyo.PrimaryActionGlyph : _endfield.PrimaryActionGlyph;
+    public string ExternalLaunchTitle => CurrentGame?.IsOfficialCloud == true ? "官方云游戏" : "启动模拟器";
+    public string ExternalLaunchDescription => CurrentGame?.IsOfficialCloud == true
+        ? Services.OfficialCloudCatalog.Get(CurrentGame.Id)?.Description ?? string.Empty
+        : "打开你选择的模拟器，再在模拟器中进入明日方舟。模拟器运行时间不计入游戏时长。";
+    public Microsoft.UI.Xaml.Visibility EmulatorOptionsVisibility => CurrentGame?.IsEmulator == true
+        ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+    public string LaunchButtonText => CurrentGame?.IsOfficialCloud == true ? "启动游戏" : CurrentGame?.IsEmulator == true
+        ? (File.Exists(CurrentGame.State.EmulatorExecutablePath) ? "启动模拟器" : "选择模拟器") : _hoyo.IsSupported ? _hoyo.PrimaryActionText : _endfield.PrimaryActionText;
+    public double PrimaryProgress => CurrentGame?.IsExternalLaunch == true ? 0 : _hoyo.IsSupported ? _hoyo.Progress : _endfield.PrimaryProgress;
+    public string PrimaryActionGlyph => CurrentGame?.IsOfficialCloud == true ? "\uE774" : CurrentGame?.IsEmulator == true ? "\uE7F8" : _hoyo.IsSupported ? _hoyo.PrimaryActionGlyph : _endfield.PrimaryActionGlyph;
     public Microsoft.UI.Xaml.Visibility PrimaryProgressVisibility =>
-        (_hoyo.IsSupported && _hoyo.IsPrimaryDownloading || CurrentGame?.Id == BuiltInGameIds.Endfield && _endfield.IsPrimaryDownloading)
+        CurrentGame?.IsExternalLaunch != true && (_hoyo.IsSupported && _hoyo.IsPrimaryDownloading || CurrentGame?.Id == BuiltInGameIds.Endfield && _endfield.IsPrimaryDownloading)
             ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
     public string LaunchStatusText => _launcher.StatusText;
@@ -279,6 +286,12 @@ public sealed class GameLibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(CurrentProfiles));
         OnPropertyChanged(nameof(SelectedProfile));
         OnPropertyChanged(nameof(ProfileSummary));
+        OnPropertyChanged(nameof(ExternalLaunchTitle));
+        OnPropertyChanged(nameof(ExternalLaunchDescription));
+        OnPropertyChanged(nameof(EmulatorOptionsVisibility));
+        OnPropertyChanged(nameof(PrimaryActionGlyph));
+        OnPropertyChanged(nameof(PrimaryProgress));
+        OnPropertyChanged(nameof(PrimaryProgressVisibility));
         OnPropertyChanged(nameof(PathText));
         OnPropertyChanged(nameof(EndfieldChannelText));
         OnPropertyChanged(nameof(VersionText));
@@ -294,9 +307,9 @@ public sealed class GameLibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(ScanStatusText));
 
         var game = CurrentGame;
-        var enabledSteps = SelectedProfile?.Steps.Count(step => step.IsEnabled && step.Phase is LaunchPhase.BeforeGame or LaunchPhase.AfterGame) ?? 0;
-        var maaEnabled = SelectedProfile?.Steps.Any(step => step.IsEnabled && IsMaaStep(step)) == true;
-        var installedText = game is null ? "暂无数据" : game.IsInstalled ? "已安装" : "未安装";
+        var enabledSteps = game?.IsExternalLaunch == true ? 0 : SelectedProfile?.Steps.Count(step => step.IsEnabled && step.Phase is LaunchPhase.BeforeGame or LaunchPhase.AfterGame) ?? 0;
+        var maaEnabled = game?.IsExternalLaunch != true && SelectedProfile?.Steps.Any(step => step.IsEnabled && IsMaaStep(step)) == true;
+        var installedText = game is null ? "暂无数据" : game.InstallStatus;
 
         InfoChips.Clear();
         InfoChips.Add(new InfoChipViewModel(

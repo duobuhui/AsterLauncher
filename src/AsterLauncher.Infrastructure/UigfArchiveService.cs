@@ -47,7 +47,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
     private readonly bool _ownsClient;
 
     public UigfArchiveService(ILogger<UigfArchiveService> logger)
-        : this(logger, new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, true)
+        : this(logger, new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(30) }, true)
     {
     }
 
@@ -173,39 +173,55 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
         }
     }
 
-    public async Task<GachaImportResult> CaptureFromGameAsync(
+    public Task<GachaImportResult> CaptureFromGameAsync(
         string gameId,
         string executablePath,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default,
+        bool fullRefresh = false) =>
+        CaptureAsync(gameId, executablePath, null, progress, cancellationToken, fullRefresh);
+
+    public Task<GachaImportResult> CaptureFromUrlAsync(
+        string gameId,
+        string historyUrl,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default,
         bool fullRefresh = false)
+    {
+        if (!GachaHistoryUrlValidator.TryValidate(gameId, historyUrl, out var uri))
+            return Task.FromResult(new GachaImportResult(false, 0, GachaHistoryUrlValidator.InvalidLinkMessage));
+        return CaptureAsync(gameId, string.Empty, uri, progress, cancellationToken, fullRefresh);
+    }
+
+    private async Task<GachaImportResult> CaptureAsync(
+        string gameId, string executablePath, Uri? suppliedUrl, IProgress<string>? progress,
+        CancellationToken cancellationToken, bool fullRefresh)
     {
         if (!CaptureDefinitions.TryGetValue(gameId, out var definition))
         {
             return new GachaImportResult(false, 0, "当前游戏不使用米哈游 UIGF 抽卡格式。");
         }
 
-        if (string.IsNullOrWhiteSpace(executablePath) || !File.Exists(executablePath))
+        if (suppliedUrl is null && (string.IsNullOrWhiteSpace(executablePath) || !File.Exists(executablePath)))
         {
             return new GachaImportResult(false, 0, "请先在游戏设置中指定有效的游戏 EXE。");
         }
 
         try
         {
-            progress?.Report("正在定位游戏 Web 缓存…");
-            var cachePath = FindNewestCache(executablePath);
-            if (cachePath is null)
-            {
-                return new GachaImportResult(false, 0, "没有找到 data_2 Web 缓存。请先在游戏内打开一次抽卡记录页面后重试。");
-            }
-
-            var capturedUrl = await ExtractHistoryUrlAsync(cachePath, definition, cancellationToken).ConfigureAwait(false);
+            var capturedUrl = suppliedUrl;
             if (capturedUrl is null)
             {
-                return new GachaImportResult(false, 0, "缓存中没有找到受支持的抽卡记录链接。请在游戏内重新打开抽卡记录页面。");
+                progress?.Report("正在定位游戏 Web 缓存…");
+                var cachePath = FindNewestCache(executablePath);
+                if (cachePath is null)
+                    return new GachaImportResult(false, 0, "没有找到 data_2 Web 缓存。请先在游戏内打开一次抽卡记录页面后重试。");
+                capturedUrl = await ExtractHistoryUrlAsync(cachePath, definition, cancellationToken).ConfigureAwait(false);
+                if (capturedUrl is null)
+                    return new GachaImportResult(false, 0, "缓存中没有找到受支持的抽卡记录链接。请在游戏内重新打开抽卡记录页面。");
             }
 
-            progress?.Report("已找到本地链接，正在通过官方接口同步…");
+            progress?.Report("正在通过官方接口同步…");
             var existing = File.Exists(ArchivePath)
                 ? await ReadRootAsync(ArchivePath, cancellationToken).ConfigureAwait(false)
                 : NewRoot();
@@ -234,6 +250,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
                 return new GachaImportResult(true, 0, $"没有读取到新的抽卡记录。{unavailableNote}");
             }
 
+            foreach (var record in records) GachaArchivePrivacy.Strip(record, capturedUrl);
             var incoming = CreateArchive(definition.UigfKey, records);
             var root = File.Exists(ArchivePath)
                 ? Merge(await ReadRootAsync(ArchivePath, cancellationToken).ConfigureAwait(false), incoming)
@@ -259,10 +276,10 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
             _logger.LogWarning("Gacha HTTP request failed; status {StatusCode}", exception.StatusCode);
             return new GachaImportResult(false, 0, "访问官方抽卡接口失败。链接中的授权参数不会显示；请稍后重试或重新打开游戏内记录页。");
         }
-        catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException or InvalidOperationException or UriFormatException)
+        catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException or InvalidOperationException or FormatException)
         {
             _logger.LogWarning("Gacha capture failed; error type {ErrorType}", exception.GetType().Name);
-            return new GachaImportResult(false, 0, $"同步失败：{exception.Message}");
+            return new GachaImportResult(false, 0, "同步失败：记录数据无法读取或保存。请重新复制官方记录链接后重试。");
         }
     }
 
@@ -377,9 +394,14 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
 
     private static Uri BuildApiUri(string endpoint, string capturedQuery, string gachaType, string endId)
     {
-        var query = capturedQuery.TrimStart('?');
-        var separator = string.IsNullOrWhiteSpace(query) ? string.Empty : "&";
-        return new Uri($"{endpoint}?{query}{separator}gacha_type={Uri.EscapeDataString(gachaType)}&page=1&size=20&end_id={Uri.EscapeDataString(endId)}");
+        if (!GachaHistoryUrlValidator.TryParseQuery(capturedQuery, out var query))
+            throw new InvalidDataException("记录链接参数不完整。");
+        query.Remove("real_gacha_type");
+        query["gacha_type"] = gachaType;
+        query["page"] = "1";
+        query["size"] = "20";
+        query["end_id"] = endId;
+        return GachaHistoryUrlValidator.WithQuery(new Uri(endpoint), query);
     }
 
     private static string? FindNewestCache(string executablePath)
@@ -549,6 +571,7 @@ public sealed class UigfArchiveService : IUigfArchiveService, IDisposable
 
     private static async Task SaveRootAsync(JsonObject root, string path, CancellationToken cancellationToken)
     {
+        GachaArchivePrivacy.Strip(root);
         var fullPath = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("目标路径没有父目录。");
         Directory.CreateDirectory(directory);

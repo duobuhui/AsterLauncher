@@ -85,7 +85,11 @@ public sealed partial class GameSettingsPage : Page
     private void RefreshForm()
     {
         var game = _viewModel.CurrentGame;
-        ServerPanel.Visibility = game is not null && (game.Id == Core.BuiltInGameIds.Endfield || Core.HoYoInstallationIdentity.HasChannels(game.Id)) ? Visibility.Visible : Visibility.Collapsed;
+        ServerPanel.Visibility = game is not null && !game.IsExternalLaunch && (game.Id == Core.BuiltInGameIds.Endfield || Core.HoYoInstallationIdentity.HasChannels(game.Id)) ? Visibility.Visible : Visibility.Collapsed;
+        ExternalEntryInfo.Visibility = game?.IsExternalLaunch == true ? Visibility.Visible : Visibility.Collapsed;
+        ExternalEntryInfo.Text = game?.IsOfficialCloud == true
+            ? "当前使用官方云游戏。画面选项请在云游戏内设置；下方游戏信息中的 EXE 保留给本地安装使用。"
+            : "当前使用模拟器入口。可右键游戏图标选择模拟器 EXE；下方游戏信息中的 EXE 保留给本地启动方案使用。";
         ServerExecutableBox.Text = game?.EffectiveExecutablePath ?? game?.State.ExecutablePath ?? "";
         ServerBox.SelectedIndex = game?.Id == Core.BuiltInGameIds.Endfield ? (int)_viewModel.SelectedEndfieldChannel : game?.State.SelectedHoYoChannel switch { Core.HoYoChannel.Official => 1, Core.HoYoChannel.Bilibili => 2, _ => 0 };
         PresentationExpander.IsExpanded = game?.Id != Core.BuiltInGameIds.Endfield;
@@ -155,7 +159,7 @@ public sealed partial class GameSettingsPage : Page
     {
         if (Uri.TryCreate(_viewModel.CurrentGame?.OfficialDownloadUri, UriKind.Absolute, out var uri))
         {
-            await Launcher.LaunchUriAsync(uri);
+            await ExternalBrowserService.OpenAsync(uri, XamlRoot);
         }
     }
 }

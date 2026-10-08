@@ -3,7 +3,6 @@ using AsterLauncher.App.ViewModels;
 using AsterLauncher.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.System;
 
 namespace AsterLauncher.App.Views;
 
@@ -40,7 +39,7 @@ public sealed partial class ToolsPage : Page
         if (sender is Button { Tag: CompanionTool tool }
             && Uri.TryCreate(tool.HomepageUri, UriKind.Absolute, out var uri))
         {
-            await Launcher.LaunchUriAsync(uri);
+            await ExternalBrowserService.OpenAsync(uri, XamlRoot);
         }
     }
 }

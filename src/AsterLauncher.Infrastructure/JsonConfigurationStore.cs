@@ -43,6 +43,7 @@ public sealed class JsonConfigurationStore : IConfigurationStore
                 cancellationToken).ConfigureAwait(false);
             configuration ??= CreateInitialConfiguration();
             LauncherAppearance.Normalize(configuration);
+            NormalizeLaunchTargets(configuration);
             return configuration;
         }
         catch (JsonException exception)
@@ -63,6 +64,7 @@ public sealed class JsonConfigurationStore : IConfigurationStore
         await _saveGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            NormalizeLaunchTargets(configuration);
             var directory = Path.GetDirectoryName(ConfigurationPath)!;
             Directory.CreateDirectory(directory);
             var temporaryPath = Path.Combine(directory, $"launcher.settings.{Guid.NewGuid():N}.tmp");
@@ -89,6 +91,16 @@ public sealed class JsonConfigurationStore : IConfigurationStore
             _saveGate.Release();
         }
     }
+
+    private static void NormalizeLaunchTargets(LauncherConfiguration configuration)
+    {
+        foreach (var game in configuration.Games ?? [])
+        {
+            if (game is not null)
+                game.LaunchTarget = GameLaunchTargets.Normalize(game.GameId, game.LaunchTarget);
+        }
+    }
+
     private static LauncherConfiguration CreateInitialConfiguration()
     {
         var profile = new LaunchProfile

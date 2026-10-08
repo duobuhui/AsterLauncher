@@ -21,6 +21,7 @@ public sealed partial class GachaPage : Page
     private bool _settingAccounts;
     private bool _showStatistics;
     private int _refreshRevision;
+    private bool _cloudLinkDialogOpen;
 
     private readonly IResourceCatalogProvider _resources;
     private void Resource_OnUpdated(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(async () => { if (IsLoaded) await RefreshAsync(); });
@@ -62,6 +63,7 @@ public sealed partial class GachaPage : Page
             or BuiltInGameIds.ZenlessZoneZero;
         CaptureButton.Visibility = isEndfield || supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
         CaptureButton.Content = "增量同步";
+        CloudSyncHint.Visibility = _launcher.CurrentGame?.IsOfficialCloud == true ? Visibility.Visible : Visibility.Collapsed;
         FullCaptureButton.Visibility = isEndfield || supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
         ImportButton.Content = isEndfield ? "导入终末地 JSON" : "导入 UIGF v4 JSON";
         ExportButton.Content = isEndfield ? "导出终末地 JSON" : "导出 UIGF v4.2 JSON";
@@ -250,6 +252,12 @@ public sealed partial class GachaPage : Page
             return;
         }
 
+        if (game.IsOfficialCloud)
+        {
+            await CaptureFromCloudAsync(game, false);
+            return;
+        }
+
         if (game.Id == BuiltInGameIds.Endfield)
         {
             await RunAsync(() => _endfieldArchive.CaptureFromGameAsync(
@@ -279,6 +287,11 @@ public sealed partial class GachaPage : Page
     {
         var game = _launcher.CurrentGame;
         if (game is null) return;
+        if (game.IsOfficialCloud)
+        {
+            await CaptureFromCloudAsync(game, true);
+            return;
+        }
         var progress = new Progress<string>(message =>
         {
             ResultInfo.Title = "正在全量同步";
@@ -291,6 +304,100 @@ public sealed partial class GachaPage : Page
             : _archive.CaptureFromGameAsync(
                 game.Id, game.State.ExecutablePath ?? string.Empty, progress, fullRefresh: true));
     }
+    private async Task CaptureFromCloudAsync(GameCardViewModel game, bool fullRefresh)
+    {
+        if (_cloudLinkDialogOpen) return;
+        _cloudLinkDialogOpen = true;
+        var input = new TextBox
+        {
+            Header = "官方记录链接",
+            PlaceholderText = "粘贴当前游戏的完整 HTTPS 记录链接",
+            MaxLength = 32768,
+            IsSpellCheckEnabled = false,
+            IsTextPredictionEnabled = false,
+            TextWrapping = TextWrapping.NoWrap,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(input, "官方记录链接");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetAutomationId(input, "CloudGachaHistoryUrl");
+        var content = new StackPanel { Spacing = 12, MaxWidth = 460 };
+        content.Children.Add(new TextBlock
+        {
+            Text = game.Id == BuiltInGameIds.Endfield
+                ? "终末地目前支持官方记录接口链接（/api/record/char 或 /api/record/weapon）。若云游戏平台无法提供该链接，可在本地客户端同步，或导入已有记录文件。"
+                : "如果云游戏平台能提供链接，请从游戏内的抽卡记录页复制完整官方链接。无法复制时，可在本地客户端同步，或导入已有记录文件。",
+            TextWrapping = TextWrapping.Wrap, FontSize = 13
+        });
+        content.Children.Add(input);
+        content.Children.Add(new TextBlock
+        {
+            Text = game.Id == BuiltInGameIds.Endfield
+                ? "终末地每次同步链接对应的记录分组；其他角色或武器分组需分别粘贴链接。链接仅用于本次同步，关闭即清空，不写入日志或配置。"
+                : "链接仅用于本次同步，关闭即清空，不写入日志或配置。",
+            TextWrapping = TextWrapping.Wrap, FontSize = 12,
+            Foreground = AppearanceBrushes.Get("GlassMutedTextBrush")
+        });
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
+            Title = fullRefresh ? "从云游戏链接全量同步" : "从云游戏链接增量同步",
+            Content = content, PrimaryButtonText = "同步", CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary
+        };
+        var cancelForeground = AppearanceBrushes.Get("GlassTextBrush");
+        var cancelStyle = new Style { TargetType = typeof(Button), BasedOn = (Style)Application.Current.Resources["ThemeSecondaryButtonStyle"] };
+        cancelStyle.Setters.Add(new Setter(Control.ForegroundProperty, cancelForeground));
+        dialog.CloseButtonStyle = cancelStyle;
+        foreach (var key in new[] { "ButtonForeground", "ButtonForegroundPointerOver", "ButtonForegroundPressed" })
+            dialog.Resources[key] = cancelForeground;
+        string? historyUrl = null;
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            if (string.IsNullOrWhiteSpace(input.Text))
+            {
+                args.Cancel = true;
+                input.Focus(FocusState.Programmatic);
+                return;
+            }
+            historyUrl = input.Text.Trim();
+        };
+        void ClearInput()
+        {
+            input.Text = string.Empty;
+            input.ClearUndoRedoHistory();
+        }
+        dialog.Closed += (_, _) => ClearInput();
+        try
+        {
+            var result = await dialog.ShowAsync();
+            ClearInput();
+            dialog.Content = null;
+            if (result != ContentDialogResult.Primary || historyUrl is null
+                || !ReferenceEquals(game, _launcher.CurrentGame) || !game.IsOfficialCloud) return;
+            var progress = new Progress<string>(message =>
+            {
+                ResultInfo.Title = fullRefresh ? "正在全量同步" : "正在同步";
+                ResultInfo.Message = message;
+                ResultInfo.Severity = InfoBarSeverity.Informational;
+                ResultInfo.IsOpen = true;
+            });
+            await RunAsync(() => game.Id == BuiltInGameIds.Endfield
+                ? _endfieldArchive.CaptureFromUrlAsync(historyUrl, progress, fullRefresh: fullRefresh)
+                : _archive.CaptureFromUrlAsync(game.Id, historyUrl, progress, fullRefresh: fullRefresh));
+        }
+        catch (Exception exception) when (exception is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            ShowResult(new GachaImportResult(false, 0, "暂时无法打开或完成同步，请关闭其他弹窗后重试。"));
+        }
+        finally
+        {
+            ClearInput();
+            historyUrl = null;
+            dialog.Content = null;
+            _cloudLinkDialogOpen = false;
+        }
+    }
+
     private async void Import_OnClick(object sender, RoutedEventArgs e)
     {
         var path = await _filePicker.PickJsonAsync(App.MainWindow);

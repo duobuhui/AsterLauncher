@@ -98,6 +98,13 @@ public interface IUigfArchiveService
 
     Task<GachaImportResult> ExportAsync(string destinationPath, CancellationToken cancellationToken = default);
 
+    Task<GachaImportResult> CaptureFromUrlAsync(
+        string gameId,
+        string historyUrl,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default,
+        bool fullRefresh = false);
+
     Task<GachaImportResult> CaptureFromGameAsync(
         string gameId,
         string executablePath,
@@ -123,6 +130,12 @@ public interface IEndfieldGachaArchiveService
     Task<EndfieldGachaSummary> GetSummaryAsync(CancellationToken cancellationToken = default);
 
     Task<EndfieldGachaAnalysis> GetAnalysisAsync(CancellationToken cancellationToken = default);
+
+    Task<GachaImportResult> CaptureFromUrlAsync(
+        string historyUrl,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default,
+        bool fullRefresh = false);
 
     Task<GachaImportResult> CaptureFromGameAsync(
         IProgress<string>? progress = null,

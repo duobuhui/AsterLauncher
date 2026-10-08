@@ -324,6 +324,13 @@
                                                     <TextBlock FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}"><Run Text="预下载：" /><Run Text="{Binding PreloadText}" /></TextBlock>
                                                 </StackPanel>
                                                 <Border x:Name="MaintenanceDivider" Grid.Column="1" Width="1" HorizontalAlignment="Left" Margin="-12,0,0,0" Background="{ThemeResource GlassEdgeBrush}" Visibility="Collapsed" />
+                                                <StackPanel x:Name="ExternalLaunchPanel" Grid.Column="1" Spacing="10" Visibility="Collapsed">
+                                                    <TextBlock Text="{Binding ExternalLaunchTitle}" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
+                                                    <TextBlock Text="{Binding ExternalLaunchDescription}" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassTextBrush}" />
+                                                    <TextBlock Text="{Binding PathText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource GlassMutedTextBrush}" ToolTipService.ToolTip="{Binding PathText}" />
+                                                    <Button Content="选择模拟器 EXE" Click="SelectEmulator_OnClick" Visibility="{Binding EmulatorOptionsVisibility}" Style="{StaticResource FloatingButtonStyle}" />
+                                                    <TextBlock Text="{Binding LaunchStatusText}" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                                                </StackPanel>
                                                 <StackPanel x:Name="LaunchSettingsPanel" Grid.Column="1" Spacing="12" VerticalAlignment="Top">
                                                     <TextBlock Text="启动选项" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
                                                     <StackPanel Spacing="4">

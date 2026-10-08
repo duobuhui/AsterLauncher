@@ -192,6 +192,12 @@ public sealed class GameUserState
     public HoYoChannel SelectedHoYoChannel { get; set; } = HoYoChannel.Official;
     public string GameId { get; set; } = string.Empty;
 
+    [JsonConverter(typeof(GameLaunchTargetJsonConverter))]
+    public GameLaunchTarget LaunchTarget { get; set; } = GameLaunchTarget.Local;
+
+    // Kept separately so selecting an emulator never replaces a local game installation.
+    public string? EmulatorExecutablePath { get; set; }
+
     public string? DisplayNameOverride { get; set; }
 
     public string? PublisherOverride { get; set; }

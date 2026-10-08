@@ -11,13 +11,13 @@ public sealed class EndfieldSettingsViewModel(LauncherViewModel launcher, Endfie
     private IReadOnlyList<EndfieldPhoto> _photos = [];
     private string _photoDirectory = "";
     private int _revision;
-    public Visibility Visibility => launcher.CurrentGame?.Id == BuiltInGameIds.Endfield ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility Visibility => launcher.CurrentGame is { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false } ? Visibility.Visible : Visibility.Collapsed;
     public double Width { get; set; } = 1920;
     public double Height { get; set; } = 1080;
     public bool Fullscreen { get; set; } = true;
     public double PresetSlot { get; set; } = 1;
     public bool IsBusy { get => _busy; private set { SetProperty(ref _busy, value); OnPropertyChanged(nameof(CanEdit)); } }
-    public bool CanEdit => !IsBusy && _snapshot?.Width is not null && _snapshot.Height is not null && _snapshot.Fullscreen is not null;
+    public bool CanEdit => launcher.CurrentGame?.IsExternalLaunch != true && !IsBusy && _snapshot?.Width is not null && _snapshot.Height is not null && _snapshot.Fullscreen is not null;
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
     public IReadOnlyList<EndfieldPhoto> Photos { get => _photos; private set => SetProperty(ref _photos, value); }
     public string PhotoDirectory { get => _photoDirectory; private set => SetProperty(ref _photoDirectory, value); }
@@ -26,7 +26,7 @@ public sealed class EndfieldSettingsViewModel(LauncherViewModel launcher, Endfie
     {
         var revision = ++_revision;
         OnPropertyChanged(nameof(Visibility));
-        if (launcher.CurrentGame?.Id != BuiltInGameIds.Endfield) return;
+        if (launcher.CurrentGame is not { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false }) return;
         var install = launcher.SelectedEndfieldInstallation;
         var directory = install?.ScreenshotDirectory ?? EndfieldPhotoService.DefaultDirectory;
         IsBusy = true;
@@ -46,7 +46,7 @@ public sealed class EndfieldSettingsViewModel(LauncherViewModel launcher, Endfie
     }
     public async Task ExecuteAsync(string action)
     {
-        if (IsBusy || _snapshot is null) return;
+        if (IsBusy || _snapshot is null || launcher.CurrentGame?.IsExternalLaunch == true) return;
         var snapshot = _snapshot;
         var widthValue = Width; var heightValue = Height; var fullscreen = Fullscreen; var slotValue = PresetSlot;
         if (launcher.IsLaunching || launcher.SelectedEndfieldInstallation?.MaintenanceInProgress == true || launcher.OtherEndfieldInstallation?.MaintenanceInProgress == true)

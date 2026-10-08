@@ -1,7 +1,7 @@
-name: Publish beta
+name: Publish release
 on:
   push:
-    tags: ['v*-beta', 'v*-beta.*']
+    tags: ['v*']
 permissions:
   contents: write
 jobs:
@@ -55,11 +55,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
           dotnet test .\tests\AsterLauncher.Core.Tests\AsterLauncher.Core.Tests.csproj --no-build --configuration Debug --logger 'console;verbosity=minimal'
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
-      - name: Create multi-file release and verify migration
+      - name: Create multi-file release and verify updates
         run: |
           Set-Location $env:ASTER_CI_ROOT
           . .\eng\set-env.ps1
           $version = (Select-Xml Directory.Build.props -XPath '//Version').Node.InnerText
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-beta(?:\.\d+)?)?$') { throw 'Unsupported release version.' }
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and source version differ.' }
           $previousVersion = (Select-Xml Directory.Build.props -XPath '//ReleaseBaseVersion').Node.InnerText
           $previousPackage = $null
@@ -80,7 +81,6 @@ jobs:
           & .\eng\test-migration.ps1 -MigratorExe (Join-Path $out 'migration-publish\AsterLauncher.Migrator.exe')
           $deltaPackage = if ($previousPackage) { Join-Path $out "AsterLauncher-$previousVersion-to-$version-files-delta.zip" } else { $null }
           & .\eng\test-multifile-update.ps1 -Package (Join-Path $out "AsterLauncher-v$version-win-x64.zip") -BasePackage $previousPackage -DeltaPackage $deltaPackage
-          & .\eng\create-migration-tools-package.ps1 -FullPackage (Join-Path $out "AsterLauncher-v$version-win-x64.zip") -OutputZip (Join-Path $out "AsterLauncher-v$version-migration-tools.zip")
           "ASTER_RELEASE_OUTPUT=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Publish verified assets
         env:
@@ -90,9 +90,16 @@ jobs:
           . .\eng\set-env.ps1
           $headers = @{Authorization="Bearer $env:ASTER_RELEASE_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
           $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases"
-          $body = @{tag_name=$env:GITHUB_REF_NAME;name="AsterLauncher $env:GITHUB_REF_NAME";body=(Get-Content (".\docs\RELEASE_" + $env:GITHUB_REF_NAME.TrimStart("v").Split("-")[0] + ".md") -Raw);draft=$true;prerelease=$true} | ConvertTo-Json
+          $body = @{tag_name=$env:GITHUB_REF_NAME;name="AsterLauncher $env:GITHUB_REF_NAME";body=(Get-Content (".\docs\RELEASE_" + $env:GITHUB_REF_NAME.TrimStart("v").Split("-")[0] + ".md") -Raw);draft=$true;prerelease=($env:GITHUB_REF_NAME -match '-beta(?:\.\d+)?$')} | ConvertTo-Json
           $release = Invoke-RestMethod -Uri $api -Method Post -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($body))
-          $assets = @(Get-ChildItem -LiteralPath $env:ASTER_RELEASE_OUTPUT -File | Where-Object {$_.Name -match '\.zip$|\.zip\.sha256$|^aster-update-v2\.json$'})
+          $manifestPath = Join-Path $env:ASTER_RELEASE_OUTPUT 'aster-update-v2.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $assetNames = @('aster-update-v2.json', $manifest.full.asset, ($manifest.full.asset + '.sha256'))
+          if ($manifest.patch) { $assetNames += @($manifest.patch.asset, ($manifest.patch.asset + '.sha256')) }
+          $assets = @($assetNames | ForEach-Object {
+            if ([IO.Path]::GetFileName($_) -ne $_ -or $_ -match 'migration-tools') { throw 'Unexpected release asset name.' }
+            Get-Item -LiteralPath (Join-Path $env:ASTER_RELEASE_OUTPUT $_)
+          })
           foreach ($asset in $assets) {
             $url = $release.upload_url.Split('{')[0] + '?name=' + [Uri]::EscapeDataString($asset.Name)
             $uploaded = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -ContentType 'application/octet-stream' -InFile $asset.FullName -TimeoutSec 1800

@@ -109,6 +109,7 @@
                 <Button x:Name="FullCaptureButton" Grid.Column="4" Content="全量同步" Click="FullCapture_OnClick" VerticalAlignment="Center" Visibility="Collapsed" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" />
             </Grid></Border>
 
+            <TextBlock x:Name="CloudSyncHint" Text="云游戏同步需要手动提供官方记录链接；也可导入已有记录。" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <ToggleButton x:Name="RecordsTab" Content="抽卡记录" IsChecked="True" Click="RecordsTab_OnClick" />
                 <ToggleButton x:Name="StatisticsTab" Content="统计详情" Click="StatisticsTab_OnClick" />

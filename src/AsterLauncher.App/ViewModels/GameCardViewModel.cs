@@ -70,6 +70,11 @@ public sealed class GameCardViewModel : ObservableObject
 
     public Visibility IconFallbackVisibility => IconImage is null ? Visibility.Visible : Visibility.Collapsed;
 
+    public GameLaunchTarget LaunchTarget => GameLaunchTargets.Normalize(Id, State.LaunchTarget);
+    public bool IsOfficialCloud => LaunchTarget == GameLaunchTarget.OfficialCloud;
+    public bool IsEmulator => LaunchTarget == GameLaunchTarget.Emulator;
+    public bool IsExternalLaunch => LaunchTarget != GameLaunchTarget.Local;
+
     public string? OfficialDownloadUri => Adapter.Definition.OfficialDownloadUri;
 
     public string DownloadDescription => string.IsNullOrWhiteSpace(Adapter.Definition.DownloadDescription)
@@ -80,20 +85,20 @@ public sealed class GameCardViewModel : ObservableObject
         ? _endfieldChannel == EndfieldChannel.Unknown ? null : _endfieldInstallation?.ExecutablePath
         : HoYoInstallationIdentity.HasChannels(Id) ? State.HoYoInstallation?.ExecutablePath : State.ExecutablePath;
 
-    public string ChannelBadgeText => HoYoInstallationIdentity.HasChannels(Id) ? State.SelectedHoYoChannel switch { HoYoChannel.Official => "官", HoYoChannel.Bilibili => "B", _ => "?" } : Id != BuiltInGameIds.Endfield ? string.Empty : _endfieldChannel switch
+    public string ChannelBadgeText => IsOfficialCloud ? "云" : IsEmulator ? "模" : HoYoInstallationIdentity.HasChannels(Id) ? State.SelectedHoYoChannel switch { HoYoChannel.Official => "官", HoYoChannel.Bilibili => "B", _ => "?" } : Id != BuiltInGameIds.Endfield ? string.Empty : _endfieldChannel switch
     {
         EndfieldChannel.Official => "官",
         EndfieldChannel.Bilibili => "B",
         _ => "?"
     };
 
-    public Visibility ChannelBadgeVisibility => Id == BuiltInGameIds.Endfield || HoYoInstallationIdentity.HasChannels(Id) ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ChannelBadgeVisibility => IsExternalLaunch || Id == BuiltInGameIds.Endfield || HoYoInstallationIdentity.HasChannels(Id) ? Visibility.Visible : Visibility.Collapsed;
 
-    public bool IsInstalled => File.Exists(EffectiveExecutablePath ?? (Id == BuiltInGameIds.Endfield && _endfieldChannel == EndfieldChannel.Unknown ? State.ExecutablePath : null));
+    public bool IsInstalled => !IsExternalLaunch && File.Exists(EffectiveExecutablePath ?? (Id == BuiltInGameIds.Endfield && _endfieldChannel == EndfieldChannel.Unknown ? State.ExecutablePath : null));
 
-    public string InstallStatus => IsInstalled ? "已安装" : "未找到";
+    public string InstallStatus => IsOfficialCloud ? "官方云游戏" : IsEmulator ? "模拟器入口" : IsInstalled ? "已安装" : "未找到";
 
-    public string InstallIconGlyph => IsInstalled ? "\uE73E" : "\uE783";
+    public string InstallIconGlyph => IsOfficialCloud ? "\uE774" : IsEmulator ? "\uE7F8" : IsInstalled ? "\uE73E" : "\uE783";
 
     public bool IsRunning
     {
@@ -108,11 +113,11 @@ public sealed class GameCardViewModel : ObservableObject
         }
     }
 
-    public string RunningStatusText => IsRunning ? "运行中" : "未运行";
+    public string RunningStatusText => IsOfficialCloud ? "浏览器启动" : IsEmulator ? "模拟器启动" : IsRunning ? "运行中" : "未运行";
 
     public Brush StatusBrush => new SolidColorBrush(IsRunning ? ColorHelper.FromArgb(255, 85, 214, 160) : ColorHelper.FromArgb(255, 145, 154, 177));
 
-    public string ExecutablePath => string.IsNullOrWhiteSpace(EffectiveExecutablePath) ? "尚未指定" : EffectiveExecutablePath;
+    public string ExecutablePath => IsOfficialCloud ? Services.OfficialCloudCatalog.Get(Id)?.Uri.AbsoluteUri ?? "官方云游戏" : IsEmulator ? State.EmulatorExecutablePath ?? "尚未选择模拟器 EXE" : string.IsNullOrWhiteSpace(EffectiveExecutablePath) ? "尚未指定" : EffectiveExecutablePath;
 
     public string LastPlayedText => State.LastPlayedAt is null
         ? "从未启动"
@@ -148,6 +153,7 @@ public sealed class GameCardViewModel : ObservableObject
     {
         get
         {
+            if (IsExternalLaunch) return IsOfficialCloud ? "在线服务" : "模拟器入口";
             if (!IsInstalled)
             {
                 return "暂无数据";
@@ -186,6 +192,11 @@ public sealed class GameCardViewModel : ObservableObject
         IconImage = ResolvePackagedImage(Adapter.Definition.IconAssetPath);
         OnPropertyChanged(nameof(ChannelBadgeText));
         OnPropertyChanged(nameof(ChannelBadgeVisibility));
+        OnPropertyChanged(nameof(LaunchTarget));
+        OnPropertyChanged(nameof(IsOfficialCloud));
+        OnPropertyChanged(nameof(IsEmulator));
+        OnPropertyChanged(nameof(IsExternalLaunch));
+        OnPropertyChanged(nameof(RunningStatusText));
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(Publisher));
         OnPropertyChanged(nameof(IconGlyph));

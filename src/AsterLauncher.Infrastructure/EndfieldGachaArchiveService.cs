@@ -32,7 +32,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
     public EndfieldGachaArchiveService(ILogger<EndfieldGachaArchiveService> logger)
         : this(
             logger,
-            new HttpClient { Timeout = TimeSpan.FromSeconds(30) },
+            new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(30) },
             true,
             GetDefaultCachePath)
     {
@@ -110,24 +110,39 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
         }
     }
 
-    public async Task<GachaImportResult> CaptureFromGameAsync(
+    public Task<GachaImportResult> CaptureFromGameAsync(
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default,
+        bool fullRefresh = false) =>
+        CaptureAsync(null, progress, cancellationToken, fullRefresh);
+
+    public Task<GachaImportResult> CaptureFromUrlAsync(
+        string historyUrl,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default,
         bool fullRefresh = false)
     {
-        var cachePath = _cachePathProvider();
-        if (string.IsNullOrWhiteSpace(cachePath) || !File.Exists(cachePath))
-        {
-            return new GachaImportResult(false, 0, "没有找到终末地记录缓存。请先在游戏内打开一次抽卡记录页面。");
-        }
+        if (!GachaHistoryUrlValidator.TryValidate(BuiltInGameIds.Endfield, historyUrl, out var uri))
+            return Task.FromResult(new GachaImportResult(false, 0, GachaHistoryUrlValidator.InvalidLinkMessage));
+        return CaptureAsync([uri], progress, cancellationToken, fullRefresh);
+    }
 
+    private async Task<GachaImportResult> CaptureAsync(
+        IReadOnlyList<Uri>? suppliedUrls, IProgress<string>? progress,
+        CancellationToken cancellationToken, bool fullRefresh)
+    {
         try
         {
-            progress?.Report("正在读取终末地记录缓存…");
-            var captureUrls = await ExtractCaptureUrlsAsync(cachePath, cancellationToken).ConfigureAwait(false);
-            if (captureUrls.Count == 0)
+            var captureUrls = suppliedUrls;
+            if (captureUrls is null)
             {
-                return new GachaImportResult(false, 0, "缓存中没有可用的官方记录链接。请在游戏内重新打开抽卡记录页面。");
+                var cachePath = _cachePathProvider();
+                if (string.IsNullOrWhiteSpace(cachePath) || !File.Exists(cachePath))
+                    return new GachaImportResult(false, 0, "没有找到终末地记录缓存。请先在游戏内打开一次抽卡记录页面。");
+                progress?.Report("正在读取终末地记录缓存…");
+                captureUrls = await ExtractCaptureUrlsAsync(cachePath, cancellationToken).ConfigureAwait(false);
+                if (captureUrls.Count == 0)
+                    return new GachaImportResult(false, 0, "缓存中没有可用的官方记录链接。请在游戏内重新打开抽卡记录页面。");
             }
 
             var current = File.Exists(ArchivePath)
@@ -169,16 +184,16 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                 ? "连接官方记录接口时 TLS 握手失败。请检查系统网络、代理或安全软件后重试。"
                 : "访问终末地官方记录接口失败。请稍后重试或重新打开游戏内记录页。");
         }
-        catch (InvalidDataException exception)
+        catch (RecordResponseException exception)
         {
-            // Every InvalidDataException in this capture path uses our own token-free message.
+            // Only our own fixed messages and numeric response codes reach this branch.
             _logger.LogWarning("Endfield gacha capture failed; reason {SafeReason}", exception.Message);
             return new GachaImportResult(false, 0, $"同步失败：{exception.Message}");
         }
-        catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException or UriFormatException)
+        catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException or InvalidOperationException or FormatException)
         {
             _logger.LogWarning("Endfield gacha capture failed; error type {ErrorType}", exception.GetType().Name);
-            return new GachaImportResult(false, 0, $"同步失败：{exception.Message}");
+            return new GachaImportResult(false, 0, "同步失败：记录数据无法读取或保存。请重新复制官方记录链接后重试。");
         }
     }
 
@@ -296,7 +311,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
             .OfType<JsonObject>().Select(GetCheckpointIdentity).ToHashSet(StringComparer.Ordinal);
         var failedGroups = 0;
         var successfulGroups = 0;
-        InvalidDataException? lastInvalidResponse = null;
+        RecordResponseException? lastInvalidResponse = null;
         foreach (var captureUrl in captureUrls)
         {
             var target = captureUrl.AbsolutePath.EndsWith("/char", StringComparison.OrdinalIgnoreCase)
@@ -320,7 +335,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                 using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
                 if (!TryGetRecordList(document.RootElement, out var data, out var list))
                 {
-                    throw new InvalidDataException(GetRecordResponseError(document.RootElement));
+                    throw new RecordResponseException(GetRecordResponseError(document.RootElement));
                 }
 
                 if (list.GetArrayLength() == 0)
@@ -338,6 +353,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
                         {
                             reachedExistingRecord = true;
                         }
+                        GachaArchivePrivacy.Strip(record, captureUrl);
                         groupRecords.Add(record);
                     }
 
@@ -366,7 +382,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
               }
               successfulGroups++;
             }
-            catch (InvalidDataException exception)
+            catch (RecordResponseException exception)
             {
                 failedGroups++;
                 lastInvalidResponse = exception;
@@ -378,11 +394,13 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
 
         if (successfulGroups == 0)
         {
-            throw lastInvalidResponse ?? new InvalidDataException("官方接口没有返回可用的记录分组。请在游戏内重新打开记录页面后重试。");
+            throw lastInvalidResponse ?? new RecordResponseException("官方接口没有返回可用的记录分组。请在游戏内重新打开记录页面后重试。");
         }
 
         return (result, failedGroups);
     }
+
+    private sealed class RecordResponseException(string message) : Exception(message) { }
 
     private static bool TryGetRecordList(JsonElement root, out JsonElement data, out JsonElement list)
     {
@@ -464,6 +482,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
 
     private static bool IsAllowedCaptureUri(Uri uri) =>
         uri.Scheme == Uri.UriSchemeHttps
+        && uri.IsDefaultPort && uri.UserInfo.Length == 0
         && AllowedHosts.Contains(uri.Host)
         && (uri.AbsolutePath.Equals("/api/record/char", StringComparison.OrdinalIgnoreCase)
             || uri.AbsolutePath.Equals("/api/record/weapon", StringComparison.OrdinalIgnoreCase));
@@ -614,6 +633,7 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
 
     private static void StripSensitiveFields(JsonNode? node)
     {
+        GachaArchivePrivacy.Strip(node);
         if (node is JsonObject obj)
         {
             foreach (var key in obj.Select(property => property.Key).ToArray())

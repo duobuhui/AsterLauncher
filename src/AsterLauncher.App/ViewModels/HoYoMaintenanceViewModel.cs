@@ -23,18 +23,20 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     private readonly HoYoMaintenanceService _service;
     private readonly Dictionary<Guid, State> _states = [];
     private readonly State _empty = new();
+    private readonly HoYoInstallation _unsupportedInstallation = new();
     public HoYoMaintenanceViewModel(LauncherViewModel launcher, HoYoMaintenanceService service)
     {
         _launcher = launcher; _service = service;
         launcher.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(LauncherViewModel.CurrentGame) or nameof(LauncherViewModel.CanLaunch)) Refresh(); };
     }
     public bool IsSupported => _launcher.CurrentGame is { } game && HoYoDistributionProvider.Games.ContainsKey(game.Id);
-    private State Current => _launcher.CurrentGame is { } game ? GetState(game) : _empty;
+    private State Current => IsSupported && _launcher.CurrentGame is { } game ? GetState(game) : _empty;
     private State GetState(GameCardViewModel game) => GetState(Installation(game));
     private State GetState(HoYoInstallation install) => _states.TryGetValue(install.InstallationId, out var state) ? state
         : _states[install.InstallationId] = new() { ReadImportedAudio = install.ExecutablePath is not null };
     private HoYoInstallation Installation(GameCardViewModel game)
-        => game.State.HoYoInstallation ??= HoYoInstallationIdentity.Get(game.State, game.State.SelectedHoYoChannel);
+        => !HoYoDistributionProvider.Games.ContainsKey(game.Id) ? _unsupportedInstallation
+            : game.State.HoYoInstallation ??= HoYoInstallationIdentity.Get(game.State, game.State.SelectedHoYoChannel);
     private bool IsSelected(GameCardViewModel game, HoYoInstallation install)
         => ReferenceEquals(game, _launcher.CurrentGame) && ReferenceEquals(install, game.State.HoYoInstallation);
     public string ChannelText => _launcher.CurrentGame is { } game ? Installation(game).Channel switch

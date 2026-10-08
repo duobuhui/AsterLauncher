@@ -416,7 +416,7 @@ public sealed class EndfieldCommunityPage : Page
     private async Task OpenSourceAsync(string source)
     {
         if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.UserInfo.Length > 0) return;
-        if (!await Windows.System.Launcher.LaunchUriAsync(uri)) ShowMessage("无法打开浏览器，请稍后重试。");
+        await ExternalBrowserService.OpenAsync(uri, XamlRoot);
     }
     private void ShowMessage(string text) { _message.Text = text; _message.Visibility = Visibility.Visible; }
     private static Style GetStyle(string key) => (Style)Application.Current.Resources[key];

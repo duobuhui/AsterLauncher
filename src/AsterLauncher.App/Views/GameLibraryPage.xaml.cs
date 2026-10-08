@@ -76,7 +76,7 @@ public sealed partial class GameLibraryPage : Page
                 DispatcherQueue.TryEnqueue(RefreshLaunchSurfaceLayout);
         };        _launcher.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName == nameof(LauncherViewModel.SelectedEndfieldChannel))
+            if (args.PropertyName is nameof(LauncherViewModel.SelectedEndfieldChannel) or nameof(LauncherViewModel.SelectedLaunchTarget))
                 UpdateEndfieldControls();
         };
     }
@@ -113,6 +113,7 @@ public sealed partial class GameLibraryPage : Page
             ShowFeature("overview");
             DispatcherQueue.TryEnqueue(async () =>
             {
+                if (_launcher.CurrentGame?.IsExternalLaunch == true) return;
                 await _endfield.ScanSharingAsync();
                 if (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield)
                     await _endfield.CheckVersionAsync();
@@ -300,6 +301,7 @@ public sealed partial class GameLibraryPage : Page
         UpdateEndfieldControls();
 
         ShowFeature("overview");
+        if (game.IsExternalLaunch) return;
         if (changed && game.Id == BuiltInGameIds.Endfield) await _endfield.CheckVersionAsync();
         else if (changed && _hoyo.IsSupported) await _hoyo.CheckVersionAsync();
     }
@@ -317,9 +319,13 @@ public sealed partial class GameLibraryPage : Page
     {
         var selected = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
         EndfieldCalendarNavigation.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-        EndfieldPanel.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
-        HoYoPanel.Visibility = _hoyo.IsSupported ? Visibility.Visible : Visibility.Collapsed;
-        var maintenance = selected || _hoyo.IsSupported;
+        var external = _launcher.CurrentGame?.IsExternalLaunch == true;
+        CommandDetails.Visibility = external ? Visibility.Collapsed : Visibility.Visible;
+        ExternalLaunchPanel.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
+        LaunchSettingsPanel.Visibility = external ? Visibility.Collapsed : Visibility.Visible;
+        EndfieldPanel.Visibility = selected && !external ? Visibility.Visible : Visibility.Collapsed;
+        HoYoPanel.Visibility = _hoyo.IsSupported && !external ? Visibility.Visible : Visibility.Collapsed;
+        var maintenance = !external && (selected || _hoyo.IsSupported);
         DownloadStatusPanel.DataContext = _hoyo.IsSupported ? _hoyo : _endfield;
         DownloadStatusPanel.SetBinding(VisibilityProperty, new Microsoft.UI.Xaml.Data.Binding { Source = DownloadStatusPanel.DataContext, Path = new PropertyPath("DownloadVisibility") });
         MaintenanceDivider.Visibility = maintenance ? Visibility.Visible : Visibility.Collapsed;
@@ -364,7 +370,7 @@ public sealed partial class GameLibraryPage : Page
                 {
                     Text = channel == EndfieldChannel.Official ? "官服" : "哔哩哔哩服",
                     Tag = channel,
-                    IsChecked = _launcher.SelectedEndfieldChannel == channel
+                    IsChecked = !game.IsExternalLaunch && _launcher.SelectedEndfieldChannel == channel
                 };
                 item.Click += async (_, _) =>
                 {
@@ -377,13 +383,15 @@ public sealed partial class GameLibraryPage : Page
                 };
                 channels.Items.Add(item);
             }
+            AddCloudServerItem(channels, game);
             menu.Opening += (_, _) =>
             {
                 foreach (var item in channels.Items.OfType<ToggleMenuFlyoutItem>())
-                    item.IsChecked = item.Tag is EndfieldChannel value && _launcher.SelectedEndfieldChannel == value;
+                    item.IsChecked = item.Tag is GameLaunchTarget ? game.IsOfficialCloud : !game.IsExternalLaunch && item.Tag is EndfieldChannel value && _launcher.SelectedEndfieldChannel == value;
             };
             menu.Items.Add(channels);
-            Add("检查游戏更新", async () => { await SelectContextGameAsync(game); await _endfield.CheckVersionAsync(); });
+            var check = Add("检查游戏更新", async () => { await SelectContextGameAsync(game); await _endfield.CheckVersionAsync(); });
+            menu.Opening += (_, _) => check.IsEnabled = !game.IsExternalLaunch;
         }
         if (HoYoInstallationIdentity.HasChannels(game.Id))
         {
@@ -399,13 +407,42 @@ public sealed partial class GameLibraryPage : Page
                 };
                 channels.Items.Add(item);
             }
+            AddCloudServerItem(channels, game);
             menu.Opening += (_, _) =>
             {
                 foreach (var item in channels.Items.OfType<ToggleMenuFlyoutItem>())
-                    item.IsChecked = item.Tag is HoYoChannel channel && game.State.SelectedHoYoChannel == channel;
+                    item.IsChecked = item.Tag is GameLaunchTarget ? game.IsOfficialCloud : !game.IsExternalLaunch && item.Tag is HoYoChannel channel && game.State.SelectedHoYoChannel == channel;
             };
             menu.Items.Add(channels);
-            Add("检查游戏更新", async () => { await SelectContextGameAsync(game); await _hoyo.CheckVersionAsync(); });
+            var check = Add("检查游戏更新", async () => { await SelectContextGameAsync(game); await _hoyo.CheckVersionAsync(); });
+            menu.Opening += (_, _) => check.IsEnabled = !game.IsExternalLaunch;
+        }
+        if (GameLaunchTargets.SupportsEmulator(game.Id))
+        {
+            var emulator = new ToggleMenuFlyoutItem { Text = "启动模拟器", IsChecked = game.IsEmulator };
+            emulator.Click += async (_, _) =>
+            {
+                try
+                {
+                    await SelectContextGameAsync(game);
+                    if (string.IsNullOrWhiteSpace(game.State.EmulatorExecutablePath))
+                        await SelectEmulatorAsync(game);
+                    else
+                        await _launcher.SelectLaunchTargetAsync(game, GameLaunchTarget.Emulator);
+                    UpdateEndfieldControls();
+                }
+                catch { await ShowMessageAsync("切换未完成", "请选择有效的模拟器 EXE 后重试。"); }
+            };
+            menu.Items.Add(emulator);
+            Add("选择模拟器 EXE", async () => { await SelectContextGameAsync(game); await SelectEmulatorAsync(game); });
+            var local = new ToggleMenuFlyoutItem { Text = "本地启动方案", IsChecked = !game.IsExternalLaunch };
+            local.Click += async (_, _) =>
+            {
+                try { await SelectContextGameAsync(game); await _launcher.SelectLaunchTargetAsync(game, GameLaunchTarget.Local); }
+                catch { await ShowMessageAsync("切换未完成", "无法保存启动入口，请稍后重试。"); }
+            };
+            menu.Items.Add(local);
+            menu.Opening += (_, _) => { emulator.IsChecked = game.IsEmulator; local.IsChecked = !game.IsExternalLaunch; };
         }
         if (game.Id is BuiltInGameIds.Endfield or BuiltInGameIds.GenshinImpact
             or BuiltInGameIds.HonkaiStarRail or BuiltInGameIds.ZenlessZoneZero)
@@ -419,7 +456,7 @@ public sealed partial class GameLibraryPage : Page
             if (game.EffectiveExecutablePath is { } executable && Path.GetDirectoryName(executable) is { } directory)
                 await Launcher.LaunchFolderPathAsync(directory);
         });
-        menu.Opening += (_, _) => folder.IsEnabled = game.EffectiveExecutablePath is { } executable
+        menu.Opening += (_, _) => folder.IsEnabled = !game.IsExternalLaunch && game.EffectiveExecutablePath is { } executable
             && Directory.Exists(Path.GetDirectoryName(executable));
         Add("游戏设置", async () => { await SelectContextGameAsync(game); ShowFeature("game-settings"); });
         var remove = new MenuFlyoutItem { Text = game.Adapter.Definition.IsCustom ? "移除游戏" : "隐藏游戏", Tag = game.Id };
@@ -427,6 +464,41 @@ public sealed partial class GameLibraryPage : Page
         menu.Items.Add(remove);
         return menu;
 
+    }
+
+    private void AddCloudServerItem(MenuFlyoutSubItem channels, GameCardViewModel game)
+    {
+        if (!GameLaunchTargets.SupportsOfficialCloud(game.Id)) return;
+        channels.Items.Add(new MenuFlyoutSeparator());
+        var cloud = new ToggleMenuFlyoutItem { Text = "官方云游戏", Tag = GameLaunchTarget.OfficialCloud };
+        cloud.Click += async (_, _) =>
+        {
+            try
+            {
+                await SelectContextGameAsync(game);
+                await _launcher.SelectLaunchTargetAsync(game, GameLaunchTarget.OfficialCloud);
+                UpdateEndfieldControls();
+                ShowFeature("overview");
+            }
+            catch { await ShowMessageAsync("切换未完成", "无法保存启动入口，请稍后重试。"); }
+        };
+        channels.Items.Add(cloud);
+    }
+
+    private async Task<bool> SelectEmulatorAsync(GameCardViewModel game)
+    {
+        var path = await _filePicker.PickExecutableAsync(App.MainWindow);
+        if (path is null) return false;
+        await _launcher.SelectLaunchTargetAsync(game, GameLaunchTarget.Emulator, path);
+        UpdateEndfieldControls();
+        return true;
+    }
+
+    private async void SelectEmulator_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_launcher.CurrentGame is not { } game || !GameLaunchTargets.SupportsEmulator(game.Id)) return;
+        try { await SelectEmulatorAsync(game); }
+        catch { await ShowMessageAsync("无法选择模拟器", "请选择有效且可访问的模拟器 EXE。"); }
     }
 
     private void ShowChannelPicker(FrameworkElement anchor)
@@ -447,11 +519,22 @@ public sealed partial class GameLibraryPage : Page
             };
             menu.Items.Add(item);
         }
+        if (GameLaunchTargets.SupportsOfficialCloud(game.Id))
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            var cloud = new MenuFlyoutItem { Text = "官方云游戏" };
+            cloud.Click += async (_, _) =>
+            {
+                try { await _launcher.SelectLaunchTargetAsync(game, GameLaunchTarget.OfficialCloud); UpdateEndfieldControls(); }
+                catch { await ShowMessageAsync("切换未完成", "无法保存启动入口，请稍后重试。"); }
+            };
+            menu.Items.Add(cloud);
+        }
         menu.ShowAt(anchor);
     }
 
     private double GetExpandedLaunchWidth() =>
-        Math.Min((_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield || _hoyo.IsSupported) ? 880 : 560,
+        Math.Min(_launcher.CurrentGame?.IsExternalLaunch != true && (_launcher.CurrentGame?.Id == BuiltInGameIds.Endfield || _hoyo.IsSupported) ? 880 : 560,
             Math.Max(234, HeroContent.ActualWidth - HeroContent.Padding.Left - HeroContent.Padding.Right));
 
     private void RefreshLaunchSurfaceLayout()
@@ -719,6 +802,26 @@ public sealed partial class GameLibraryPage : Page
     {
         try
         {
+            if (_launcher.CurrentGame is { IsOfficialCloud: true } cloudGame)
+            {
+                if (OfficialCloudCatalog.Get(cloudGame.Id) is { } entry
+                    && await ExternalBrowserService.OpenAsync(entry.Uri, XamlRoot, entry.Description))
+                    _launcher.ReportExternalLaunch("已打开官方云游戏入口。");
+                return;
+            }
+            if (_launcher.CurrentGame is { IsEmulator: true } emulatorGame)
+            {
+                if (!File.Exists(emulatorGame.State.EmulatorExecutablePath))
+                {
+                    await SelectEmulatorAsync(emulatorGame);
+                    return;
+                }
+                if (EmulatorLaunchService.TryLaunch(emulatorGame.State.EmulatorExecutablePath, out var message))
+                    _launcher.ReportExternalLaunch(message);
+                else
+                    await ShowMessageAsync("无法启动模拟器", message);
+                return;
+            }
             if (_hoyo.IsSupported)
             {
                 if (_hoyo.IsPrimaryDownloading) { _hoyo.Pause(); return; }
@@ -1036,7 +1139,7 @@ public sealed partial class GameLibraryPage : Page
     {
         if (Uri.TryCreate(ViewModel.CurrentGame?.OfficialDownloadUri, UriKind.Absolute, out var uri))
         {
-            await Launcher.LaunchUriAsync(uri);
+            await ExternalBrowserService.OpenAsync(uri, XamlRoot);
             return;
         }
 

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$Package,[string]$BasePackage,[string]$DeltaPackage)
+param([Parameter(Mandatory)][string]$Package,[string]$BasePackage,[string]$DeltaPackage,[string]$OlderPackage)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'set-env.ps1')
 $workspace=Split-Path -Parent $PSScriptRoot
@@ -17,6 +17,7 @@ $copied=Join-Path $stage 'package.zip';Copy-Item -LiteralPath $Package -Destinat
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'src\AsterLauncher.App\Services\ApplyUpdate.ps1') -Package $copied -TargetExe (Join-Path $install 'AsterLauncher.exe') -Mode MultiFull -ProcessId 99999999 -ExpectedHash $shimHash -NoLaunch
 if($LASTEXITCODE -ne 0){throw ('Full updater failed: '+(Get-Content (Join-Path $stage 'update.log') -Raw))}
 if((Get-FileHash (Join-Path $data 'fixture-user-data.txt')).Hash -ne $dataHash){throw 'Full update changed user data.'}
+if(@(Get-ChildItem -LiteralPath (Join-Path $install 'MigrationBackup') -Filter 'migration-*.json').Count -ne 1){throw 'Full update did not keep exactly one rollback.'}
 $target=Join-Path $fixture 'target-fixture.zip';Copy-Item -LiteralPath $Package -Destination $target
 $zip=[IO.Compression.ZipFile]::Open($target,[IO.Compression.ZipArchiveMode]::Update)
 try{
@@ -34,6 +35,7 @@ if((Get-Item $delta).Length -ge (Get-Item $Package).Length){throw 'File delta di
 if($LASTEXITCODE -ne 0){throw ('File delta updater failed: '+(Get-Content (Join-Path $deltaStage 'update.log') -Raw))}
 if((Get-Content (Join-Path $install 'App\fixture-maintenance.txt') -Raw) -ne 'future changed file fixture'){throw 'Delta result mismatch.'}
 if((Get-FileHash (Join-Path $data 'fixture-user-data.txt')).Hash -ne $dataHash){throw 'Delta update changed user data.'}
+if(@(Get-ChildItem -LiteralPath (Join-Path $install 'MigrationBackup') -Filter 'migration-*.json').Count -ne 1){throw 'Consecutive full/delta updates accumulated rollback backups.'}
 Write-Output "Full and file delta updates passed; Data preserved. Delta $((Get-Item $delta).Length) bytes / full $((Get-Item $Package).Length) bytes. Isolated copies removed after success."
 
 if ($BasePackage -or $DeltaPackage) {
@@ -96,5 +98,49 @@ if ($BasePackage -or $DeltaPackage) {
     $updated = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     if ($updated.version -ne $expected.version) { throw 'Recovered manifest version differs.' }
     Write-Output "Actual release delta passed: $($updated.version), all target file hashes match; Data and location preserved."
+}
+$retentionInstall = $install
+if ($BasePackage) { $retentionInstall = $baseInstall }
+& (Join-Path $PSScriptRoot 'test-update-retention.ps1') -Package $Package -InstallRoot $retentionInstall -LegacyPackage $BasePackage
+
+if ($OlderPackage) {
+    # A nonmatching patch baseline upgrades directly with the latest complete package.
+    $olderInstall = Join-Path $fixture 'older-installed'
+    [IO.Compression.ZipFile]::ExtractToDirectory([IO.Path]::GetFullPath($OlderPackage), $olderInstall)
+    $oldVersion = (Get-Content -LiteralPath (Join-Path $olderInstall 'release-files.json') -Raw | ConvertFrom-Json).version
+    $olderData = Join-Path $olderInstall 'Data'
+    New-Item -ItemType Directory -Force -Path $olderData | Out-Null
+    $olderSentinel = Join-Path $olderData 'cross-version-data.txt'
+    [IO.File]::WriteAllText($olderSentinel, 'preserve data across skipped launcher releases')
+    $olderDataHash = (Get-FileHash -LiteralPath $olderSentinel).Hash
+    $olderStage = Join-Path $olderInstall ('.aster-update-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $olderStage | Out-Null
+    $olderFull = Join-Path $olderStage 'package.zip'
+    Copy-Item -LiteralPath $Package -Destination $olderFull
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'src\AsterLauncher.App\Services\ApplyUpdate.ps1') -Package $olderFull -TargetExe (Join-Path $olderInstall 'AsterLauncher.exe') -Mode MultiFull -ProcessId 99999999 -ExpectedHash $shimHash -NoLaunch
+    if ($LASTEXITCODE -ne 0) { throw ('Cross-version full update failed: ' + (Get-Content (Join-Path $olderStage 'update.log') -Raw)) }
+    if (Test-Path -LiteralPath $olderStage) { throw 'Cross-version full update left its GUID staging directory.' }
+    $sync = Start-Process -FilePath (Join-Path $olderInstall 'AsterLauncher.exe') -ArgumentList @('--sync-release', ('"' + $olderInstall + '"')) -WindowStyle Hidden -Wait -PassThru
+    if ($sync.ExitCode -ne 0) { throw 'Cross-version new entry synchronization failed.' }
+    $targetZip = [IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($Package))
+    try {
+        $reader = [IO.StreamReader]::new($targetZip.GetEntry('release-files.json').Open())
+        try { $expected = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+    } finally { $targetZip.Dispose() }
+    foreach ($property in $expected.files.PSObject.Properties) {
+        $path = Join-Path $olderInstall $property.Name
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or
+            (Get-Item -LiteralPath $path).Length -ne $property.Value.length -or
+            (Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() -ne $property.Value.sha256) {
+            throw "Cross-version target mismatch: $($property.Name)"
+        }
+    }
+    $updated = Get-Content -LiteralPath (Join-Path $olderInstall 'release-files.json') -Raw | ConvertFrom-Json
+    if ($updated.version -ne $expected.version -or
+        (Get-FileHash -LiteralPath $olderSentinel).Hash -ne $olderDataHash -or
+        @(Get-ChildItem -LiteralPath (Join-Path $olderInstall 'MigrationBackup') -Filter 'migration-*.json').Count -ne 1) {
+        throw 'Cross-version update did not preserve version, Data or single rollback.'
+    }
+    Write-Output "PASS: direct full update $oldVersion -> $($updated.version); all target hashes, Data and one rollback verified."
 }
 & (Join-Path $PSScriptRoot "remove-validation-fixture.ps1") -Path $fixture

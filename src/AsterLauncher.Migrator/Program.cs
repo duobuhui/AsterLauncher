@@ -32,6 +32,7 @@ internal static class Program
             if (args.Length == 2 && args[0] == "--sync-release")
             {
                 SynchronizeReleaseManifest(Path.GetFullPath(args[1]));
+                PruneCompletedBackups(Path.GetFullPath(args[1]));
                 return 0;
             }
             if (args.Length == 2 && args[0] == "--recover")
@@ -152,6 +153,7 @@ internal static class Program
     {
         var root = Path.GetDirectoryName(Environment.ProcessPath) ?? throw new InvalidOperationException("无法定位启动器目录。");
         SynchronizeReleaseManifest(root);
+        PruneCompletedBackups(root);
         var app = Path.Combine(root, AppName, EntryName);
         if (!File.Exists(app)) throw new FileNotFoundException("App 文件夹中的启动器缺失，请从迁移备份恢复。", app);
         var info = new ProcessStartInfo(app)
@@ -326,7 +328,8 @@ internal static class Program
                 if (File.Exists(journal)) File.Delete(journal);
                 throw;
             }
-            Console.WriteLine("迁移完成。旧版 EXE 保存在 " + backupEntry);
+            PruneCompletedBackups(root, nonce);
+            Console.WriteLine("更新完成。仅保留最近一次可回滚的程序备份：" + backupEntry);
         }
         finally
         {
@@ -337,6 +340,193 @@ internal static class Program
             }
         }
     }
+
+    // A receipt is written only after every installed component has been switched.
+    // Old clients still invoke their old helper, so the new root entry also applies
+    // this policy on the first launch after an update.
+    private static void PruneCompletedBackups(string root, string? preferredId = null)
+    {
+        try
+        {
+            root = Path.GetFullPath(root);
+            var backupRoot = Path.Combine(root, "MigrationBackup");
+            if (!Directory.Exists(backupRoot) || HasReparseAncestor(backupRoot)
+                || File.Exists(Path.Combine(root, ".aster-migration.json"))
+                || Directory.Exists(Path.Combine(root, ".aster-migration.json"))) return;
+
+            // Protect every configured data location, including one temporarily
+            // overridden by the development environment.
+            var protectedPaths = new List<string> { Path.Combine(root, "Data") };
+            var environment = Environment.GetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME");
+            if (!string.IsNullOrWhiteSpace(environment)) protectedPaths.Add(Path.GetFullPath(environment));
+            var pointer = Path.Combine(root, DataPointerName);
+            if (File.Exists(pointer))
+            {
+                if (HasReparseAncestor(pointer)) return;
+                using var document = JsonDocument.Parse(File.ReadAllText(pointer));
+                var selected = document.RootElement.GetProperty("directory").GetString();
+                if (string.IsNullOrWhiteSpace(selected) || !Path.IsPathFullyQualified(selected)) return;
+                protectedPaths.Add(Path.GetFullPath(selected));
+            }
+
+            if (protectedPaths.Any(HasReparseAncestor)) return; // A data alias may resolve inside a backup.
+            var receipts = Directory.GetFiles(backupRoot, "migration-*.json", SearchOption.TopDirectoryOnly);
+            if (receipts.Length < 2) return;
+            var groups = receipts.Select(receipt => ReadCompletedBackup(root, receipt, protectedPaths))
+                .Where(group => group is not null).Cast<CompletedBackup>()
+                .OrderByDescending(group => group.Id == preferredId)
+                .ThenByDescending(group => group.CompletedAtUtc)
+                .ThenByDescending(group => group.Id, StringComparer.Ordinal)
+                .ToArray();
+            if (groups.Length < 2) return;
+            foreach (var obsolete in groups.Skip(1))
+            {
+                if (File.Exists(Path.Combine(root, ".aster-migration.json"))
+                    || Directory.Exists(Path.Combine(root, ".aster-migration.json"))) return;
+                // Recheck immediately before removal. Delete only listed files and
+                // empty directories; never recursively remove an untrusted tree.
+                var current = ReadCompletedBackup(root, obsolete.Receipt, protectedPaths);
+                if (current is null) continue;
+                try
+                {
+                    foreach (var file in current.Files)
+                    {
+                        if (HasReparseAncestor(file)) throw new IOException("备份路径已改变。");
+                        File.Delete(file);
+                    }
+                    foreach (var directory in current.Directories.OrderByDescending(path => path.Length))
+                    {
+                        if (HasReparseAncestor(directory)) throw new IOException("备份路径已改变。");
+                        Directory.Delete(directory, false);
+                    }
+                    if (HasReparseAncestor(current.Receipt)) throw new IOException("备份路径已改变。");
+                    File.Delete(current.Receipt);
+                }
+                catch (IOException) { /* Keep the receipt and any remaining files for manual inspection. */ }
+                catch (UnauthorizedAccessException) { /* Do not invalidate a successful update. */ }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+            or JsonException or InvalidDataException or ArgumentException or InvalidOperationException
+            or NotSupportedException or KeyNotFoundException)
+        {
+            // Cleanup is optional. Unknown or interrupted backups must never stop
+            // the installed application from starting or undo a committed update.
+        }
+    }
+
+    private static CompletedBackup? ReadCompletedBackup(string root, string receipt, IReadOnlyList<string> protectedPaths)
+    {
+        try
+        {
+            if (!File.Exists(receipt) || HasReparseAncestor(receipt) || new FileInfo(receipt).Length > 65536) return null;
+            var record = JsonSerializer.Deserialize<MigrationRecord>(File.ReadAllText(receipt), JsonOptions);
+            if (record is null || !ValidMigrationId(record.Id) || !IsSha256(record.ShimSha256)
+                || !IsSha256(record.PackageSha256)
+                || (record.ManifestSha256 is not null && !IsSha256(record.ManifestSha256))) return null;
+            var backupRoot = Path.Combine(root, "MigrationBackup");
+            var entry = Path.Combine(backupRoot, "AsterLauncher-" + record.Id + ".exe");
+            var app = Path.Combine(backupRoot, "App-" + record.Id);
+            var tools = Path.Combine(backupRoot, "MigrationTools-" + record.Id);
+            var manifestPath = Path.Combine(backupRoot, "release-files-" + record.Id + ".json");
+            var stage = Path.Combine(root, ".aster-migration-" + record.Id);
+            if (!string.Equals(receipt, Path.Combine(backupRoot, "migration-" + record.Id + ".json"), StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(record.OldExeBackup, entry, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(record.OldAppBackup, app, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(record.OldToolsBackup, tools, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(record.Stage, stage, StringComparison.OrdinalIgnoreCase)
+                || !File.Exists(entry) || Directory.Exists(entry)
+                || Directory.Exists(app) != record.HadApp || File.Exists(app)
+                || Directory.Exists(tools) != record.HadTools || File.Exists(tools)
+                || File.Exists(manifestPath) != record.HadManifest || Directory.Exists(manifestPath)) return null;
+            foreach (var path in new[] { receipt, entry, app, tools, manifestPath, stage })
+            {
+                if (HasReparseAncestor(path)
+                    || protectedPaths.Any(data => PathsOverlap(path, data))) return null;
+            }
+            if (File.Exists(stage) || (Directory.Exists(stage) && Directory.EnumerateFileSystemEntries(stage).Any())) return null;
+
+            var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { entry };
+            var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (record.HadApp || record.HadTools)
+            {
+                // A manifest proves the owned file set. Older manifest-less trees
+                // can contain user files, so leave those for manual inspection.
+                if (!record.HadManifest || new FileInfo(manifestPath).Length > 16 * 1024 * 1024) return null;
+                var manifest = JsonSerializer.Deserialize<ReleaseManifest>(File.ReadAllText(manifestPath), JsonOptions);
+                if (manifest is null || manifest.Format != 1 || string.IsNullOrWhiteSpace(manifest.Version)
+                    || manifest.Files is null || manifest.Files.Count is < 1 or > 10000
+                    || !manifest.Files.ContainsKey(EntryName)
+                    || (record.HadApp && !manifest.Files.ContainsKey("App/AsterLauncher.exe"))
+                    || (record.HadTools && !manifest.Files.ContainsKey("MigrationTools/AsterLauncher.Migrator.dll"))) return null;
+                foreach (var (name, specification) in manifest.Files)
+                {
+                    if (!SafeEntry(name) || specification is null || specification.Length < 0 || !IsSha256(specification.Sha256)) return null;
+                    string path;
+                    if (name == EntryName) path = entry;
+                    else if (record.HadApp && name.StartsWith("App/", StringComparison.Ordinal))
+                        path = Path.Combine(app, name[4..].Replace('/', Path.DirectorySeparatorChar));
+                    else if (record.HadTools && name.StartsWith("MigrationTools/", StringComparison.Ordinal))
+                        path = Path.Combine(tools, name[15..].Replace('/', Path.DirectorySeparatorChar));
+                    else return null;
+                    path = Path.GetFullPath(path);
+                    if (!IsWithin(backupRoot, path) || HasReparseAncestor(path) || !File.Exists(path)
+                        || new FileInfo(path).Length != specification.Length
+                        || protectedPaths.Any(data => PathsOverlap(path, data))) return null;
+                    if (path != entry && !files.Add(path)) return null;
+                    var parent = Path.GetDirectoryName(path);
+                    while (parent is not null && (PathsEqual(parent, app) || IsWithin(app, parent)
+                        || PathsEqual(parent, tools) || IsWithin(tools, parent)))
+                    {
+                        directories.Add(parent);
+                        parent = Path.GetDirectoryName(parent);
+                    }
+                }
+                // Exact membership rejects extra documents, data files and links,
+                // without rereading hundreds of MiB merely to clean old programs.
+                foreach (var tree in new[] { app, tools }.Where(Directory.Exists))
+                {
+                    var pending = new Stack<string>();
+                    pending.Push(tree);
+                    while (pending.Count > 0)
+                    {
+                        var directory = pending.Pop();
+                        if (!directories.Contains(directory) || HasReparseAncestor(directory)) return null;
+                        foreach (var child in Directory.EnumerateFileSystemEntries(directory))
+                        {
+                            if (IsReparse(child) || protectedPaths.Any(data => PathsOverlap(child, data))) return null;
+                            if (Directory.Exists(child)) pending.Push(child);
+                            else if (!files.Contains(child)) return null;
+                        }
+                    }
+                }
+            }
+            else if (record.HadManifest) return null;
+            if (record.HadManifest) files.Add(manifestPath);
+            return new CompletedBackup(record.Id, receipt, File.GetLastWriteTimeUtc(receipt), files.ToArray(), directories.ToArray());
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+            or JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private static bool ValidMigrationId(string? id) => id is { Length: 23 } && id[14] == '-'
+        && DateTime.TryParseExact(id[..14], "yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out _) && id[15..].All(Uri.IsHexDigit);
+
+    private static bool HasReparseAncestor(string path)
+    {
+        for (string? current = Path.GetFullPath(path); current is not null; current = Path.GetDirectoryName(current))
+            if ((File.Exists(current) || Directory.Exists(current)) && IsReparse(current)) return true;
+        return false;
+    }
+
+    private static bool PathsEqual(string left, string right) =>
+        string.Equals(Path.GetFullPath(left).TrimEnd('\\', '/'), Path.GetFullPath(right).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+    private static bool PathsOverlap(string left, string right) => PathsEqual(left, right) || IsWithin(left, right) || IsWithin(right, left);
+    private sealed record CompletedBackup(string Id, string Receipt, DateTime CompletedAtUtc, string[] Files, string[] Directories);
 
     private static void Recover(string rootArgument)
     {
