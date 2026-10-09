@@ -74,6 +74,15 @@
                         </Grid>
                         <TextBlock x:Name="DataDirectoryResultText" FontSize="12" TextWrapping="Wrap" />
                     </StackPanel></Border>
+                    <Border Style="{StaticResource CommunitySurfaceStyle}"><StackPanel Spacing="8">
+                        <TextBlock Text="记录恢复" Style="{StaticResource SectionHeadingStyle}" />
+                        <TextBlock Text="配置每次保存时保留一份有效备份。时长丢失时，也可从本地日志找回已完成的游戏会话；先查看结果，再确认恢复。" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="RecoverPlayHistoryButton" Content="从日志恢复时长" Click="RecoverPlayHistory_OnClick" />
+                            <Button x:Name="RecoverConfigurationButton" Content="恢复配置备份" Click="RecoverConfiguration_OnClick" />
+                        </StackPanel>
+                        <TextBlock x:Name="RecoveryStatusText" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel></Border>
                 </StackPanel></ScrollViewer>
             </TabViewItem>
             <TabViewItem IsClosable="False" AutomationProperties.Name="本地存储"><TabViewItem.Header><TextBlock Text="本地存储" Foreground="{ThemeResource PageTitleBrush}" /></TabViewItem.Header>

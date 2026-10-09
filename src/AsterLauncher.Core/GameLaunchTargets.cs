@@ -46,7 +46,14 @@ public sealed class GameLaunchTargetJsonConverter : JsonConverter<GameLaunchTarg
             return (GameLaunchTarget)numericValue;
         }
 
-        reader.Skip();
+        // Scalar values have already been consumed. Skip() rejects every
+        // non-final buffer, even for "Local", so it must not be used here.
+        // The serializer buffers custom converter values; ParseValue also
+        // consumes an unknown object/array without requiring the final buffer.
+        if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray)
+        {
+            using var ignored = JsonDocument.ParseValue(ref reader);
+        }
         return GameLaunchTarget.Local;
     }
 

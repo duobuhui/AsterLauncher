@@ -39,6 +39,12 @@ public partial class App : Application
             _ = RefreshWallpapersAsync();
             if (_services.GetRequiredService<LauncherViewModel>().ResourceUpdatesEnabled) _ = RefreshResourcesAsync();
         }
+        catch (ConfigurationReadException exception)
+        {
+            _window = new ConfigurationRecoveryWindow(exception, (JsonConfigurationStore)_services.GetRequiredService<IConfigurationStore>());
+            MainWindow = _window;
+            _window.Activate();
+        }
         catch (Exception exception)
         {
             _services.GetRequiredService<ILogger<App>>().LogCritical(exception, "Application startup failed");

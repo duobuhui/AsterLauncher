@@ -37,7 +37,9 @@ public sealed class HoYoMaintenanceService(IHoYoDistributionProvider provider, E
             .GroupBy(p => p[0].Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Last()[1].Trim(), StringComparer.OrdinalIgnoreCase);
         // Never turn a Bilibili/global install into a national official install by replacing SDK files.
         if (values.GetValueOrDefault("channel") != (channel == HoYoChannel.Bilibili ? "14" : "1")
-            || values.GetValueOrDefault("cps", "mihoyo") != (channel == HoYoChannel.Bilibili ? "bilibili" : "mihoyo")
+            || (values.GetValueOrDefault("cps", "mihoyo") != (channel == HoYoChannel.Bilibili ? "bilibili" : "mihoyo")
+                && !(channel == HoYoChannel.Official && values.GetValueOrDefault("cps") == "hyp_mihoyo"
+                    && InstalledServerDeclaration.ReadVerifiedHoYoChannel(root, executable) == HoYoChannel.Official))
             || values.GetValueOrDefault("sub_channel", "1") != (channel == HoYoChannel.Bilibili ? "0" : "1")
             || values.GetValueOrDefault("game_biz", "").Contains("global", StringComparison.OrdinalIgnoreCase)
             || !File.Exists(SafeGamePath.Resolve(root, executable)))

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using AsterLauncher.Core;
 using AsterLauncher.Infrastructure;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ public sealed class LauncherViewModel : ObservableObject
     private GameCardViewModel? _currentGame;
     private LaunchProfile? _selectedProfile;
     private readonly HashSet<string> _activeLaunchGameIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _playHistoryGate = new(1, 1);
     private bool _isRunning;
     private string _statusText = "正在初始化…";
     private string _scanStatus = "尚未扫描";
@@ -295,6 +297,7 @@ public sealed class LauncherViewModel : ObservableObject
     private async Task<IReadOnlyList<InstallScanResult>> ScanGameAsync(
         GameCardViewModel game, IProgress<ScanObservation>? progress = null)
     {
+        var scannedHoYoChannel = game.State.SelectedHoYoChannel;
         var results = (await game.Adapter.InstallLocator.ScanAsync(progress)).ToList();
         if (!results.Any(result => result.Kind == ScanResultKind.Found)
             && !string.IsNullOrWhiteSpace(_configuration.GameDownloadDirectory))
@@ -308,9 +311,44 @@ public sealed class LauncherViewModel : ObservableObject
         var found = results.FirstOrDefault(result => result.Kind == ScanResultKind.Found && result.Installation is not null);
         if (game.Id == BuiltInGameIds.Endfield && SelectedEndfieldChannel != EndfieldChannel.Unknown)
             return results; // Generic discovery does not prove the selected server.
-        if (HoYoInstallationIdentity.HasChannels(game.Id) && game.State.SelectedHoYoChannel != HoYoChannel.Unknown) return results;
+        if (HoYoInstallationIdentity.HasChannels(game.Id) && scannedHoYoChannel != HoYoChannel.Unknown)
+        {
+            if (found?.Installation is null) return results;
+            try
+            {
+                if (game.IsRunning) throw new InvalidOperationException("游戏正在运行，请退出后重新查找。");
+                HoYoInstallationDiscovery.BindVerified(_configuration, game.State, found.Installation.ExecutablePath, scannedHoYoChannel);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
+            {
+                results[results.IndexOf(found)] = found with
+                {
+                    Kind = ScanResultKind.InvalidPath,
+                    Message = $"已找到程序：{found.Installation.ExecutablePath}\n未绑定到当前服务器：{exception.Message}"
+                };
+                return results;
+            }
+            UpdateSavedPath(game);
+            game.Refresh();
+            if (ReferenceEquals(CurrentGame, game))
+            {
+                RefreshProfiles();
+                RefreshLaunchSequence();
+                OnPropertyChanged(nameof(CurrentGame));
+                OnPropertyChanged(nameof(CanLaunch));
+                OnPropertyChanged(nameof(LaunchButtonText));
+            }
+            await _configurationStore.SaveAsync(_configuration);
+            return results;
+        }
         if (found?.Installation is not null)
         {
+            if (HoYoInstallationIdentity.HasChannels(game.Id)
+                && (game.State.SelectedHoYoChannel != scannedHoYoChannel || game.IsExternalLaunch))
+            {
+                results[results.IndexOf(found)] = found with { Kind = ScanResultKind.InvalidPath, Message = "服务器已切换，请重新查找。" };
+                return results;
+            }
             game.State.ExecutablePath = found.Installation.ExecutablePath;
             PreserveUnidentifiedHoYoPath(game, found.Installation.ExecutablePath);
             UpdateSavedPath(game);
@@ -606,6 +644,52 @@ public sealed class LauncherViewModel : ObservableObject
         await RefreshRunningStateAsync();
     }
 
+    public Task<PlayHistoryRecoveryPlan> PreviewPlayHistoryRecoveryAsync(CancellationToken cancellationToken = default)
+    {
+        var snapshot = CloneConfiguration(_configuration);
+        return new PlayHistoryRecoveryService(Path.GetDirectoryName(ConfigurationPath)!)
+            .PreviewAsync(snapshot, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PlayHistoryRecoveryChange>> ApplyPlayHistoryRecoveryAsync(
+        PlayHistoryRecoveryPlan plan, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        await _playHistoryGate.WaitAsync(cancellationToken);
+        try
+        {
+            // Use current settings at confirmation time; a preview never replaces newer user choices.
+            var candidate = CloneConfiguration(_configuration);
+            var changes = PlayHistoryRecoveryService.Apply(candidate, plan);
+            if (changes.Count == 0) return changes;
+            await _configurationStore.SaveAsync(candidate, cancellationToken);
+            // Keep the existing game/installation objects used by running views and maintenance tasks.
+            foreach (var change in changes)
+            {
+                var recovered = candidate.Games.First(game => game.GameId == change.GameId);
+                var current = _configuration.Games.FirstOrDefault(game => game.GameId == change.GameId);
+                if (current is null) continue;
+                current.TotalPlaySeconds = recovered.TotalPlaySeconds;
+                current.LastPlayedAt = recovered.LastPlayedAt;
+                current.PlaySessions = recovered.PlaySessions;
+                _allGames.FirstOrDefault(game => game.Id == change.GameId)?.Refresh();
+                _logger.LogInformation("Play history recovered for {GameId}: {AddedSessions} sessions, {TotalSeconds} total seconds",
+                    change.GameId, change.AddedSessionCount, change.RecoveredTotalSeconds);
+            }
+            StatusText = $"已恢复 {changes.Count} 款游戏的游玩时长。";
+            GamesChanged?.Invoke(this, EventArgs.Empty);
+            return changes;
+        }
+        finally
+        {
+            _playHistoryGate.Release();
+        }
+    }
+
+    private static LauncherConfiguration CloneConfiguration(LauncherConfiguration configuration)
+        => JsonSerializer.Deserialize<LauncherConfiguration>(JsonSerializer.SerializeToUtf8Bytes(configuration))
+            ?? throw new InvalidOperationException("无法复制当前配置，未更改游玩时长。");
+
     public void ReportExternalLaunch(string message) => StatusText = message;
 
     public async Task<LaunchSessionResult?> LaunchSelectedAsync()
@@ -669,16 +753,29 @@ public sealed class LauncherViewModel : ObservableObject
                 StatusText = result.Message;
             if (result.Status == LaunchSessionStatus.Completed)
             {
-                selectedGame.State.LastPlayedAt = result.StartedAt;
-                selectedGame.State.TotalPlaySeconds += Math.Max(0, result.Duration.TotalSeconds);
-                selectedGame.State.PlaySessions.Add(new GamePlaySession
+                await _playHistoryGate.WaitAsync();
+                try
                 {
-                    StartedAt = result.StartedAt,
-                    DurationSeconds = Math.Max(0, result.Duration.TotalSeconds)
-                });
-                // Preserve dated sessions for yearly play activity; older totals remain compatible.
-                selectedGame.Refresh();
-                await _configurationStore.SaveAsync(_configuration);
+                    var duration = Math.Max(0, result.Duration.TotalSeconds);
+                    if (!PlayHistoryRecoveryService.ContainsEquivalentSession(selectedGame.State.PlaySessions, result.StartedAt, duration))
+                    {
+                        selectedGame.State.TotalPlaySeconds += duration;
+                        selectedGame.State.PlaySessions.Add(new GamePlaySession
+                        {
+                            StartedAt = result.StartedAt,
+                            DurationSeconds = duration
+                        });
+                    }
+                    if (selectedGame.State.LastPlayedAt is null || selectedGame.State.LastPlayedAt < result.StartedAt)
+                        selectedGame.State.LastPlayedAt = result.StartedAt;
+                    // Preserve dated sessions for yearly play activity; older totals remain compatible.
+                    selectedGame.Refresh();
+                    await _configurationStore.SaveAsync(_configuration);
+                }
+                finally
+                {
+                    _playHistoryGate.Release();
+                }
             }
             return result;
         }

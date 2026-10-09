@@ -247,6 +247,92 @@ public sealed class GameLaunchTargetConfigurationTests : IDisposable
         Assert.Equal(@"Z:\Emulator\Emulator.exe", restored.EmulatorExecutablePath);
     }
 
+    [Theory]
+    [InlineData("\"Local\"", GameLaunchTarget.Local)]
+    [InlineData("\"OfficialCloud\"", GameLaunchTarget.OfficialCloud)]
+    [InlineData("0", GameLaunchTarget.Local)]
+    [InlineData("1", GameLaunchTarget.OfficialCloud)]
+    [InlineData("\"FutureMode\"", GameLaunchTarget.Local)]
+    [InlineData("99", GameLaunchTarget.Local)]
+    [InlineData("1.5", GameLaunchTarget.Local)]
+    [InlineData("null", GameLaunchTarget.Local)]
+    [InlineData("true", GameLaunchTarget.Local)]
+    public async Task StreamingConfigurationPreservesUserStateWhenLaunchModeAppearsBeforeTheLastBuffer(
+        string targetJson, GameLaunchTarget expected)
+    {
+        await AssertStreamingConfigurationPreservesUserStateAsync(targetJson, expected);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StreamingUnknownStructuredModeCanSpanMultipleBuffers(bool useArray)
+    {
+        var nested = "{\"futureMode\":{\"metadata\":\"" + new string('x', 48 * 1024) + "\"}}";
+        await AssertStreamingConfigurationPreservesUserStateAsync(
+            useArray ? "[" + nested + "]" : nested, GameLaunchTarget.Local);
+    }
+
+    private async Task AssertStreamingConfigurationPreservesUserStateAsync(
+        string targetJson, GameLaunchTarget expected)
+    {
+        var playedAt = DateTimeOffset.Parse("2026-10-08T12:00:00+08:00");
+        var expectedSessions = Enumerable.Range(0, 512)
+            .Select(index => new GamePlaySession
+            {
+                StartedAt = playedAt.AddHours(-index),
+                DurationSeconds = 60 + index
+            }).ToList();
+        var configuration = new LauncherConfiguration
+        {
+            FirstRunCompleted = true,
+            SelectedGameId = BuiltInGameIds.Endfield,
+            HiddenGameIds = [BuiltInGameIds.Arknights, BuiltInGameIds.PetitPlanet],
+            GameOrder = [BuiltInGameIds.Endfield, BuiltInGameIds.Arknights],
+            Games =
+            [
+                new GameUserState
+                {
+                    GameId = BuiltInGameIds.Endfield,
+                    ExecutablePath = @"E:\Games\Endfield\Endfield.exe",
+                    LaunchTarget = GameLaunchTarget.Local,
+                    LastPlayedAt = playedAt,
+                    TotalPlaySeconds = 54321,
+                    PlaySessions = expectedSessions
+                }
+            ],
+            LaunchProfiles =
+            [
+                new LaunchProfile { GameId = BuiltInGameIds.Endfield, Name = "existing-profile" }
+            ]
+        };
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var json = JsonSerializer.Serialize(configuration, options)
+            .Replace("\"launchTarget\":\"Local\"", "\"launchTarget\":" + targetJson, StringComparison.Ordinal);
+        // DeserializeAsync normally reads in 16 KiB buffers. Real histories exceed
+        // that boundary while the launch mode occurs near the start of the file.
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(json) > 32 * 1024);
+        await File.WriteAllTextAsync(_store.ConfigurationPath, json);
+
+        var restored = await _store.LoadAsync();
+
+        Assert.True(restored.FirstRunCompleted);
+        Assert.Equal(configuration.SelectedGameId, restored.SelectedGameId);
+        Assert.Equal(configuration.HiddenGameIds, restored.HiddenGameIds);
+        Assert.Equal(configuration.GameOrder, restored.GameOrder);
+        Assert.Equal("existing-profile", Assert.Single(restored.LaunchProfiles).Name);
+        var game = Assert.Single(restored.Games);
+        Assert.Equal(expected, game.LaunchTarget);
+        Assert.Equal(configuration.Games[0].ExecutablePath, game.ExecutablePath);
+        Assert.Equal(54321, game.TotalPlaySeconds);
+        Assert.Equal(playedAt, game.LastPlayedAt);
+        Assert.Equal(expectedSessions.Count, game.PlaySessions.Count);
+        Assert.Equal(JsonSerializer.Serialize(expectedSessions), JsonSerializer.Serialize(game.PlaySessions));
+        Assert.Equal(json, await File.ReadAllTextAsync(_store.ConfigurationPath));
+    }
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME", _originalDataHome);
