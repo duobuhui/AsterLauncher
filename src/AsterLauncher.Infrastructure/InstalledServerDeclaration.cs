@@ -35,6 +35,7 @@ public static class InstalledServerDeclaration
         {
             "yuanshen.exe" => "hk4e_cn",
             "starrail.exe" => "hkrpg_cn",
+            "bh3.exe" => "bh3_cn",
             "zenlesszonezero.exe" => "nap_cn",
             _ => null
         };
@@ -55,7 +56,7 @@ public static class InstalledServerDeclaration
         return (values.GetValueOrDefault("channel"), values.GetValueOrDefault("sub_channel"), values.GetValueOrDefault("cps")) switch
         {
             ("1", "1", "mihoyo" or "hyp_mihoyo") => HoYoChannel.Official,
-            ("14", "0", "bilibili") => HoYoChannel.Bilibili,
+            ("14", "0", "bilibili") when gameBiz != "bh3_cn" => HoYoChannel.Bilibili,
             _ => HoYoChannel.Unknown
         };
     }

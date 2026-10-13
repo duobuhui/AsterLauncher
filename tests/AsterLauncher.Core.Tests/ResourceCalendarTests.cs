@@ -10,14 +10,14 @@ public sealed class ResourceCalendarTests
 {
     private static string Fixture => Path.Combine(AppContext.BaseDirectory, "ResourceFeed");
     [Fact]
-    public async Task PublishedFeedActivatesAndRestartsWithVerifiedImagesAndDayPrecision()
+    public async Task PublishedFeedActivatesAndRestartsWithVerifiedImagesAndConfirmedBoundaryPrecision()
     {
         var bytes = await File.ReadAllBytesAsync(Path.Combine(Fixture, "catalog.json"));
         var catalog = ResourceUpdateService.Parse(bytes);
         var existing = Assert.Single(catalog.Pools, p => p.Key == "绚丽异彩" && p.Phase == "1");
-        Assert.Equal("2026/09/24 — 2026/10/15", existing.DateText);
-        Assert.Null(existing.EndsAt);
-        Assert.Equal(new DateOnly(2026, 10, 15), existing.EndsOn);
+        Assert.Equal("2026/09/24 12:00 — 2026/10/15 06:00", existing.DateText);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-15T06:00:00+08:00"), existing.EndsAt);
+        Assert.Null(existing.EndsOn);
         Assert.Equal("2026/10/15 — 2026/11/05", Assert.Single(catalog.Pools, p => p.Key == "万物更新").DateText);
         Assert.Equal("2026/11/05 — 2026/11/26", Assert.Single(catalog.Pools, p => p.Key == "烟火邀星河").DateText);
         Assert.Equal("2026/10/29 12:00 — 2026/11/19 11:59", Assert.Single(catalog.Pools, p => p.Key == "祖泉的新流").DateText);
@@ -96,8 +96,13 @@ public sealed class ResourceCalendarTests
         var catalog = ResourceUpdateService.Parse(File.ReadAllBytes(Path.Combine(Fixture, "catalog.json")));
         var legacy = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(Fixture, "catalog.json")))!;
         legacy["revision"] = catalog.Revision - 1;
+        // Model a valid older cached pool with a known start and a dropped date-only end.
+        // New entries with a date-only start plus an exact end cannot be represented by that old cache.
+        legacy["pools"] = new System.Text.Json.Nodes.JsonArray(legacy["pools"]!.AsArray()
+            .OfType<System.Text.Json.Nodes.JsonObject>().Single(pool => pool["key"]!.GetValue<string>() == "烟火邀星河").DeepClone());
         foreach (var pool in legacy["pools"]!.AsArray().OfType<System.Text.Json.Nodes.JsonObject>())
             foreach (var field in new[] { "startsOn", "endsOn", "category", "featuredOperator" }) pool.Remove(field);
+        _ = ResourceUpdateService.Parse(System.Text.Encoding.UTF8.GetBytes(legacy.ToJsonString()));
         var root = Path.Combine(Environment.GetEnvironmentVariable("ASTERLAUNCHER_TEST_TEMP_ROOT") ?? Path.GetTempPath(), "resource-upgrade-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -109,17 +114,67 @@ public sealed class ResourceCalendarTests
             using var http = new HttpClient(new FeedHandler());
             var service = new ResourceUpdateService(http, root);
             await service.LoadAsync();
-            var stale = Assert.Single(service.Current!.Pools, p => p.Key == "绚丽异彩");
+            var stale = Assert.Single(service.Current!.Pools, p => p.Key == "烟火邀星河");
             Assert.Null(stale.EndsOn);
-            Assert.Equal("2026/09/24 12:00 — 未公布", stale.DateText);
+            Assert.Equal("2026/11/05 12:00 — 未公布", stale.DateText);
             Assert.True(await service.RefreshAsync());
             Assert.Equal(catalog.Revision, service.Current!.Revision);
-            Assert.Equal("2026/09/24 — 2026/10/15", Assert.Single(service.Current.Pools, p => p.Key == "绚丽异彩").DateText);
+            Assert.Equal("2026/11/05 — 2026/11/26", Assert.Single(service.Current.Pools, p => p.Key == "烟火邀星河").DateText);
             var restarted = new ResourceUpdateService(http, root);
             await restarted.LoadAsync();
-            Assert.Equal(new DateOnly(2026, 10, 15), Assert.Single(restarted.Current!.Pools, p => p.Key == "绚丽异彩").EndsOn);
+            Assert.Equal(new DateOnly(2026, 11, 26), Assert.Single(restarted.Current!.Pools, p => p.Key == "烟火邀星河").EndsOn);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+    [Fact]
+    public void PublishedDanqingDuFeedUsesConfirmedMaintenanceAndConservativeOpeningHours()
+    {
+        var catalog = ResourceUpdateService.Parse(File.ReadAllBytes(Path.Combine(Fixture, "catalog.json")));
+        var maintenance = Assert.Single(catalog.Announcements, p => p.Key == "endfield-danqingdu-maintenance-20261015");
+        Assert.Equal("maintenance", maintenance.Kind);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-15T06:00:00+08:00"), maintenance.StartsAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-15T12:00:00+08:00"), maintenance.EndsAt);
+        Assert.Contains("计划", maintenance.Description);
+        foreach (var key in new[] { "endfield-danqingdu-version", "endfield-yan-huo-sheng-yuan-202610", "endfield-mo-fen-zhu-cai-202610", "endfield-wan-wu-you-ling-202610", "endfield-zhan-zheng-hui-xiang-yi-xiang-202610" })
+        {
+            var item = Assert.Single(catalog.Announcements, p => p.Key == key);
+            Assert.Null(item.StartsAt);
+            Assert.Equal(new DateOnly(2026, 10, 15), item.StartsOn);
+        }
+        var si = Assert.Single(catalog.Pools, p => p.Key == "万物更新");
+        Assert.Null(si.StartsAt);
+        Assert.Equal(new DateOnly(2026, 10, 15), si.StartsOn);
+        Assert.Equal(DateTimeOffset.Parse("2026-11-05T11:59:00+08:00"), si.EndsAt);
+        var minghe = Assert.Single(catalog.Pools, p => p.Key == "烟火邀星河");
+        Assert.Null(minghe.EndsAt);
+        Assert.Equal(new DateOnly(2026, 11, 26), minghe.EndsOn);
+        var preload = Assert.Single(catalog.Announcements, p => p.Key == "endfield-danqingdu-preload-pc-20261013");
+        Assert.Equal(new DateOnly(2026, 10, 13), preload.StartsOn);
+        Assert.Null(preload.StartsAt);
+        Assert.Null(preload.EndsAt);
+        Assert.Null(preload.EndsOn);
+        Assert.Equal("PC", Assert.Single(preload.Platforms));
+    }
+    [Fact]
+    public void PublishedTangtangPoolCorrectsWeaponAndSeparatesChallengeAndExchangeDeadlines()
+    {
+        var catalog = ResourceUpdateService.Parse(File.ReadAllBytes(Path.Combine(Fixture, "catalog.json")));
+        var tangtang = Assert.Single(catalog.Pools, p => p.Key == "祖泉的新流" && p.Phase == "1");
+        Assert.Equal("汤汤", tangtang.FeaturedOperator);
+        Assert.Equal("细枝申领", tangtang.WeaponPool);
+        Assert.Equal("落草", tangtang.Weapon);
+        Assert.Equal("2026/10/29 12:00 — 2026/11/19 11:59", tangtang.DateText);
+        var challenge = Assert.Single(catalog.Announcements, p => p.Key == "endfield-wei-ji-he-yue-jin-lan-202611");
+        Assert.Null(challenge.EndsAt);
+        Assert.Equal(new DateOnly(2026, 11, 26), challenge.EndsOn);
+        var exchange = Assert.Single(catalog.Announcements, p => p.Key == "endfield-ji-mi-sheng-suo-jin-lan-202611");
+        Assert.Equal(DateTimeOffset.Parse("2026-12-03T04:00:00+08:00"), exchange.EndsAt);
+        Assert.Null(exchange.EndsOn);
+        var guideReward = Assert.Single(catalog.Announcements, p => p.Key == "endfield-danqingdu-guide-reward");
+        Assert.Equal(DateTimeOffset.Parse("2026-10-06T21:00:00+08:00"), guideReward.StartsAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-15T06:00:00+08:00"), guideReward.EndsAt);
+        Assert.Equal("event", guideReward.Kind);
+        Assert.Empty(catalog.Codes);
     }
     private sealed class FeedHandler : HttpMessageHandler
     {

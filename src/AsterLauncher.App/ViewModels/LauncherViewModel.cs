@@ -203,7 +203,14 @@ public sealed class LauncherViewModel : ObservableObject
         _configuration.HiddenGameIds ??= [];
         _configuration.GameOrder ??= [];
         EnsureBuiltInStates();
-        foreach (var state in _configuration.Games.Where(state => HoYoDistributionProvider.Games.ContainsKey(state.GameId))) HoYoInstallationIdentity.Restore(state);
+        foreach (var state in _configuration.Games.Where(state => HoYoDistributionProvider.Games.ContainsKey(state.GameId)))
+        {
+            HoYoInstallationIdentity.Restore(state);
+            // Existing single-client games may predate the maintenance installation record.
+            // Import only verified local metadata; an unclassified path remains launchable.
+            if (state.GameId == BuiltInGameIds.HonkaiImpact3rd && state.ExecutablePath is { Length: > 0 } executable)
+                await Task.Run(() => TryBindSingleClientMaintenance(state, executable));
+        }
         RebuildGames();
         await RestoreEndfieldIdentityAsync();
         if (SelectedEndfieldChannel is EndfieldChannel.Official or EndfieldChannel.Bilibili)
@@ -1291,9 +1298,25 @@ SafeGamePath.Resolve(root, "Endfield.exe");
         || (HoYoDistributionProvider.Games.ContainsKey(game.Id) && game.ExecutablePath is { } exe
             && File.Exists(Path.Combine(Path.GetDirectoryName(exe)!, ".aster-hoyo-maintenance.json")));
 
-    private static void PreserveUnidentifiedHoYoPath(GameCardViewModel game, string executable)
+    private void TryBindSingleClientMaintenance(GameUserState state, string executable)
     {
-        if (!HoYoInstallationIdentity.HasChannels(game.Id)) return;
+        if (state.GameId != BuiltInGameIds.HonkaiImpact3rd) return;
+        try { HoYoInstallationDiscovery.BindSingleClientVerified(state, executable); }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            // Do not turn missing/conflicting installation metadata into another server or new install.
+            _logger.LogInformation("Local launch path retained without maintenance binding for {GameId}; reason: {FailureKind}",
+                state.GameId, exception.GetType().Name);
+        }
+    }
+
+    private void PreserveUnidentifiedHoYoPath(GameCardViewModel game, string executable)
+    {
+        if (!HoYoInstallationIdentity.HasChannels(game.Id))
+        {
+            TryBindSingleClientMaintenance(game.State, executable);
+            return;
+        }
         var install = HoYoInstallationIdentity.Get(game.State, HoYoChannel.Unknown);
         install.ExecutablePath = executable; install.InstallRoot = Path.GetDirectoryName(executable);
         game.State.SelectedHoYoChannel = HoYoChannel.Unknown; game.State.HoYoInstallation = install;

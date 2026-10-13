@@ -98,7 +98,9 @@ public partial class App : Application
         }
         services.AddSingleton<IFilePickerService, FilePickerService>();
         services.AddSingleton<IUigfArchiveService>(p => new UigfArchiveService(p.GetRequiredService<ILogger<UigfArchiveService>>(), p.GetRequiredService<IResourceCatalogProvider>()));
-        services.AddSingleton<IEndfieldGachaArchiveService>(p => new EndfieldGachaArchiveService(p.GetRequiredService<ILogger<EndfieldGachaArchiveService>>(), p.GetRequiredService<IResourceCatalogProvider>()));
+        services.AddSingleton<GachaAccountSelection>();
+        services.AddSingleton<IEndfieldGachaAccountService, EndfieldGachaAccountService>();
+        services.AddSingleton<IEndfieldGachaArchiveService>(provider => provider.GetRequiredService<IEndfieldGachaAccountService>());
         services.AddSingleton<LauncherUpdateService>();
         services.AddSingleton(p => new ResourceUpdateService(new HttpClient(new EndfieldNodeHttpHandler(Path.Combine(AppContext.BaseDirectory, "NetworkRuntime"))) { Timeout = TimeSpan.FromSeconds(40) }, LauncherDataPaths.ResolveDataDirectory(), Path.Combine(AppContext.BaseDirectory, "ResourceFeed", "catalog.json")));
         services.AddSingleton<IResourceCatalogProvider>(p => p.GetRequiredService<ResourceUpdateService>());

@@ -24,6 +24,13 @@ public sealed class EndfieldGachaArchiveService : IEndfieldGachaArchiveService, 
 
     private IResourceCatalogProvider? _resources;
     public EndfieldGachaArchiveService(ILogger<EndfieldGachaArchiveService> logger, IResourceCatalogProvider resources) : this(logger) => _resources = resources;
+    internal EndfieldGachaArchiveService(ILogger<EndfieldGachaArchiveService> logger, IResourceCatalogProvider resources, string archivePath)
+        : this(logger)
+    {
+        _resources = resources;
+        ArchivePath = Path.GetFullPath(archivePath);
+    }
+
     private readonly ILogger<EndfieldGachaArchiveService> _logger;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;

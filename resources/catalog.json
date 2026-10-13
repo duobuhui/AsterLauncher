@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026100703,
-  "publishedAt": "2026-10-07T12:24:18.4240225+00:00",
+  "revision": 2026101301,
+  "publishedAt": "2026-10-13T05:16:47.318Z",
   "pools": [
     {
       "gameId": "endfield",
@@ -119,11 +119,10 @@
       "name": "绚丽异彩",
       "phase": "1",
       "startsAt": "2026-09-24T12:00:00+08:00",
-      "endsAt": null,
+      "endsAt": "2026-10-15T06:00:00+08:00",
       "weaponPool": "点绘申领",
       "weapon": "艺术暴君",
       "source": "https://endfield.hypergryph.com/news/2651",
-      "endsOn": "2026-10-15",
       "category": "refactor",
       "featuredOperator": "伊冯"
     },
@@ -132,12 +131,11 @@
       "key": "万物更新",
       "name": "万物更新",
       "startsAt": null,
-      "endsAt": null,
+      "endsAt": "2026-11-05T11:59:00+08:00",
       "weaponPool": "篆玉申领",
       "weapon": "玉中身",
-      "source": "https://www.taptap.cn/moment/856621354630254004",
+      "source": "https://www.taptap.cn/moment/858023500458232791",
       "startsOn": "2026-10-15",
-      "endsOn": "2026-11-05",
       "category": "chartered",
       "featuredOperator": "祀"
     },
@@ -149,7 +147,7 @@
       "endsAt": null,
       "weaponPool": "月映申领",
       "weapon": "唤月",
-      "source": "https://www.taptap.cn/moment/856621354630254004",
+      "source": "https://www.taptap.cn/moment/858023500458232791",
       "endsOn": "2026-11-26",
       "category": "chartered",
       "featuredOperator": "明河"
@@ -162,8 +160,8 @@
       "startsAt": "2026-10-29T12:00:00+08:00",
       "endsAt": "2026-11-19T11:59:00+08:00",
       "weaponPool": "细枝申领",
-      "weapon": "遗忘",
-      "source": "https://www.taptap.cn/moment/856621354630254004",
+      "weapon": "落草",
+      "source": "https://www.taptap.cn/moment/858023500458232791",
       "category": "refactor",
       "featuredOperator": "汤汤"
     }
@@ -237,7 +235,7 @@
       "url": "https://endfield.hypergryph.com/version_briefing/latest",
       "region": "CN",
       "platforms": [],
-      "description": "核心章节版本将于10月15日更新后开启，祀、明河依次登场。版本边界按官方已公布日期显示，维护的具体小时尚未确认。"
+      "description": "10月15日版本更新维护后开启；维护计划为06:00—12:00，实际开服以官方公告为准。11月26日下一版本维护的具体小时尚未公布。"
     },
     {
       "gameId": "endfield",
@@ -245,12 +243,12 @@
       "kind": "event",
       "title": "版本导览奖励",
       "version": "丹青渡",
-      "startsOn": "2026-10-06",
-      "endsOn": "2026-10-15",
-      "url": "https://www.taptap.cn/moment/856624663952884885",
+      "url": "https://endfield.hypergryph.com/news/4774",
       "region": "CN",
       "platforms": [],
-      "description": "在官方新版本导览网页领取嵌晶玉×1000、折金票×10000、初级认知载体×8、武器检查套组×4。需登录游戏账号并已创建角色，每个账号仅可领取一次。请在10月15日版本更新维护前领取；这是网页领取活动，无需兑换码。"
+      "description": "在官方新版本导览网页领取嵌晶玉×1000、折金票×10000、初级认知载体×8、武器检查套组×4。需登录游戏账号并已创建角色，每个账号仅可领取一次。请在10月15日版本更新维护前领取；这是网页领取活动，无需兑换码。",
+      "startsAt": "2026-10-06T21:00:00+08:00",
+      "endsAt": "2026-10-15T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -259,11 +257,11 @@
       "title": "天地墨显",
       "version": "雪凇幽梦",
       "startsAt": "2026-10-08T12:00:00+08:00",
-      "endsOn": "2026-10-15",
       "url": "https://www.taptap.cn/moment/856667432545159118",
       "region": "CN",
       "platforms": [],
-      "description": "完成3日签到可累计领取基础寻访凭证×2、嵌晶玉×500等奖励。需先完成主线任务「第一章 - 进程Ⅰ - 基地解围」。请在10月15日版本更新维护前完成签到，维护具体小时尚未确认。"
+      "description": "完成3日签到可累计领取基础寻访凭证×2、嵌晶玉×500等奖励。需先完成主线任务「第一章 - 进程Ⅰ - 基地解围」。请在10月15日版本更新维护前完成签到。",
+      "endsAt": "2026-10-15T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -272,11 +270,11 @@
       "title": "融合！山团团！",
       "version": "雪凇幽梦",
       "startsAt": "2026-10-01T12:00:00+08:00",
-      "endsOn": "2026-10-15",
       "url": "https://www.taptap.cn/moment/854133303182100693",
       "region": "CN",
       "platforms": [],
-      "description": "参与网页活动，融合相同的山团团获取积分，可领取嵌晶玉、折金票等奖励。需完成主线任务「第一章 - 进程Ⅱ - 开拓前路」。活动于10月15日版本更新维护前结束，详情见游戏内活动中心。"
+      "description": "参与网页活动，融合相同的山团团获取积分，可领取嵌晶玉、折金票等奖励。需完成主线任务「第一章 - 进程Ⅱ - 开拓前路」。活动于10月15日版本更新维护前结束，详情见游戏内活动中心。",
+      "endsAt": "2026-10-15T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -289,6 +287,252 @@
       "region": "CN",
       "platforms": [],
       "description": "前瞻特别节目已于10月6日19:30播出，介绍「丹青渡」版本内容。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "maintenance",
+      "version": "丹青渡",
+      "url": "https://endfield.hypergryph.com/news/2650",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-danqingdu-maintenance-20261015",
+      "title": "丹青渡版本更新维护",
+      "startsAt": "2026-10-15T06:00:00+08:00",
+      "endsAt": "2026-10-15T12:00:00+08:00",
+      "description": "官方计划维护时间；实际结束时间与开服以官方公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://endfield.hypergryph.com/news/2650",
+      "region": "CN",
+      "platforms": [
+        "PC"
+      ],
+      "key": "endfield-danqingdu-preload-pc-20261013",
+      "title": "丹青渡PC预下载",
+      "startsOn": "2026-10-13",
+      "description": "官方已于10月13日公告开启PC预下载，资源约9GB，解压需额外预留15GB。PC预下载结束时刻未公布；此条为公告日期，不表示精确开启小时。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-yan-huo-sheng-yuan-202610",
+      "title": "烟火生缘",
+      "startsOn": "2026-10-15",
+      "endsOn": "2026-11-26",
+      "description": "版本更新维护后开启，限时经营任务在下一版本维护前结束；缘缘庄经营玩法之后仍可体验。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-mo-fen-zhu-cai-202610",
+      "title": "墨分诸彩",
+      "startsOn": "2026-10-15",
+      "endsAt": "2026-11-05T12:00:00+08:00",
+      "description": "版本更新维护后开启，完成祀的画区域指定任务领取活动奖励。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-wan-wu-you-ling-202610",
+      "title": "万物有灵签到",
+      "startsOn": "2026-10-15",
+      "endsAt": "2026-11-05T11:59:00+08:00",
+      "description": "万物更新寻访开放期间的限时签到，累计领取万物有灵寻访凭证×5。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-xing-he-gong-wo-202611",
+      "title": "星河共我签到",
+      "startsAt": "2026-11-05T12:00:00+08:00",
+      "endsOn": "2026-11-26",
+      "description": "烟火邀星河寻访开放期间的限时签到，累计领取星河共我寻访凭证×5。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-gui-ye-202611",
+      "title": "归野",
+      "startsAt": "2026-11-05T12:00:00+08:00",
+      "endsOn": "2026-11-26",
+      "description": "明河叙事活动在下一版本更新维护前结束；活动页面下线后，满足参与条件仍可继续体验支线任务。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-ka-li-fang-fei-tong-hua-202610",
+      "title": "卡莉的芳菲童话",
+      "startsAt": "2026-10-22T12:00:00+08:00",
+      "endsAt": "2026-11-05T04:00:00+08:00",
+      "description": "完成拍照任务领取活动奖励。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-bai-qu-yan-wu-202610",
+      "title": "百趣演武",
+      "startsAt": "2026-10-29T12:00:00+08:00",
+      "endsAt": "2026-11-19T04:00:00+08:00",
+      "description": "挑战演武获取积分并领取奖励；活动内容于11月11日04:00更新。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-wei-ji-chou-bei-202610",
+      "title": "危机筹备",
+      "startsAt": "2026-10-29T04:00:00+08:00",
+      "endsAt": "2026-11-05T04:00:00+08:00",
+      "description": "每日完成指定任务领取活动奖励。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-wei-ji-he-yue-jin-lan-202611",
+      "title": "危机合约·浸蓝测试作战",
+      "startsAt": "2026-11-05T12:00:00+08:00",
+      "endsOn": "2026-11-26",
+      "description": "挑战活动在下一版本更新维护前结束；11月12日12:00更新活动内容，机密圣所兑换另有期限。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-ji-mi-sheng-suo-jin-lan-202611",
+      "title": "机密圣所·浸蓝兑换",
+      "startsAt": "2026-11-05T12:00:00+08:00",
+      "endsAt": "2026-12-03T04:00:00+08:00",
+      "description": "使用晶化硬币·浸蓝兑换奖励；兑换期限与危机合约挑战期限不同。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-li-zhi-bu-gei-202611",
+      "title": "理智补给",
+      "startsAt": "2026-11-19T04:00:00+08:00",
+      "endsAt": "2026-11-26T04:00:00+08:00",
+      "description": "每日完成指定任务领取理智补给奖励。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-yu-zhong-hun-xin-guang-ying-202610",
+      "title": "予众魂的新光影",
+      "startsAt": "2026-10-31T12:00:00+08:00",
+      "endsAt": "2026-11-14T04:00:00+08:00",
+      "description": "搭配演员与道具完成网页故事拍摄，解锁结局领取奖励。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-zhan-zheng-hui-xiang-yi-xiang-202610",
+      "title": "战争回响·异想赛季",
+      "startsOn": "2026-10-15",
+      "endsAt": "2026-11-05T11:59:00+08:00",
+      "description": "版本更新维护后开启新赛季；包含三个轮换周期。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-zhan-zheng-hui-xiang-kuang-re-202611",
+      "title": "战争回响·狂热赛季",
+      "startsAt": "2026-11-05T12:00:00+08:00",
+      "endsOn": "2026-11-26",
+      "description": "新赛季在下一版本更新维护前结束；包含三个轮换周期。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-ying-tuo-feng-bei-shen-lin-202610",
+      "title": "影拓丰碑·深林呓语开放",
+      "startsAt": "2026-10-22T12:00:00+08:00",
+      "description": "挑战玩法新增深林呓语系列；公告未设置结束期限，此条仅标注开放时点。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-feng-bei-liu-ming-mo-lin-202610",
+      "title": "丰碑留名·魔林",
+      "startsAt": "2026-10-22T12:00:00+08:00",
+      "endsAt": "2026-11-05T04:00:00+08:00",
+      "description": "在影拓丰碑中完成指定挑战领取限时奖励。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "event",
+      "version": "丹青渡",
+      "url": "https://www.taptap.cn/moment/858023500458232791",
+      "region": "CN",
+      "platforms": [],
+      "key": "endfield-mi-jing-xing-zhe-hua-wai-202611",
+      "title": "密境行者·画外遗光更新",
+      "startsAt": "2026-11-12T12:00:00+08:00",
+      "description": "开放前三个协议空间，11月19日继续开放后三个；后续批次只公布日期，未指定开放小时。"
     }
   ],
   "codes": []

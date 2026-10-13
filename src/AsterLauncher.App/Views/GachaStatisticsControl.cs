@@ -11,7 +11,7 @@ namespace AsterLauncher.App.Views;
 public sealed class GachaStatisticsControl : UserControl
 {
     private readonly StackPanel _body = new() { Spacing = 12 };
-    private readonly ComboBox _account = new() { MinWidth = 150 };
+    private string? _selectedUid;
     private readonly ComboBox _pool = new() { MinWidth = 160 };
     private readonly TextBlock _summary = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _rules = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
@@ -36,9 +36,8 @@ public sealed class GachaStatisticsControl : UserControl
     {
         var selectors = new Grid { ColumnSpacing = 10 };
         selectors.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        selectors.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        selectors.Children.Add(_pool); Grid.SetColumn(_account,1); selectors.Children.Add(_account);
-        AutomationProperties.SetName(_pool,"统计卡池"); AutomationProperties.SetName(_account,"统计账号");
+        selectors.Children.Add(_pool);
+        AutomationProperties.SetName(_pool,"统计卡池");
         _body.Children.Add(selectors);
         _body.Children.Add(new Border { Child=_summary, Padding=new(14), CornerRadius=new(12),
             Background=Brush("HeroGlassBrush"),BorderBrush=Brush("GlassEdgeBrush"),BorderThickness=new(1) });
@@ -67,11 +66,17 @@ public sealed class GachaStatisticsControl : UserControl
         editor.Children.Add(actions); editor.Children.Add(_correctionInfo);
         _editor.Content=editor; _body.Children.Add(_editor);
         Content=_body;
-        _account.SelectionChanged+=(_,_)=>{if(!_setting) PopulatePools();};
+
         _pool.SelectionChanged+=(_,_)=>{if(!_setting) Render();};
         _record.SelectionChanged+=(_,_)=>ShowCorrection();
     }
-    public async Task SetUigfAsync(UigfGachaAnalysis analysis)
+    public void Clear()
+    {
+        ++_revision;
+        _analysis=UigfGachaAnalysis.Empty; _endfield=null; _selectedUid=null; _stats=[];
+        _setting=true; _pool.ItemsSource=null; _pool.SelectedIndex=-1; _setting=false;
+        Render();
+    }    public async Task SetUigfAsync(UigfGachaAnalysis analysis, string? selectedUid)
     {
         var revision=++_revision;
         IReadOnlyDictionary<string,GachaUpStatus> corrections;
@@ -79,16 +84,13 @@ public sealed class GachaStatisticsControl : UserControl
         if(revision!=_revision)return;
         _corrections=corrections; _analysis=analysis; _endfield=null;
         _knownItems=ReadKnownItems(analysis.GameId);
-        _setting=true;
-        _account.ItemsSource=analysis.Accounts.Select(a=>a.AccountLabel).ToArray();
-        _account.Visibility=analysis.Accounts.Count>1?Visibility.Visible:Visibility.Collapsed;
-        _account.SelectedIndex=analysis.Accounts.Count==0?-1:0;
-        _setting=false; PopulatePools();
+        _selectedUid=analysis.Accounts.Any(account=>account.Uid==selectedUid)?selectedUid:null;
+        PopulatePools();
     }
     public void SetEndfield(EndfieldGachaAnalysis analysis, int weaponRecords)
     {
         ++_revision; _endfield=analysis; _analysis=UigfGachaAnalysis.Empty;
-        _account.Visibility=Visibility.Collapsed;
+        _selectedUid=null;
         _setting=true; _pool.ItemsSource=Enum.GetValues<EndfieldPoolCategory>().Where(c=>Flatten(analysis.Pools).Any(p=>p.Category==c))
             .Select(c=>new EndfieldCategory(c, c switch{EndfieldPoolCategory.Standard=>"基础寻访",EndfieldPoolCategory.Chartered=>"特许寻访",EndfieldPoolCategory.Refactor=>"重构寻访",EndfieldPoolCategory.Celebration=>"庆典寻访",_=>"其他寻访"})).Cast<object>().Concat(analysis.WeaponPools.Select(p=>new EndfieldWeaponSelection(p))).ToArray();
         _pool.DisplayMemberPath="Title"; _pool.SelectedIndex=_pool.Items.Count>0?0:-1; _setting=false;
@@ -97,12 +99,21 @@ public sealed class GachaStatisticsControl : UserControl
     }
     private static IEnumerable<EndfieldPoolAnalysis> Flatten(IEnumerable<EndfieldPoolAnalysis> pools)
         => pools.SelectMany(p=>new[]{p}.Concat(Flatten(p.PreviousPhases??[]))).DistinctBy(p=>p.PoolKey.Length>0?p.PoolKey:p.PoolId+"\u001F"+p.PoolVersion);
+    public void SelectUigfAccount(string? uid)
+    {
+        if(_endfield is not null)return;
+        ++_revision;
+        _selectedUid=_analysis.Accounts.Any(account=>account.Uid==uid)?uid:null;
+        PopulatePools();
+    }
     private void PopulatePools()
     {
-        var account=_account.SelectedIndex>=0&&_account.SelectedIndex<_analysis.Accounts.Count?_analysis.Accounts[_account.SelectedIndex]:null;
+        var selectedType=(_pool.SelectedItem as GachaPoolStatistics)?.Type;
+        var account=_analysis.Accounts.FirstOrDefault(account=>account.Uid==_selectedUid);
         _stats=account is null?[]:GachaStatisticsAnalyzer.Analyze(_analysis.GameId,account,_corrections,_knownItems);
         _setting=true; _pool.DisplayMemberPath="Title"; _pool.ItemsSource=_stats;
-        _pool.SelectedIndex=_stats.Count>0?0:-1; _setting=false; Render();
+        var index=_stats.ToList().FindIndex(pool=>pool.Type==selectedType);
+        _pool.SelectedIndex=_stats.Count>0?Math.Max(0,index):-1; _setting=false; Render();
     }
     private void LayoutPlots()
     {
@@ -158,19 +169,19 @@ public sealed class GachaStatisticsControl : UserControl
     }
     private void ShowCorrection()
     {
-        if(_record.SelectedIndex<0||_record.SelectedIndex>=_editPoints.Count||_pool.SelectedItem is not GachaPoolStatistics pool)return;
-        var point=_editPoints[_record.SelectedIndex]; var uid=_analysis.Accounts[_account.SelectedIndex].Uid;
+        if(_record.SelectedIndex<0||_record.SelectedIndex>=_editPoints.Count||_pool.SelectedItem is not GachaPoolStatistics pool||_selectedUid is null)return;
+        var point=_editPoints[_record.SelectedIndex]; var uid=_selectedUid;
         var key=GachaStatisticsAnalyzer.CorrectionKey(_analysis.GameId,uid,pool.Type,point.RecordId);
         _status.SelectedIndex=_corrections.TryGetValue(key,out var saved)?saved switch{GachaUpStatus.Featured=>1,GachaUpStatus.NonFeatured=>2,_=>3}:0;
         _correctionInfo.Text=$"当前结果：{point.UpStatus switch{GachaUpStatus.Featured=>"UP",GachaUpStatus.NonFeatured=>"非 UP",_=>"待校对"}}。校对只影响本地统计，不修改原始抽卡档案。";
     }
     private async void SaveCorrection(object sender,RoutedEventArgs e)
     {
-        if(_record.SelectedIndex<0||_record.SelectedIndex>=_editPoints.Count||_pool.SelectedItem is not GachaPoolStatistics pool)return;
+        if(_record.SelectedIndex<0||_record.SelectedIndex>=_editPoints.Count||_pool.SelectedItem is not GachaPoolStatistics pool||_selectedUid is null)return;
         var point=_editPoints[_record.SelectedIndex];
         if(string.IsNullOrWhiteSpace(point.RecordId)){_correctionInfo.Text="此记录缺少唯一编号，不能保存校对。";return;}
         var game=_analysis.GameId;
-        var uid=_analysis.Accounts[_account.SelectedIndex].Uid; var revision=_revision;
+        var uid=_selectedUid; var revision=_revision;
         var status=_status.SelectedIndex switch{1=>GachaUpStatus.Featured,2=>GachaUpStatus.NonFeatured,3=>GachaUpStatus.Unknown,_=>(GachaUpStatus?)null};
         try
         {

@@ -10,6 +10,8 @@
         <views:HistoryCountVisibilityConverter x:Key="HistoryCountVisibilityConverter" />
         <views:SectionHeaderWidthConverter x:Key="SectionHeaderWidthConverter" />
         <views:PortraitImageConverter x:Key="PortraitImageConverter" />
+        <views:GachaCountBrushConverter x:Key="GachaCountBrushConverter" />
+        <views:GachaHighCountBrushConverter x:Key="GachaHighCountBrushConverter" />
         <DataTemplate x:Key="SignatureWeaponTemplate" x:DataType="core:EndfieldSignatureWeaponAnalysis">
             <StackPanel Spacing="6" Margin="0,5,0,0">
                 <Border Height="1" Background="{ThemeResource GlassEdgeBrush}" Margin="0,0,0,4" />
@@ -45,7 +47,7 @@
                         <TextBlock Text="{x:Bind OperatorName}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock Grid.Column="1" Text="{x:Bind BarTitle}" FontSize="12" Foreground="{ThemeResource PageTitleBrush}" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" />
                     </Grid>
-                    <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{x:Bind BarPercent}" Tag="{x:Bind IsOver65}" Loaded="SixStarBar_OnLoaded" HorizontalAlignment="Stretch" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" ToolTipService.ToolTip="计入保底的抽数，以 80 抽为满格；免费抽不计入。" />
+                    <ProgressBar Height="8" Minimum="0" Maximum="100" Value="{x:Bind BarPercent}" HorizontalAlignment="Stretch" Background="#798A9AAB" Foreground="{x:Bind IsOver65, Converter={StaticResource GachaHighCountBrushConverter}}" ToolTipService.ToolTip="计入保底的抽数，以 80 抽为满格；免费抽不计入。" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" HorizontalAlignment="Right" Spacing="1">
                     <TextBlock Text="{x:Bind RecordedSpanText}" FontSize="12" HorizontalAlignment="Right" />
@@ -62,13 +64,7 @@
                         <Image Source="{x:Bind PortraitKey, Converter={StaticResource PortraitImageConverter}}" Stretch="Uniform" />
                     </Grid>
                 </Border>
-                <Grid Grid.Column="1" Height="24">
-                    <Border Background="#70404D5B" CornerRadius="4" />
-                    <Border Background="{ThemeResource PageTitleBrush}" CornerRadius="4" Opacity="0.6" Tag="{x:Bind IsHighCount}" Loaded="UigfFill_OnLoaded" RenderTransformOrigin="0,0.5">
-                        <Border.RenderTransform><ScaleTransform ScaleX="{x:Bind BarFraction}" /></Border.RenderTransform>
-                    </Border>
-                    <TextBlock Text="{x:Bind Name}" FontSize="12" FontWeight="SemiBold" Margin="7,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                </Grid>
+                <views:GachaPullBar Grid.Column="1" Pull="{x:Bind}" />
                 <StackPanel Grid.Column="2" MinWidth="50" Spacing="0" HorizontalAlignment="Right">
                     <TextBlock Text="{x:Bind PullCountText}" FontSize="12" HorizontalAlignment="Right" />
                     <TextBlock Text="{x:Bind TimeText}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" HorizontalAlignment="Right" />
@@ -100,6 +96,7 @@
             <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="12" Padding="12,9"><Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
 
+                <ComboBox x:Name="GachaAccountSelector" MinWidth="175" MaxWidth="235" DisplayMemberPath="Label" PlaceholderText="暂无账号" AutomationProperties.Name="抽卡账号" SelectionChanged="GachaAccountSelector_SelectionChanged" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                     <TextBlock x:Name="CurrentGameText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="ArchiveSummaryText" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
@@ -110,6 +107,11 @@
             </Grid></Border>
 
             <TextBlock x:Name="CloudSyncHint" Text="云游戏同步需要手动提供官方记录链接；也可导入已有记录。" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <TextBlock x:Name="AccountHintText" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
+                <Button x:Name="NewEndfieldAccountButton" Grid.Column="1" Content="新建账号档案" Click="NewEndfieldAccount_OnClick" Visibility="Collapsed" />
+            </Grid>
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <ToggleButton x:Name="RecordsTab" Content="抽卡记录" IsChecked="True" Click="RecordsTab_OnClick" />
                 <ToggleButton x:Name="StatisticsTab" Content="统计详情" Click="StatisticsTab_OnClick" />
@@ -229,7 +231,7 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="{x:Bind Title}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{x:Bind Text}" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
-                            </Grid><ProgressBar Value="{x:Bind Percent}" Tag="{x:Bind IsHighCount}" Loaded="SixStarBar_OnLoaded" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{ThemeResource PageTitleBrush}" /></StackPanel>
+                            </Grid><ProgressBar Value="{x:Bind Percent}" Height="4" Maximum="100" Background="#798A9AAB" Foreground="{Binding Converter={StaticResource GachaCountBrushConverter}}" /></StackPanel>
                         </Border>
                     </DataTemplate>
                 </ItemsRepeater.ItemTemplate>
@@ -238,7 +240,6 @@
                 <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <TextBlock x:Name="UigfRulesText" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
-                    <ComboBox x:Name="UigfAccountSelector" Grid.Column="1" MinWidth="150" Visibility="Collapsed" SelectionChanged="UigfAccountSelector_SelectionChanged" />
                 </Grid>
                 <TextBlock x:Name="UigfEmptyText" Text="暂无星穹铁道记录；同步或导入 UIGF 后显示。" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" Visibility="Collapsed" />
                 <ItemsRepeater x:Name="UigfSections">

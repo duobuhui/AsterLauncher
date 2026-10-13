@@ -41,7 +41,11 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         => ReferenceEquals(game, _launcher.CurrentGame) && ReferenceEquals(install, game.State.HoYoInstallation);
     public string ChannelText => _launcher.CurrentGame is { } game ? Installation(game).Channel switch
         { HoYoChannel.Bilibili => "哔哩哔哩服", HoYoChannel.Official => "国服官服", _ => "渠道未确认，请在游戏右键菜单中选择" } : "";
-    public string SuggestedRoot => _launcher.CurrentGame is { } game && Installation(game).InstallRoot is { } root ? root
+    public bool HasUnboundExistingGame => _launcher.CurrentGame is { IsInstalled: true } game
+        && !HoYoMaintenancePolicy.IsBoundToExecutable(game.EffectiveExecutablePath, Installation(game));
+    private string ExistingGameRoot => Path.GetDirectoryName(_launcher.CurrentGame!.EffectiveExecutablePath!)!;
+    public string SuggestedRoot => HasUnboundExistingGame ? ExistingGameRoot
+        : _launcher.CurrentGame is { } game && Installation(game).InstallRoot is { } root ? root
         : string.IsNullOrWhiteSpace(_launcher.GameDownloadDirectory) ? ""
         : Path.Combine(_launcher.GameDownloadDirectory, Current.Release?.DirectoryName ?? _launcher.CurrentGame!.DisplayName,
             Installation(_launcher.CurrentGame!).Channel == HoYoChannel.Bilibili ? "Bilibili" : "Official");
@@ -49,12 +53,18 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         set { if (_launcher.CurrentGame is { } game) Installation(game).ShareResources = value; } }
     public string SharingText => Current.Sharing;
     public string Title => (_launcher.CurrentGame?.DisplayName ?? "") + " · 安装与修复";
-    public string InstallRoot => _launcher.CurrentGame is { } game && Installation(game).InstallRoot is { Length: > 0 } root ? root
+    public string InstallRoot => HasUnboundExistingGame ? ExistingGameRoot + "（待关联维护）"
+        : _launcher.CurrentGame is { } game && Installation(game).InstallRoot is { Length: > 0 } root ? root
         : string.IsNullOrWhiteSpace(_launcher.GameDownloadDirectory) ? "请先在设置中指定游戏下载目录"
         : SuggestedRoot + "（安装时创建）";
-    public string LocalVersion => _launcher.CurrentGame is { } game ? Installation(game).InstalledVersion ?? "未安装 / 未确认" : "";
+    public string LocalVersion => HasUnboundExistingGame ? "已找到游戏 · 未关联维护"
+        : _launcher.CurrentGame is { } game
+            ? Installation(game).InstalledVersion is { Length: > 0 } version ? version : game.IsInstalled ? "版本未确认" : "未安装"
+            : "";
     public string RemoteVersion => Current.Remote;
-    public string StageText => Current.Stage;
+    public string StageText => HasUnboundExistingGame && !Current.Busy && !Current.Cleaning
+        ? "可启动现有游戏。请自动查找或更改目录，确认现有安装后再维护。"
+        : Current.Stage;
     public string PlanText => Current.PlanText;
     public string PreloadText => Current.Preload;
     public string DownloadText => Current.Download;
@@ -63,28 +73,35 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     public string DetailText => Current.Busy && !Current.Cleaning && !Current.PauseRequested ? Current.Display.DetailText : "";
     public Visibility CurrentFileVisibility => CurrentFileText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility DetailVisibility => DetailText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-    public bool CanResume => (Current.Paused || Current.Failed) && !Current.Busy && !Current.Cleaning;
+    public bool CanResume => (Current.Paused || Current.Failed) && !Current.Busy && !Current.Cleaning && !HasUnboundExistingGame;
     public bool CanPauseOrResume => !Current.Cleaning && !Current.PauseRequested && (CanResume || Current.Busy && (Current.Downloading || Current.Preloading));
     public bool CanCancel => !Current.Cleaning && (Current.Downloading || Current.Preloading || Current.Paused || Current.Failed);
     public string PauseActionText => Current.PauseRequested ? "正在暂停…" : Current.Failed ? "重试" : Current.Paused ? "继续" : "暂停";
     public double Progress => Current.Progress;
     public bool IsBusy => Current.Busy || Current.Cleaning;
     public bool CanSetRoot => !Current.Busy && !Current.Cleaning;
-    public bool CanRepair => !Current.Busy && !Current.Cleaning && _launcher.CurrentGame?.IsInstalled == true;
-    public bool CanPreload => !Current.Busy && !Current.Cleaning && Current.Release?.PreloadVersion is not null;
+    public bool CanSelectAudio => CanSetRoot && !HasUnboundExistingGame;
+    public bool CanCheck => CanSetRoot && !HasUnboundExistingGame;
+    public bool CanRepair => !Current.Busy && !Current.Cleaning && !HasUnboundExistingGame && _launcher.CurrentGame?.IsInstalled == true;
+    public bool CanPreload => !Current.Busy && !Current.Cleaning && !HasUnboundExistingGame && Current.Release?.PreloadVersion is not null;
     public bool IsPrimaryDownloading => Current.Downloading || Current.Preloading;
     public Visibility DownloadVisibility => IsSupported && (Current.Downloading || Current.Preloading || Current.Paused || Current.Failed || Current.Cleaning) ? Visibility.Visible : Visibility.Collapsed;
     public bool IsIndeterminate => Current.Cleaning || Current.Busy && !Current.Display.HasTotal;
     public string PrimaryActionGlyph => IsPrimaryDownloading ? "\uE769" : CanResume ? "\uE768" : StartsMaintenance ? "\uE896" : "\uE768";
+    public bool CanUpdate => IsSupported && !HasUnboundExistingGame && _launcher.CurrentGame is { IsInstalled: true } game
+        && HoYoMaintenancePolicy.CompareVersions(Installation(game).InstalledVersion, Current.Release?.Version)
+            == HoYoVersionRelation.RemoteNewer;
     public bool StartsMaintenance => IsSupported && !Current.Busy && !Current.Cleaning && _launcher.CurrentGame is { } game
-        && (!game.IsInstalled || Installation(game).MaintenanceInProgress || Installation(game).AudioSelectionPending || Current.Release is { } release && LocalVersion != release.Version);
+        && HoYoMaintenancePolicy.ShouldStartMaintenance(game.IsInstalled, !HasUnboundExistingGame,
+            Installation(game).MaintenanceInProgress, Installation(game).AudioSelectionPending,
+            Installation(game).InstalledVersion, Current.Release?.Version);
     public string PrimaryActionText => Current.Cleaning ? "正在取消任务…" : Current.PauseRequested ? "正在暂停…"
         : IsPrimaryDownloading ? Current.Display.IsNetworkTransfer ? $"暂停下载 {Progress:0}%" : Current.Stage
-        : Current.Failed ? Current.LastWasPreload ? "重试预下载" : "重试下载"
-        : Current.Paused ? Current.LastWasPreload ? "继续预下载" : "继续下载"
-        : _launcher.CurrentGame is { } game && Installation(game).MaintenanceInProgress ? "继续下载"
-        : _launcher.CurrentGame is { } audioGame && Installation(audioGame).AudioSelectionPending && gameInstalled() ? "下载所选语音"
-        : Current.Release is { } release && gameInstalled() && LocalVersion != release.Version ? "更新游戏"
+        : Current.Failed && !HasUnboundExistingGame ? Current.LastWasPreload ? "重试预下载" : "重试下载"
+        : Current.Paused && !HasUnboundExistingGame ? Current.LastWasPreload ? "继续预下载" : "继续下载"
+        : !HasUnboundExistingGame && _launcher.CurrentGame is { } game && Installation(game).MaintenanceInProgress ? "继续下载"
+        : !HasUnboundExistingGame && _launcher.CurrentGame is { } audioGame && Installation(audioGame).AudioSelectionPending && gameInstalled() ? "下载所选语音"
+        : CanUpdate ? "更新游戏"
         : !gameInstalled() ? Current.Remote == "未开放下载" ? "未开放下载" : "下载游戏" : _launcher.LaunchButtonText;
     private bool gameInstalled() => _launcher.CurrentGame?.IsInstalled == true;
     public bool ChineseAudio { get => HasAudio("zh-cn"); set => SetAudio("zh-cn", value); }
@@ -94,7 +111,7 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     private bool HasAudio(string language) => _launcher.CurrentGame is { } game && Installation(game).AudioLanguages.Contains(language);
     private async void SetAudio(string language, bool selected)
     {
-        if (_launcher.CurrentGame is not { } game || Current.Busy || Current.Cleaning) return;
+        if (_launcher.CurrentGame is not { } game || Current.Busy || Current.Cleaning || HasUnboundExistingGame) return;
         var install = Installation(game); var languages = install.AudioLanguages;
         if (languages.Contains(language) == selected) return;
         Current.ReadImportedAudio = false;
@@ -109,20 +126,53 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     {
         if (!IsSupported || _launcher.CurrentGame is not { } game) return;
         var install = Installation(game); var state = GetState(install); if (state.Checking || state.Busy) return;
-        state.Checking = true; state.Remote = "检查中…"; Refresh();
+        state.Checking = true; state.Release = null; state.Remote = "检查中…"; Refresh();
+        var revision = state.Revision;
+        var checkedRoot = install.InstallRoot;
+        var checkedExecutable = install.ExecutablePath;
+        var checkedChannel = install.Channel;
+        var fallbackVersion = install.InstalledVersion;
         try
         {
-            var revision = state.Revision;
             var checkedVersion = await Task.Run(async () =>
             {
-                var local = install.InstallRoot is { } root ? HoYoMaintenanceService.ReadVersion(root) : install.InstalledVersion;
-                var pending = install.InstallRoot is { } path && File.Exists(SafeGamePath.Resolve(path, ".aster-hoyo-maintenance.json"));
-                return (Release: await _service.GetReleaseAsync(game.Id, install.Channel), Local: local, Pending: pending);
+                var local = checkedRoot is { } root ? HoYoMaintenanceService.ReadVersion(root) : fallbackVersion;
+                var pending = checkedRoot is { } path && File.Exists(SafeGamePath.Resolve(path, ".aster-hoyo-maintenance.json"));
+                return (Release: await _service.GetReleaseAsync(game.Id, checkedChannel), Local: local, Pending: pending);
             });
             if (state.Busy || revision != state.Revision) return;
+            if (checkedChannel != install.Channel)
+            {
+                state.Remote = "安装信息已变化，请重新检查";
+                return;
+            }
+            if (!string.Equals(checkedRoot, install.InstallRoot, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(checkedExecutable, install.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+            {
+                // Discovery may bind a real installation while the network request is pending.
+                // Reread that directory instead of committing the old null version over it.
+                checkedRoot = install.InstallRoot;
+                checkedExecutable = install.ExecutablePath;
+                fallbackVersion = install.InstalledVersion;
+                var refreshed = await Task.Run(() =>
+                {
+                    var local = checkedRoot is { } root ? HoYoMaintenanceService.ReadVersion(root) : fallbackVersion;
+                    var pending = checkedRoot is { } path && File.Exists(SafeGamePath.Resolve(path, ".aster-hoyo-maintenance.json"));
+                    return (Local: local, Pending: pending);
+                });
+                if (state.Busy || revision != state.Revision
+                    || checkedChannel != install.Channel
+                    || !string.Equals(checkedRoot, install.InstallRoot, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(checkedExecutable, install.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    state.Remote = "安装信息已变化，请重新检查";
+                    return;
+                }
+                checkedVersion = (checkedVersion.Release, refreshed.Local, refreshed.Pending);
+            }
             state.Release = checkedVersion.Release; install.InstalledVersion = checkedVersion.Local; install.MaintenanceInProgress = checkedVersion.Pending;
             state.Remote = state.Release?.Version ?? "未开放下载";
-            if (state.ReadImportedAudio && install.ExecutablePath is { } existing && state.Release?.AudioRecordPath is { } record)
+            if (HoYoMaintenancePolicy.IsBoundToExecutable(game.EffectiveExecutablePath, install) && state.ReadImportedAudio && install.ExecutablePath is { } existing && state.Release?.AudioRecordPath is { } record)
             {
                 var path = SafeGamePath.Resolve(Path.GetDirectoryName(existing)!, record);
                 if (File.Exists(path) && new FileInfo(path).Length < 64 * 1024)
@@ -139,10 +189,24 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
             }
             state.ReadImportedAudio = false;
             state.Preload = state.Release?.PreloadVersion is { } pre ? install.PreloadVersion == pre ? $"已缓存 {pre}" : $"可预下载至 {pre}" : "未开放";
-            if (state.Release is { } release && install.InstalledVersion is { } local && local != release.Version)
-                state.Stage = $"发现新版本 {release.Version}";
+            state.Stage = HoYoMaintenancePolicy.CompareVersions(install.InstalledVersion, state.Release?.Version) switch
+            {
+                HoYoVersionRelation.RemoteNewer => $"发现新版本 {state.Release!.Version}",
+                HoYoVersionRelation.LocalNewer => "本地版本高于当前公开版本，保留现有安装。",
+                HoYoVersionRelation.Same => "已是当前版本。",
+                _ => game.IsInstalled ? "无法确认版本，可启动现有游戏；维护前请检查安装信息。" : ""
+            };
         }
-        catch { state.Remote = "检查失败"; state.Preload = "检查失败"; state.Stage = "无法获取官方版本，请稍后重试。"; }
+        catch
+        {
+            if (!state.Busy && revision == state.Revision && checkedChannel == install.Channel
+                && string.Equals(checkedRoot, install.InstallRoot, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(checkedExecutable, install.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+            {
+                state.Release = null; state.Remote = "检查失败"; state.Preload = "检查失败";
+                state.Stage = "无法获取官方版本，请稍后重试；现有游戏仍可启动。";
+            }
+        }
         finally { state.Checking = false; if (IsSelected(game, install)) Refresh(); }
     }
     public async Task SetRootAsync(string root)
@@ -153,6 +217,8 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         if (install.MaintenanceInProgress && !string.Equals(install.InstallRoot, Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("当前目录有未完成维护，请完成或取消任务后再更改目录。");
         var full = Path.GetFullPath(root);
+        if (HasUnboundExistingGame && !HoYoMaintenancePolicy.IsExistingDirectory(game.EffectiveExecutablePath, full))
+            throw new InvalidOperationException("已找到本地游戏。请先选择现有 EXE 所在目录并确认安装信息，不能另建目录替代现有安装。");
         var values = await Task.Run(async () =>
         {
             var release = await _service.GetReleaseAsync(game.Id, install.Channel) ?? throw new InvalidOperationException("官方尚未开放 PC 下载。");
@@ -162,9 +228,16 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
             return (Release: release, Executable: File.Exists(exe) ? exe : null, Version: HoYoMaintenanceService.ReadVersion(full));
         });
         if (!IsSelected(game, install)) return;
-        if (!string.Equals(install.InstallRoot, full, StringComparison.OrdinalIgnoreCase))
+        var rootChanged = !string.Equals(install.InstallRoot, full, StringComparison.OrdinalIgnoreCase);
+        if (rootChanged)
         {
             await Task.Run(() => _service.CancelAsync(install)); await Task.Run(() => _service.CancelAsync(install, true));
+        }
+        if (!IsSelected(game, install)) return;
+        // Even selecting the same directory invalidates any older version request.
+        state.Revision++;
+        if (rootChanged)
+        {
             install.PreloadContentHash = install.PreloadSourceVersion = install.PreloadVersion = null;
             install.InstallRoot = full; install.ChannelConfirmed = install.OfficialChannelConfirmed = false;
             state.Plan = null; state.ReadImportedAudio = values.Executable is not null;
@@ -180,6 +253,7 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         var install = Installation(game); var state = GetState(install); var peer = _launcher.OtherHoYoInstallation(game);
         await RunAsync(game, install, false, false, async token =>
         {
+            EnsureExistingInstallationBound(game, install);
             state.Plan = null;
             var ProgressForCaptured = ProgressFor(game, install, token);
             var plan = await Task.Run(async () =>
@@ -200,12 +274,14 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     {
         if (_launcher.CurrentGame is not { } game) return;
         var install = Installation(game);
+        EnsureExistingInstallationBound(game, install);
         install.ChannelConfirmed = true; install.OfficialChannelConfirmed = install.Channel == HoYoChannel.Official;
         await _launcher.PersistHoYoInstallationAsync(game);
     }
     public async Task EnsureDefaultRootAsync()
     {
         if (_launcher.CurrentGame is not { } game) return;
+        EnsureExistingInstallationBound(game, Installation(game));
         if (Installation(game).InstallRoot is null) await SetRootAsync(SuggestedRoot);
         var root = Installation(game).InstallRoot ?? throw new InvalidOperationException("请先在设置中指定游戏下载目录。");
         await Task.Run(() => Directory.CreateDirectory(root));
@@ -216,6 +292,7 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         var install = Installation(game); var state = GetState(install); var peer = _launcher.OtherHoYoInstallation(game);
         await RunAsync(game, install, true, false, async token =>
         {
+            EnsureExistingInstallationBound(game, install);
             state.LastWasRepair = repair;
             await _launcher.PersistHoYoInstallationAsync(game, install);
             try
@@ -239,6 +316,7 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
         var install = Installation(game); var state = GetState(install);
         await RunAsync(game, install, false, true, async token =>
         {
+            EnsureExistingInstallationBound(game, install);
             var report = ProgressFor(game, install, token);
             await Task.Run(() => _service.PreloadAsync(game.Id, install, report, token), token);
             await _launcher.PersistHoYoInstallationAsync(game, install);
@@ -377,7 +455,12 @@ public sealed class HoYoMaintenanceViewModel : ObservableObject
     }
     public void Refresh()
     {
-        foreach (var name in new[] { nameof(ChannelText), nameof(SharingText), nameof(Title), nameof(InstallRoot), nameof(LocalVersion), nameof(RemoteVersion), nameof(StageText), nameof(PlanText), nameof(PreloadText), nameof(Progress), nameof(DownloadText), nameof(SpeedText), nameof(CurrentFileText), nameof(CurrentFileVisibility), nameof(DetailText), nameof(DetailVisibility), nameof(CanResume), nameof(CanPauseOrResume), nameof(CanCancel), nameof(PauseActionText), nameof(IsBusy), nameof(CanSetRoot), nameof(CanRepair), nameof(CanPreload), nameof(IsPrimaryDownloading), nameof(DownloadVisibility), nameof(IsIndeterminate), nameof(PrimaryActionText), nameof(PrimaryActionGlyph), nameof(StartsMaintenance), nameof(ChineseAudio), nameof(EnglishAudio), nameof(JapaneseAudio), nameof(KoreanAudio) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(ChannelText), nameof(SharingText), nameof(Title), nameof(InstallRoot), nameof(LocalVersion), nameof(RemoteVersion), nameof(StageText), nameof(PlanText), nameof(PreloadText), nameof(Progress), nameof(DownloadText), nameof(SpeedText), nameof(CurrentFileText), nameof(CurrentFileVisibility), nameof(DetailText), nameof(DetailVisibility), nameof(CanResume), nameof(CanPauseOrResume), nameof(CanCancel), nameof(PauseActionText), nameof(IsBusy), nameof(CanSetRoot), nameof(CanSelectAudio), nameof(CanCheck), nameof(CanRepair), nameof(CanPreload), nameof(IsPrimaryDownloading), nameof(DownloadVisibility), nameof(IsIndeterminate), nameof(PrimaryActionText), nameof(PrimaryActionGlyph), nameof(StartsMaintenance), nameof(CanUpdate), nameof(HasUnboundExistingGame), nameof(ChineseAudio), nameof(EnglishAudio), nameof(JapaneseAudio), nameof(KoreanAudio) }) OnPropertyChanged(name);
+    }
+    private static void EnsureExistingInstallationBound(GameCardViewModel game, HoYoInstallation install)
+    {
+        if (game.IsInstalled && !HoYoMaintenancePolicy.IsBoundToExecutable(game.EffectiveExecutablePath, install))
+            throw new InvalidOperationException("已找到本地游戏，但维护信息尚未关联。请自动查找或将目录更改为现有 EXE 所在位置，确认后再维护。");
     }
     private static string Bytes(long value) => value >= 1073741824 ? $"{value / 1073741824d:0.00} GiB" : value >= 1048576 ? $"{value / 1048576d:0.0} MiB" : value >= 1024 ? $"{value / 1024d:0.0} KiB" : $"{value} B";
 }

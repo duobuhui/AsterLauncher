@@ -157,6 +157,7 @@ public sealed partial class GameLibraryPage : Page
     public void ShowFeature(string tag)
     {
         if (tag == "calendar" && _launcher.CurrentGame?.Id != BuiltInGameIds.Endfield) tag = "overview";
+        if (tag == "gacha" && !GachaCapabilities.SupportsRecords(_launcher.CurrentGame?.Id)) tag = "overview";
         HideSidebarFlyouts();
         if (_isLaunchExpanded) SetLaunchExpanded(false);
         UpdateNavigationState(tag);
@@ -319,6 +320,7 @@ public sealed partial class GameLibraryPage : Page
     {
         var selected = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
         EndfieldCalendarNavigation.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+        GachaNavigation.Visibility = GachaCapabilities.SupportsRecords(_launcher.CurrentGame?.Id) ? Visibility.Visible : Visibility.Collapsed;
         var external = _launcher.CurrentGame?.IsExternalLaunch == true;
         CommandDetails.Visibility = external ? Visibility.Collapsed : Visibility.Visible;
         ExternalLaunchPanel.Visibility = external ? Visibility.Visible : Visibility.Collapsed;
@@ -444,8 +446,7 @@ public sealed partial class GameLibraryPage : Page
             menu.Items.Add(local);
             menu.Opening += (_, _) => { emulator.IsChecked = game.IsEmulator; local.IsChecked = !game.IsExternalLaunch; };
         }
-        if (game.Id is BuiltInGameIds.Endfield or BuiltInGameIds.GenshinImpact
-            or BuiltInGameIds.HonkaiStarRail or BuiltInGameIds.ZenlessZoneZero)
+        if (GachaCapabilities.SupportsRecords(game.Id))
             Add("抽卡记录", async () => { await SelectContextGameAsync(game); ShowFeature("gacha"); });
         if (game.Id == BuiltInGameIds.Endfield)
             Add("版本日历与兑换码", async () => { await SelectContextGameAsync(game); ShowFeature("calendar"); });
