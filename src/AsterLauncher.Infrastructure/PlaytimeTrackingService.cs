@@ -237,7 +237,7 @@ public sealed class PlaytimeTrackingService : IDisposable
                         { unavailable.UnionWith(group.Select(target => target.GameId)); continue; }
                         var actual = Path.GetFullPath(path.ToString());
                         var started = DateTimeOffset.FromFileTime(created).ToUniversalTime();
-                        foreach (var target in group.Where(target => string.Equals(Path.GetFullPath(target.ExecutablePath), actual, StringComparison.OrdinalIgnoreCase)))
+                        foreach (var target in group.Where(target => SameExecutablePath(target.ExecutablePath, actual)))
                         {
                             var identity = new PlaytimeObservation
                             {
@@ -248,13 +248,32 @@ public sealed class PlaytimeTrackingService : IDisposable
                             found.Add(identity);
                         }
                     }
-                    catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or ArgumentException)
+                    catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
                     { unavailable.UnionWith(group.Select(target => target.GameId)); }
                 }
             }
         }
         return new PlaytimeProcessScan(found, unavailable);
     }
+
+    internal static bool SameExecutablePath(string registered, string actual)
+        => string.Equals(Path.GetFullPath(registered), Path.GetFullPath(actual), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ResolvePhysicalExecutablePath(registered), ResolvePhysicalExecutablePath(actual), StringComparison.OrdinalIgnoreCase);
+
+    internal static string ResolvePhysicalExecutablePath(string path)
+    {
+        using var file = File.OpenHandle(Path.GetFullPath(path), FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
+        var final = new StringBuilder(32768);
+        var length = GetFinalPathNameByHandle(file, final, (uint)final.Capacity, 0);
+        if (length == 0 || length >= final.Capacity) throw new Win32Exception(Marshal.GetLastWin32Error());
+        var value = final.ToString();
+        if (value.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + value[8..];
+        return value.StartsWith(@"\\?\", StringComparison.Ordinal) ? value[4..] : value;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetFinalPathNameByHandle(SafeFileHandle file, StringBuilder path, uint size, uint flags);
 
     [DllImport("kernel32.dll", SetLastError = true)] private static extern SafeProcessHandle OpenProcess(uint access, bool inherit, int processId);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]

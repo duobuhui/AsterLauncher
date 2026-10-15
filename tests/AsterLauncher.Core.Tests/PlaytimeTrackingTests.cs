@@ -343,7 +343,7 @@ public sealed class PlaytimeTrackingTests : IDisposable
             var observation = Assert.Single(scan.Processes, item => item.ProcessId == owned.Id);
 
             Assert.Equal("owned-node-fixture", observation.GameId);
-            Assert.Equal(Path.GetFullPath(node), observation.ExecutablePath, ignoreCase: true);
+            Assert.True(PlaytimeTrackingService.SameExecutablePath(node, observation.ExecutablePath));
             Assert.Equal(new DateTimeOffset(owned.StartTime.ToUniversalTime()), observation.StartedAt);
             Assert.True(observation.StartedAt <= scannedAt);
             Assert.Equal(observation.StartedAt, observation.ObservedUntil);
@@ -466,6 +466,27 @@ public sealed class PlaytimeTrackingTests : IDisposable
     [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "GetProcessTimes", SetLastError = true)]
     private static extern bool GetOwnedProcessTimes(Microsoft.Win32.SafeHandles.SafeProcessHandle process,
         out long created, out long exited, out long kernel, out long user);
+
+    [Fact]
+    public void PhysicalPathNormalizationKeepsOrdinaryAbsoluteExecutablePathsUsable()
+    {
+        var path = Exe("physical-path", "game.exe");
+        var physical = PlaytimeTrackingService.ResolvePhysicalExecutablePath(path);
+        Assert.True(Path.IsPathFullyQualified(physical));
+        Assert.False(physical.StartsWith(@"\\?\", StringComparison.Ordinal));
+        Assert.True(PlaytimeTrackingService.SameExecutablePath(path, physical));
+    }
+
+    [Fact]
+    public void EqualFileIdsInDifferentHardLinkEntriesDoNotAttributeAnotherInstallation()
+    {
+        var first = Exe("first-installation", "game.exe");
+        var second = Path.Combine(_root, "second-installation", "game.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(second)!);
+        Assert.True(WindowsHardLink.TryCreate(second, first));
+        Assert.Equal(WindowsHardLink.Identity(first), WindowsHardLink.Identity(second));
+        Assert.False(PlaytimeTrackingService.SameExecutablePath(first, second));
+    }
 
     private string Exe(string directory, string name)
     {
