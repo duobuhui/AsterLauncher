@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026101501,
-  "publishedAt": "2026-10-15T03:32:29.615Z",
+  "revision": 2026101502,
+  "publishedAt": "2026-10-15T08:20:57.890Z",
   "pools": [
     {
       "gameId": "endfield",
@@ -167,6 +167,17 @@
     }
   ],
   "images": [
+    {
+      "gameId": "endfield",
+      "kind": "banner",
+      "key": "绚丽异彩",
+      "aliases": ["绚丽异彩 #1", "绚丽异彩#1", "绚丽异彩 ＃1", "绚丽异彩＃1"],
+      "file": "images/endfield/refactor-vivid.png",
+      "sha256": "fefe7528f847f2cf217be08efce5be973413df8c4ac657a377d9f7d733b152cf",
+      "size": 928667,
+      "source": "https://web.hycdn.cn/upload/image/20260921/394fc7fba6fed31434e0c65f69ecdecd.png",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
     {
       "gameId": "endfield",
       "kind": "portrait",

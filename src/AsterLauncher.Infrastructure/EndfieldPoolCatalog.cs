@@ -63,9 +63,16 @@ internal static class EndfieldPoolCatalog
         if (resource?.FeaturedOperator is { Length: > 0 } featuredOperator)
         {
             var refactor = resource.Category == "refactor";
+            // Rule/date updates do not replace artwork already bundled for a verified pool.
+            // A separately verified resource image still takes priority in the view converter.
+            var banner = refactor
+                ? RefactorSeriesName(poolName) == "绚丽异彩" && featuredOperator == "伊冯"
+                    ? "Gacha/refactor-vivid.png" : "endfield-pool-card.svg"
+                : CharteredFeatured.TryGetValue(poolName, out var bundled) && bundled.Featured == featuredOperator
+                    ? bundled.Banner : "endfield-pool-card.svg";
             return new(refactor ? EndfieldPoolCategory.Refactor : EndfieldPoolCategory.Chartered,
                 featuredOperator, refactor ? "refactor" : "chartered",
-                refactor ? $"refactor:{RefactorSeriesName(poolName)}" : poolId, "endfield-pool-card.svg");
+                refactor ? $"refactor:{RefactorSeriesName(poolName)}" : poolId, banner);
         }
         if (poolId.Equals("standard", StringComparison.OrdinalIgnoreCase)
             || poolName.Equals("基础寻访", StringComparison.Ordinal))

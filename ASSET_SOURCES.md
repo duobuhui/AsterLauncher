@@ -14,7 +14,7 @@ The v0.7 theme presets are original color definitions in XAML/C#. Their names do
 
 The 2026-09-24 Endfield record-response investigation used no media or artwork and introduced no new packaged assets. Publisher media rights remain as described below.
 
-The 2026-09-28 Re-Factor phase and pity update studied the official [rules](https://endfield.hypergryph.com/news/4776) and [绚丽异彩 notice](https://endfield.hypergryph.com/news/2651). It introduced no new images or packaged assets. The existing `refactor-vivid.png` remains attributed below; its publisher rights are unchanged. Unknown future Re-Factor cards use the original `endfield-pool-card.svg` until a verified banner and rights record are added.
+The 2026-09-28 Re-Factor phase and pity update studied the official [rules](https://endfield.hypergryph.com/news/4776) and [绚丽异彩 notice](https://endfield.hypergryph.com/news/2651). It introduced no new images or packaged assets. The existing `refactor-vivid.png` remains attributed below; its publisher rights are unchanged. Resource revision 2026101502 also serves the identical bytes at `resources/images/endfield/refactor-vivid.png` to restore the banner lookup on existing clients (SHA-256 `fefe7528f847f2cf217be08efce5be973413df8c4ac657a377d9f7d733b152cf`); this is the same official phase-1 banner, with no new artwork or permission claim. Unknown future Re-Factor cards use the original `endfield-pool-card.svg` until a verified banner and rights record are added.
 
 The six-star analysis table uses only local record text and the project's existing color resources. No GitHub artwork, operator portraits, or third-party UI assets were imported.
 
