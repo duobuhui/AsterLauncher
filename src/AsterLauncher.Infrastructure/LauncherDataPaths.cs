@@ -100,7 +100,12 @@ public static class LauncherDataPaths
         if (Directory.EnumerateFileSystemEntries(target).Any())
             throw new IOException("目标文件夹不是空的，请选择空文件夹以避免覆盖现有数据。");
 
-        CopyDirectory(source, target, skipUpdates: false);
+        cancellationToken.ThrowIfCancellationRequested();
+        // Keep a new observer from acquiring the old data root while it is being copied.
+        // Runtime locks are not migrated; durable requests and receipts are copied normally.
+        using var observerLease = AcquirePlaytimeRelocationGuard(source);
+        CopyDirectory(source, target, skipUpdates: false,
+            excludedFile: observerLease is null ? null : Path.GetFullPath(observerLease.Name));
         var selectionFile = Path.Combine(appDirectory, LocationFileName);
         var temporaryFile = selectionFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -117,6 +122,21 @@ public static class LauncherDataPaths
         return true;
     }
 
+    private static FileStream? AcquirePlaytimeRelocationGuard(string source)
+    {
+        if (!Directory.Exists(source)) return null;
+        var lockPath = SafeGamePath.Resolve(source, "playtime/observer.lock");
+        Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
+        try
+        {
+            return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(
+                "游戏计时仍在运行或无法访问计时目录。请先退出游戏并等待计时进程结束，再迁移数据目录。", exception);
+        }
+    }
     private static bool IsInside(string path, string possibleParent)
     {
         var parent = possibleParent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
@@ -124,7 +144,7 @@ public static class LauncherDataPaths
         return path.StartsWith(parent, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void CopyDirectory(string source, string target, bool skipUpdates)
+    private static void CopyDirectory(string source, string target, bool skipUpdates, string? excludedFile = null)
     {
         if (!Directory.Exists(source)) return;
         var pending = new Queue<(string Source, string Target)>();
@@ -134,6 +154,9 @@ public static class LauncherDataPaths
             Directory.CreateDirectory(pair.Target);
             foreach (var entry in Directory.EnumerateFileSystemEntries(pair.Source))
             {
+                if (excludedFile is not null && (string.Equals(Path.GetFullPath(entry), excludedFile, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(Path.GetFullPath(entry), Path.Combine(Path.GetDirectoryName(excludedFile)!, "receipts.write.lock"), StringComparison.OrdinalIgnoreCase)))
+                    continue;
                 if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) continue;
                 var destination = Path.Combine(pair.Target, Path.GetFileName(entry));
                 if (Directory.Exists(entry))

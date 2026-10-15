@@ -32,4 +32,18 @@ public sealed class GameUserStatePlayTimeTests
         Assert.Null(state.GetLastSessionPlaySeconds());
         Assert.Equal(0, state.GetThisWeekPlaySeconds(DateTimeOffset.Now));
     }
+    [Fact]
+    public void WeeklySummaryClipsAContinuousObservedSessionAtMondayAndNow()
+    {
+        var offset = TimeSpan.FromHours(8);
+        var now = new DateTimeOffset(2026, 9, 21, 1, 0, 0, offset);
+        var state = new GameUserState { PlaySessions =
+        [
+            new() { StartedAt = now.AddHours(-2), DurationSeconds = 3 * 3600 },
+            new() { StartedAt = now.AddDays(-3), DurationSeconds = double.NaN },
+            new() { StartedAt = now.AddHours(1), DurationSeconds = 3600 }
+        ] };
+        Assert.Equal(3600, state.GetThisWeekPlaySeconds(now));
+    }
+
 }

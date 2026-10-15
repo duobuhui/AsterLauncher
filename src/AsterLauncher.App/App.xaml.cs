@@ -13,14 +13,31 @@ public partial class App : Application
 {
     private readonly ServiceProvider _services;
     private Window? _window;
+    private readonly DataInstanceLease _instanceLease;
+    private bool _activationPending;
+    private bool _windowClosed;
 
     public App()
     {
         InitializeComponent();
-        LauncherDataPaths.MigrateLegacyBundleDataIfNeeded();
-        var services = new ServiceCollection();
-        ConfigureServices(services);
-        _services = services.BuildServiceProvider();
+        var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        _instanceLease = new DataInstanceLease(LauncherDataPaths.ResolveDataDirectory(),
+            () => dispatcher.TryEnqueue(ActivateExistingWindow));
+        if (!_instanceLease.IsPrimary)
+        {
+            // A secondary process must not initialize logs, configuration or any data service.
+            _services = new ServiceCollection().BuildServiceProvider();
+            return;
+        }
+        try
+        {
+            // Legacy migration copies into this already resolved data root; it never changes the selection.
+            LauncherDataPaths.MigrateLegacyBundleDataIfNeeded();
+            var services = new ServiceCollection();
+            ConfigureServices(services);
+            _services = services.BuildServiceProvider();
+        }
+        catch { _instanceLease.Dispose(); throw; }
     }
 
     public static Window MainWindow { get; private set; } = null!;
@@ -29,27 +46,59 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (!_instanceLease.IsPrimary)
+        {
+            _instanceLease.Dispose();
+            Exit();
+            return;
+        }
         try
         {
             await _services.GetRequiredService<LauncherViewModel>().InitializeAsync();
             await Task.Run(() => _services.GetRequiredService<ResourceUpdateService>().LoadAsync());
-            _window = _services.GetRequiredService<MainWindow>();
-            MainWindow = _window;
-            _window.Activate();
+            ShowMainWindow(_services.GetRequiredService<MainWindow>());
             _ = RefreshWallpapersAsync();
             if (_services.GetRequiredService<LauncherViewModel>().ResourceUpdatesEnabled) _ = RefreshResourcesAsync();
         }
         catch (ConfigurationReadException exception)
         {
-            _window = new ConfigurationRecoveryWindow(exception, (JsonConfigurationStore)_services.GetRequiredService<IConfigurationStore>());
-            MainWindow = _window;
-            _window.Activate();
+            ShowMainWindow(new ConfigurationRecoveryWindow(exception, (JsonConfigurationStore)_services.GetRequiredService<IConfigurationStore>()));
         }
         catch (Exception exception)
         {
+            _windowClosed = true;
+            _instanceLease.Dispose();
             _services.GetRequiredService<ILogger<App>>().LogCritical(exception, "Application startup failed");
             throw;
         }
+    }
+
+    private void ShowMainWindow(Window window)
+    {
+        _window = window;
+        MainWindow = window;
+        window.Closed += (_, _) =>
+        {
+            _windowClosed = true;
+            _instanceLease.Dispose();
+        };
+        window.Activate();
+        if (_activationPending) ActivateExistingWindow();
+    }
+
+    private void ActivateExistingWindow()
+    {
+        if (_windowClosed) return;
+        if (_window is null) { _activationPending = true; return; }
+        _activationPending = false;
+        if (_window is MainWindow launcher) launcher.ShowFromSecondaryInstance();
+        else
+        {
+            _window.AppWindow.Show();
+            if (_window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+                presenter.Restore();
+        }
+        _window.Activate();
     }
 
     private async Task RefreshResourcesAsync()
@@ -163,6 +212,7 @@ public partial class App : Application
 #endif
         services.AddSingleton<IEndfieldDisplayStore, EndfieldRegistryDisplayStore>();
         services.AddSingleton(provider => new EndfieldDisplayService(provider.GetRequiredService<IEndfieldDisplayStore>(), LauncherDataPaths.ResolveDataDirectory()));
+        services.AddSingleton(_ => new PlaytimeTrackingService(LauncherDataPaths.ResolveDataDirectory(), Path.Combine(AppContext.BaseDirectory, "Services", "WatchPlaytime.ps1")));
         services.AddSingleton<LauncherViewModel>();
         services.AddSingleton<GameLibraryViewModel>();
         services.AddSingleton<EndfieldCommunityViewModel>();

@@ -224,10 +224,13 @@ public sealed class GameUserState
         var localNow = now.ToOffset(now.Offset);
         var daysSinceMonday = ((int)localNow.DayOfWeek + 6) % 7;
         var weekStart = new DateTimeOffset(localNow.Date.AddDays(-daysSinceMonday), localNow.Offset);
-        return PlaySessions
-            .Where(session => session.StartedAt.ToOffset(localNow.Offset) >= weekStart
-                && session.StartedAt.ToOffset(localNow.Offset) <= localNow)
-            .Sum(session => Math.Max(0, session.DurationSeconds));
+        return PlaySessions.Sum(session =>
+        {
+            if (!double.IsFinite(session.DurationSeconds) || session.DurationSeconds <= 0) return 0;
+            var observed = Math.Min(session.DurationSeconds, (now - session.StartedAt).TotalSeconds);
+            var beforeWeek = Math.Max(0, (weekStart - session.StartedAt).TotalSeconds);
+            return Math.Max(0, observed - beforeWeek);
+        });
     }
 
     public double? GetLastSessionPlaySeconds() => PlaySessions
@@ -238,6 +241,8 @@ public sealed class GameUserState
 
 public sealed class GamePlaySession
 {
+    public string? TrackingId { get; set; }
+
     public DateTimeOffset StartedAt { get; set; }
 
     public double DurationSeconds { get; set; }

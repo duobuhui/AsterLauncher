@@ -162,6 +162,7 @@ public sealed class GameLibraryViewModel : ObservableObject
     public string ThisWeekPlayTimeText => CurrentGame?.ThisWeekPlayTimeText ?? "暂无数据";
 
     public string TotalPlayTimeText => CurrentGame?.TotalPlayTimeText ?? "暂无数据";
+    public string PlaytimeTrackingText => _launcher.PlaytimeTrackingText;
 
     public string RecentLaunchText => $"最近启动 · {LastPlayedText}";
 
@@ -300,6 +301,7 @@ public sealed class GameLibraryViewModel : ObservableObject
         OnPropertyChanged(nameof(LastSessionPlayTimeText));
         OnPropertyChanged(nameof(ThisWeekPlayTimeText));
         OnPropertyChanged(nameof(TotalPlayTimeText));
+        OnPropertyChanged(nameof(PlaytimeTrackingText));
         OnPropertyChanged(nameof(RecentLaunchText));
         OnPropertyChanged(nameof(CanLaunch));
         OnPropertyChanged(nameof(LaunchButtonText));

@@ -78,6 +78,68 @@ public sealed class LauncherDataPathsTests : IDisposable
         Assert.True(File.Exists(Path.Combine(release, "asterlauncher.data-location.json")));
         Assert.False(File.Exists(Path.Combine(app, "asterlauncher.data-location.json")));
     }
+    [Fact]
+    public async Task Relocate_ActivePlaytimeObserverBlocksBeforeCopyOrSelectionCommit()
+    {
+        var executableDirectory = Path.Combine(_root, "release");
+        var source = Path.Combine(executableDirectory, "Data");
+        var target = Path.Combine(_root, "chosen");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(target);
+        var journal = new PlaytimeJournal(source);
+        Directory.CreateDirectory(Path.GetDirectoryName(journal.ObserverLockPath)!);
+        var settings = Path.Combine(source, "launcher.settings.json");
+        await File.WriteAllTextAsync(settings, "original settings");
+        using var observer = new FileStream(journal.ObserverLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            LauncherDataPaths.RelocateAsync(target, executableDirectory: executableDirectory, sourceDirectory: source));
+
+        Assert.Contains("退出游戏", error.Message);
+        Assert.Contains("计时", error.Message);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(target));
+        Assert.False(File.Exists(Path.Combine(executableDirectory, "asterlauncher.data-location.json")));
+        Assert.Equal("original settings", await File.ReadAllTextAsync(settings));
+    }
+
+    [Fact]
+    public async Task Relocate_UnlockedObserverFileAllowsMoveAndPreservesReceiptsWithoutCopyingRuntimeLock()
+    {
+        var executableDirectory = Path.Combine(_root, "release");
+        var source = Path.Combine(executableDirectory, "Data");
+        var target = Path.Combine(_root, "chosen");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(target);
+        var journal = new PlaytimeJournal(source);
+        Directory.CreateDirectory(journal.ReceiptDirectory);
+        Directory.CreateDirectory(journal.RequestDirectory);
+        await File.WriteAllTextAsync(journal.ObserverLockPath, string.Empty);
+        var receiptName = new string('a', 64) + ".json";
+        var requestName = new string('b', 64) + ".json";
+        await File.WriteAllTextAsync(Path.Combine(journal.ReceiptDirectory, receiptName), "durable receipt");
+        await File.WriteAllTextAsync(Path.Combine(journal.RequestDirectory, requestName), "pending request");
+
+        Assert.True(await LauncherDataPaths.RelocateAsync(target, executableDirectory: executableDirectory, sourceDirectory: source));
+
+        var migrated = new PlaytimeJournal(target);
+        Assert.Equal("durable receipt", await File.ReadAllTextAsync(Path.Combine(migrated.ReceiptDirectory, receiptName)));
+        Assert.Equal("pending request", await File.ReadAllTextAsync(Path.Combine(migrated.RequestDirectory, requestName)));
+        Assert.False(File.Exists(migrated.ObserverLockPath));
+        Assert.Equal(target, LauncherDataPaths.ResolveDataDirectory(executableDirectory, null));
+        using var available = new FileStream(journal.ObserverLockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+    }
+
+    [Fact]
+    public async Task Relocate_SameDirectoryStillReturnsFalseWhenObserverIsActive()
+    {
+        var executableDirectory = Path.Combine(_root, "release");
+        var source = Path.Combine(executableDirectory, "Data");
+        var journal = new PlaytimeJournal(source);
+        Directory.CreateDirectory(Path.GetDirectoryName(journal.ObserverLockPath)!);
+        using var observer = new FileStream(journal.ObserverLockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        Assert.False(await LauncherDataPaths.RelocateAsync(source, executableDirectory: executableDirectory, sourceDirectory: source));
+    }
+
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME", _originalDataHome);

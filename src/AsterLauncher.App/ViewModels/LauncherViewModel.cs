@@ -11,6 +11,12 @@ public sealed class LauncherViewModel : ObservableObject
 {
     private readonly IConfigurationStore _configurationStore;
     private readonly GameLaunchOrchestrator _orchestrator;
+    private readonly PlaytimeTrackingService _playtimeTracking;
+    private readonly SemaphoreSlim _runtimeRefreshGate = new(1, 1);
+    private bool _runtimeStopping;
+    private bool _playtimeSavePending;
+    private readonly HashSet<string> _pendingPlaytimeGameIds = new(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlySet<string> _playtimeUnavailable = new HashSet<string>();
     private readonly IReadOnlyList<IGameAdapter> _builtInAdapters;
     private readonly ILogger<LauncherViewModel> _logger;
     private readonly DispatcherTimer _runtimeTimer = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -28,10 +34,11 @@ public sealed class LauncherViewModel : ObservableObject
         IConfigurationStore configurationStore,
         GameLaunchOrchestrator orchestrator,
         IEnumerable<IGameAdapter> builtInAdapters,
-        ILogger<LauncherViewModel> logger)
+        ILogger<LauncherViewModel> logger, PlaytimeTrackingService playtimeTracking)
     {
         _configurationStore = configurationStore;
         _orchestrator = orchestrator;
+        _playtimeTracking = playtimeTracking;
         _builtInAdapters = builtInAdapters.ToList();
         _logger = logger;
         _runtimeTimer.Tick += RuntimeTimerOnTick;
@@ -160,6 +167,14 @@ public sealed class LauncherViewModel : ObservableObject
     public string LaunchButtonText => IsLaunching ? "运行中…" : "启动游戏";
 
     public string RunningStatusText => IsRunning ? "运行中" : "未运行";
+    public string PlaytimeTrackingText => CurrentGame?.IsExternalLaunch == true ? "云游戏及模拟器暂不统计时长。"
+        : CurrentGame is { } game && _playtimeUnavailable.Contains(game.Id) ? "无法读取游戏进程或计时组件，当前时长可能不完整。"
+        : "按游戏实际进程计时；关闭启动器后仍记录至游戏退出。";
+    public void StopRuntimePolling()
+    {
+        _runtimeTimer.Stop();
+        _playtimeTracking.Dispose();
+    }
 
     public string ConfigurationPath => _configurationStore.ConfigurationPath;
 
@@ -665,24 +680,18 @@ public sealed class LauncherViewModel : ObservableObject
         await _playHistoryGate.WaitAsync(cancellationToken);
         try
         {
-            // Use current settings at confirmation time; a preview never replaces newer user choices.
-            var candidate = CloneConfiguration(_configuration);
-            var changes = PlayHistoryRecoveryService.Apply(candidate, plan);
-            if (changes.Count == 0) return changes;
-            await _configurationStore.SaveAsync(candidate, cancellationToken);
-            // Keep the existing game/installation objects used by running views and maintenance tasks.
+            // Merge into current live objects before queuing a save; later settings saves retain it.
+            var changes = PlayHistoryRecoveryService.Apply(_configuration, plan);
             foreach (var change in changes)
             {
-                var recovered = candidate.Games.First(game => game.GameId == change.GameId);
-                var current = _configuration.Games.FirstOrDefault(game => game.GameId == change.GameId);
-                if (current is null) continue;
-                current.TotalPlaySeconds = recovered.TotalPlaySeconds;
-                current.LastPlayedAt = recovered.LastPlayedAt;
-                current.PlaySessions = recovered.PlaySessions;
-                _allGames.FirstOrDefault(game => game.Id == change.GameId)?.Refresh();
+                _pendingPlaytimeGameIds.Add(change.GameId);
+                _playtimeSavePending = true;
+            }
+            await SavePendingPlaytimeAsync(cancellationToken);
+            if (changes.Count == 0) return changes;
+            foreach (var change in changes)
                 _logger.LogInformation("Play history recovered for {GameId}: {AddedSessions} sessions, {TotalSeconds} total seconds",
                     change.GameId, change.AddedSessionCount, change.RecoveredTotalSeconds);
-            }
             StatusText = $"已恢复 {changes.Count} 款游戏的游玩时长。";
             GamesChanged?.Invoke(this, EventArgs.Empty);
             return changes;
@@ -758,32 +767,7 @@ public sealed class LauncherViewModel : ObservableObject
             var result = await _orchestrator.LaunchAsync(request, progress);
             if (string.Equals(CurrentLaunchKey, launchKey, StringComparison.OrdinalIgnoreCase))
                 StatusText = result.Message;
-            if (result.Status == LaunchSessionStatus.Completed)
-            {
-                await _playHistoryGate.WaitAsync();
-                try
-                {
-                    var duration = Math.Max(0, result.Duration.TotalSeconds);
-                    if (!PlayHistoryRecoveryService.ContainsEquivalentSession(selectedGame.State.PlaySessions, result.StartedAt, duration))
-                    {
-                        selectedGame.State.TotalPlaySeconds += duration;
-                        selectedGame.State.PlaySessions.Add(new GamePlaySession
-                        {
-                            StartedAt = result.StartedAt,
-                            DurationSeconds = duration
-                        });
-                    }
-                    if (selectedGame.State.LastPlayedAt is null || selectedGame.State.LastPlayedAt < result.StartedAt)
-                        selectedGame.State.LastPlayedAt = result.StartedAt;
-                    // Preserve dated sessions for yearly play activity; older totals remain compatible.
-                    selectedGame.Refresh();
-                    await _configurationStore.SaveAsync(_configuration);
-                }
-                finally
-                {
-                    _playHistoryGate.Release();
-                }
-            }
+            // Process observations own play time; launch orchestration never settles a second interval.
             return result;
         }
         finally
@@ -1071,25 +1055,93 @@ public sealed class LauncherViewModel : ObservableObject
 
     private async Task RefreshRunningStateAsync()
     {
-        foreach (var game in Games)
+        if (_runtimeStopping || !await _runtimeRefreshGate.WaitAsync(0)) return;
+        try
         {
-            try
+            foreach (var game in _allGames)
             {
-                var running = game.IsInstalled && await game.Adapter.ProcessDetector.IsRunningAsync(
-                    game.Adapter.Definition,
-                    game.EffectiveExecutablePath ?? game.State.ExecutablePath);
-                game.SetRunning(running);
+                try
+                {
+                    var running = game.IsInstalled && await game.Adapter.ProcessDetector.IsRunningAsync(
+                        game.Adapter.Definition, game.EffectiveExecutablePath ?? game.State.ExecutablePath);
+                    game.SetRunning(running);
+                }
+                catch (Exception exception)
+                {
+                    game.SetRunning(false);
+                    _logger.LogWarning(exception, "Process status refresh failed for {GameId}", game.Id);
+                }
             }
-            catch (Exception exception)
-            {
-                game.SetRunning(false);
-                _logger.LogWarning(exception, "Process status refresh failed for {GameId}", game.Id);
-            }
-        }
+            var result = await _playtimeTracking.PollAsync(PlaytimeTargetCatalog.Build(_configuration));
+            _playtimeUnavailable = result.UnavailableGameIds;
+            OnPropertyChanged(nameof(PlaytimeTrackingText));
 
-        IsRunning = CurrentGame?.IsRunning == true;
+            await MergePlaytimeAsync(result.Observations);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or JsonException or UnauthorizedAccessException or ArgumentException or System.ComponentModel.Win32Exception)
+        {
+            _playtimeUnavailable = _allGames.Select(game => game.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            OnPropertyChanged(nameof(PlaytimeTrackingText));
+            _logger.LogWarning("Play time observation could not be saved. Failure kind: {FailureKind}", exception.GetType().Name);
+        }
+        finally
+        {
+            IsRunning = CurrentGame?.IsRunning == true;
+            _runtimeRefreshGate.Release();
+        }
     }
 
+    private async Task MergePlaytimeAsync(IReadOnlyList<PlaytimeObservation> observations)
+    {
+        await _playHistoryGate.WaitAsync();
+        try
+        {
+            foreach (var state in _configuration.Games)
+                if (PlaytimeSessionMerger.Apply(state, observations.Where(item => item.GameId == state.GameId)))
+                {
+                    _pendingPlaytimeGameIds.Add(state.GameId);
+                    _playtimeSavePending = true;
+                }
+            await SavePendingPlaytimeAsync();
+            // Live history is updated before a save is queued, so later settings saves include it.
+            // A failed save leaves both the dirty flag and the independent receipt for retry.
+            foreach (var observation in observations.Where(item => item.IsComplete
+                && _configuration.Games.Any(game => PlaytimeSessionMerger.Covers(game, item))))
+                await _playtimeTracking.DeleteCompletedAsync(observation);
+        }
+        finally { _playHistoryGate.Release(); }
+    }
+
+    private async Task SavePendingPlaytimeAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_playtimeSavePending) return;
+        await _configurationStore.SaveAsync(_configuration, cancellationToken);
+        _playtimeSavePending = false;
+        foreach (var gameId in _pendingPlaytimeGameIds)
+            _allGames.FirstOrDefault(game => game.Id == gameId)?.Refresh();
+        _pendingPlaytimeGameIds.Clear();
+        OnPropertyChanged(nameof(CurrentGame));
+    }
+
+    public async Task PrepareForExitAsync()
+    {
+        _runtimeStopping = true;
+        _runtimeTimer.Stop();
+        await _runtimeRefreshGate.WaitAsync();
+        try
+        {
+            var result = await _playtimeTracking.WaitForObserverAsync(PlaytimeTargetCatalog.Build(_configuration));
+            _playtimeUnavailable = result.UnavailableGameIds;
+            await MergePlaytimeAsync(result.Observations);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or JsonException
+            or UnauthorizedAccessException or ArgumentException or System.ComponentModel.Win32Exception)
+        {
+            // Durable observer receipts remain available on the next launch when saving fails.
+            _logger.LogWarning("Play time exit checkpoint failed. Failure kind: {FailureKind}", exception.GetType().Name);
+        }
+        finally { _runtimeRefreshGate.Release(); }
+    }
     private async Task RestoreEndfieldIdentityAsync()
     {
         var legacy = _configuration.Games.FirstOrDefault(g => g.GameId == BuiltInGameIds.Endfield)?.ExecutablePath;

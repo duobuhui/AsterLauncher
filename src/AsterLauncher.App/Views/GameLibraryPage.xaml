@@ -218,7 +218,7 @@
                                         <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="{Binding PauseActionText, FallbackValue=暂停}" IsEnabled="{Binding CanPauseOrResume, FallbackValue=True}" Click="EndfieldPause_OnClick" Style="{StaticResource FloatingButtonStyle}" /><Button Content="取消任务" IsEnabled="{Binding CanCancel}" Click="EndfieldCancel_OnClick" ToolTipService.ToolTip="取消并清理未使用的缓存；暂停可保留进度。" Style="{StaticResource FloatingButtonStyle}" /></StackPanel>
                                     </StackPanel>
                                 </Border>
-                                <Button x:Name="PlayTimeButton" HorizontalAlignment="Right" MinWidth="112" Height="36" Padding="10,4" Background="{ThemeResource HeroGlassBrush}" Foreground="{ThemeResource GlassTextBrush}" BorderBrush="#48FFFFFF" BorderThickness="1" CornerRadius="12" AutomationProperties.Name="查看游玩时间详情" Click="PlayTime_OnClick">
+                                <Button x:Name="PlayTimeButton" HorizontalAlignment="Right" MinWidth="112" Height="36" Padding="10,4" Background="{ThemeResource HeroGlassBrush}" Foreground="{ThemeResource GlassTextBrush}" BorderBrush="#48FFFFFF" BorderThickness="1" CornerRadius="12" AutomationProperties.Name="查看游玩时间详情" ToolTipService.ToolTip="{Binding PlaytimeTrackingText}" Click="PlayTime_OnClick">
 
                                     <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE823;" FontSize="15" /><TextBlock Text="{Binding TotalPlayTimeText}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel>
                                 </Button>

@@ -37,6 +37,8 @@ public sealed partial class MainWindow : Window
     private readonly UISettings _uiSettings = new();
     private readonly TrayIconService _trayIcon;
     private bool _allowExit;
+    private bool _preparingClose;
+    private bool _closeReady;
     private GameCardViewModel? _observedGame;
     private ImageSource? _requestedWallpaper;
     private readonly Dictionary<ImageSource, Image> _wallpaperLayers = [];
@@ -68,6 +70,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnAppWindowClosing;
         Closed += (_, _) =>
         {
+            _launcher.StopRuntimePolling();
             RemoveWindowSubclass(_windowHandle, _windowSubclass, UIntPtr.Zero);
             _trayIcon.Dispose();
         };
@@ -350,21 +353,38 @@ public sealed partial class MainWindow : Window
         _gameLibraryPage.ShowFeature(tag);
     }
 
-    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        if (_allowExit || _launcher.CloseButtonBehavior != CloseButtonBehavior.MinimizeToTray) return;
+        if (_closeReady) return;
         args.Cancel = true;
-        try
+        if (!_allowExit && _launcher.CloseButtonBehavior == CloseButtonBehavior.MinimizeToTray)
         {
-            _trayIcon.Show();
-            ShowWindow(_windowHandle, 0);
+            try
+            {
+                _trayIcon.Show();
+                ShowWindow(_windowHandle, 0);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Could not add system tray icon; keeping launcher window visible");
+            }
+            return;
         }
+        if (_preparingClose) return;
+        _preparingClose = true;
+        try { await _launcher.PrepareForExitAsync(); }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Could not add system tray icon; keeping launcher window visible");
+            _logger.LogWarning("Launcher exit checkpoint ended with {FailureKind}", exception.GetType().Name);
+        }
+        finally
+        {
+            _closeReady = true;
+            Close();
         }
     }
 
+    public void ShowFromSecondaryInstance() => RestoreFromTray();
     private void RestoreFromTray()
     {
         ShowWindow(_windowHandle, 9);

@@ -105,6 +105,7 @@ public sealed class PlayHistoryRecoveryService
                         .Where(session => session is not null)
                         .Select(session => new GamePlaySession
                         {
+                            TrackingId = session.TrackingId,
                             StartedAt = session.StartedAt,
                             DurationSeconds = session.DurationSeconds
                         }).ToList()
@@ -285,6 +286,9 @@ public sealed class PlayHistoryRecoveryService
             var index = IndexSessions(merged);
             foreach (var session in group)
             {
+                // Orchestrator logs also include companion setup/exit work. Where real process
+                // evidence exists, never refill those uncertain edges from a wider legacy log.
+                if (OverlapsTrackedHistory(merged, session)) continue;
                 var bucket = session.StartedAt.UtcTicks / StartTolerance.Ticks;
                 var duplicate = false;
                 for (var nearby = bucket - 1; nearby <= bucket + 1; nearby++)
@@ -314,6 +318,27 @@ public sealed class PlayHistoryRecoveryService
             result.Add(new PendingMerge(state, merged, lastPlayedAt, change));
         }
         return result;
+    }
+
+    private static bool OverlapsTrackedHistory(IEnumerable<GamePlaySession> sessions, RecoveredPlaySession recovered)
+    {
+        var recoveredStart = recovered.StartedAt.UtcTicks;
+        var recoveredEnd = recoveredStart + (long)Math.Round(recovered.DurationSeconds * TimeSpan.TicksPerSecond,
+            MidpointRounding.AwayFromZero);
+        foreach (var existing in sessions)
+        {
+            if (existing is null || !PlaytimeIdentity.IsSessionId(existing.TrackingId)
+                || !double.IsFinite(existing.DurationSeconds) || existing.DurationSeconds <= 0
+                || existing.StartedAt < DateTimeOffset.UnixEpoch)
+                continue;
+            var duration = existing.DurationSeconds * TimeSpan.TicksPerSecond;
+            if (!double.IsFinite(duration) || duration > DateTimeOffset.MaxValue.UtcTicks - existing.StartedAt.UtcTicks)
+                continue;
+            var existingEnd = existing.StartedAt.UtcTicks + (long)Math.Round(duration, MidpointRounding.AwayFromZero);
+            if (existing.StartedAt.UtcTicks < recoveredEnd && existingEnd > recoveredStart)
+                return true;
+        }
+        return false;
     }
 
     private static Dictionary<long, List<GamePlaySession>> IndexSessions(IEnumerable<GamePlaySession> sessions)

@@ -253,14 +253,27 @@ public sealed class JsonConfigurationStore : IConfigurationStore
         }
     }
 
-    public async Task SaveAsync(LauncherConfiguration configuration, CancellationToken cancellationToken = default)
+    public Task SaveAsync(LauncherConfiguration configuration, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        if (cancellationToken.IsCancellationRequested) return Task.FromCanceled(cancellationToken);
+        if (_writesBlocked) return Task.FromException(CreateReadException());
+        // Capture on the caller's thread before yielding. Queued saves must never enumerate a
+        // mutable UI model later or incorporate edits made after this save was requested.
+        NormalizeLaunchTargets(configuration);
+        var snapshot = JsonSerializer.Deserialize<LauncherConfiguration>(
+            JsonSerializer.SerializeToUtf8Bytes(configuration, SerializerOptions), SerializerOptions)
+            ?? throw new JsonException("Configuration root must be an object.");
+        return SaveSnapshotAsync(snapshot, cancellationToken);
+    }
+
+    private async Task SaveSnapshotAsync(LauncherConfiguration snapshot, CancellationToken cancellationToken)
+    {
         await _saveGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (_writesBlocked) throw CreateReadException();
-            await SaveCoreAsync(configuration, cancellationToken).ConfigureAwait(false);
+            await SaveCoreAsync(snapshot, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

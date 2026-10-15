@@ -50,6 +50,7 @@ public sealed class PlayActivityPage : Page
         _body.Children.Add(new Border { Child = panel, Padding = new(16), CornerRadius = new(14),
             Background = Brush("HeroGlassBrush"), BorderBrush = Brush("GlassEdgeBrush"), BorderThickness = new(1) });
         _body.Children.Add(_legacy);
+        _body.Children.Add(new TextBlock { Text = "本地游戏按实际进程计时；退出启动器后仍记录至该游戏结束。云游戏及模拟器不计时。", FontSize = 12, TextWrapping = TextWrapping.Wrap });
         Content = new ScrollViewer { Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         _period.SelectionChanged += (_, _) => { if (!_setting) Render(); };
         SizeChanged += (_, _) => Render();
@@ -76,8 +77,8 @@ public sealed class PlayActivityPage : Page
         _title.Text = game.DisplayName + " · 游玩记录";
         _summary.Text = $"这段时间 {Duration(activity.Seconds)} · 游玩 {activity.ActiveDays} 天 · 最长连续 {activity.LongestStreak} 天 · 总计 {Duration(game.State.TotalPlaySeconds)}";
         _legacy.Text = activity.UnmappedSeconds > 1
-            ? $"旧版累计时长中有 {Duration(activity.UnmappedSeconds)} 没有对应的逐次记录，仍计入总时长，无法分配到热力表。颜色按每天已结束会话的实际时长显示。"
-            : "颜色按每天已结束会话的实际时长显示；跨午夜的会话按本地日期分摊。点击格子查看当天记录。";
+            ? $"旧版累计时长中有 {Duration(activity.UnmappedSeconds)} 没有对应的逐次记录，仍计入总时长，无法分配到热力表。颜色按每天已确认的游戏进程时长显示。"
+            : "颜色按每天已确认的游戏进程时长显示；跨午夜的会话按本地日期分摊。点击格子查看当天记录。";
         _calendar.Children.Clear(); _calendar.RowDefinitions.Clear(); _calendar.ColumnDefinitions.Clear();
         var monday = from.AddDays(-(((int)from.DayOfWeek + 6) % 7));
         var weeks = (through.DayNumber - monday.DayNumber) / 7 + 1;
