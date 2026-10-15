@@ -11,6 +11,46 @@ public sealed class EndfieldWorkflowTests
 {
     private static string Tool => Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("DOTNET_CLI_HOME"))!, ".artifacts", "vendor", "7zip-26.03", "extra", "x64", "7za.exe");
     [Fact]
+    public async Task InjectedRunningGameGuardStopsSyncBeforeMetadataHttpOrDirectoryWrites()
+    {
+        var root = NewRoot();
+        try
+        {
+            var game = Path.Combine(root, "not-created-game");
+            var data = Path.Combine(root, "not-created-data");
+            var provider = new Provider(new EndfieldPackage(EndfieldChannel.Official, "1.1.0",
+                new Uri("https://beyond.hycdn.cn/files"), new string('1', 32),
+                [Entry("Endfield.exe", [1])], null, null));
+            var httpCalls = 0;
+            using var http = new HttpClient(new Handler(_ =>
+            {
+                httpCalls++;
+                throw new InvalidOperationException("The guard must run before HTTP.");
+            }));
+            var blocked = new InvalidOperationException("fixture game is running");
+            var guardCalls = 0;
+            var service = new EndfieldMaintenanceService(provider, new EndfieldDownloadService(http, data),
+                new EndfieldSharingService(static () => { }), data, null, () =>
+                {
+                    guardCalls++;
+                    throw blocked;
+                });
+
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SyncAsync(
+                new EndfieldInstallation { Channel = EndfieldChannel.Official, InstallRoot = game, InstalledVersion = "1.0.0" },
+                null, false));
+
+            Assert.Same(blocked, error);
+            Assert.Equal(1, guardCalls);
+            Assert.Equal(0, provider.PackageRequests);
+            Assert.Equal(0, httpCalls);
+            Assert.False(Directory.Exists(game));
+            Assert.False(Directory.Exists(data));
+        }
+        finally { DeleteRoot(root); }
+    }
+
+    [Fact]
     public async Task PreloadThenFormalUpdateReusesIdenticalContentAfterUrlChanges()
     {
         var root=NewRoot();
@@ -25,7 +65,7 @@ public sealed class EndfieldWorkflowTests
             var patch=new EndfieldPatch("1.1.0",[new(new Uri("https://beyond.hycdn.cn/patch.zip?auth_key=preload"),hash,zip.Length)],hash,zip.Length);
             var provider=new Provider(new EndfieldPackage(install.Channel,"1.1.0",new Uri("https://beyond.hycdn.cn/files"),new string('1',32),[Entry("Endfield.exe",target)],null,patch));
             using var http=new HttpClient(new Handler(_=>{calls++;return Ok(zip);}));
-            var service=new EndfieldMaintenanceService(provider,new(http,root),new(),root,new(Tool));
+            var service=new EndfieldMaintenanceService(provider,new(http,root),new(static()=>{}),root,new(Tool),static()=>{});
             await service.PreloadAsync(install,patch);
             Assert.Equal("1.0.0",install.InstalledVersion);
             Assert.Equal("old",await File.ReadAllTextAsync(Path.Combine(install.InstallRoot,"Endfield.exe")));
@@ -71,7 +111,7 @@ public sealed class EndfieldWorkflowTests
             var provider=new Provider(new(EndfieldChannel.Official,"1.0.0",new Uri("https://beyond.hycdn.cn/files"),new string('1',32),[Entry("Endfield.exe",exe),Entry(relative,good)],null,null));
             var calls=0;using var http=new HttpClient(new Handler(_=>{calls++;return Ok(good);}));
             var install=new EndfieldInstallation{Channel=EndfieldChannel.Official,InstallRoot=game,InstalledVersion="1.0.0"};
-            var service=new EndfieldMaintenanceService(provider,new(http,root),new(),root);
+            var service=new EndfieldMaintenanceService(provider,new(http,root),new(static()=>{}),root,null,static()=>{});
             var (_,plan)=await service.PlanAsync(install);Assert.Single(plan.Corrupt);Assert.Equal(good.Length,plan.DownloadBytes);
             await service.SyncAsync(install,null,true);
             Assert.Equal(1,calls);Assert.Equal(good,await File.ReadAllBytesAsync(first));Assert.Equal(old,await File.ReadAllBytesAsync(second));Assert.Equal("keep me",await File.ReadAllTextAsync(Path.Combine(game,"personal-note.txt")));
@@ -87,10 +127,10 @@ public sealed class EndfieldWorkflowTests
             var payload=Encoding.UTF8.GetBytes("new executable");var provider=new Provider(new(EndfieldChannel.Bilibili,"2.0.0",new Uri("https://beyond.hycdn.cn/files"),new string('1',32),[Entry("Endfield.exe",payload)],null,null));
             var install=new EndfieldInstallation{Channel=EndfieldChannel.Bilibili,InstallRoot=Path.Combine(root,"game"),InstalledVersion="1.0.0",MaintenanceInProgress=true};
             using var failing=new HttpClient(new Handler(_=>throw new OperationCanceledException()));
-            await Assert.ThrowsAsync<OperationCanceledException>(()=>new EndfieldMaintenanceService(provider,new(failing,root),new(),root).SyncAsync(install,null,false));
+            await Assert.ThrowsAsync<OperationCanceledException>(()=>new EndfieldMaintenanceService(provider,new(failing,root),new(static()=>{}),root,null,static()=>{}).SyncAsync(install,null,false));
             Assert.Equal("1.0.0",install.InstalledVersion);Assert.True(File.Exists(Path.Combine(install.InstallRoot,".aster-maintenance.json")));
             using var good=new HttpClient(new Handler(_=>Ok(payload)));
-            await new EndfieldMaintenanceService(provider,new(good,root),new(),root).SyncAsync(install,null,false);
+            await new EndfieldMaintenanceService(provider,new(good,root),new(static()=>{}),root,null,static()=>{}).SyncAsync(install,null,false);
             Assert.Equal("2.0.0",install.InstalledVersion);Assert.False(install.MaintenanceInProgress);
         }
         finally { DeleteRoot(root); }
@@ -103,7 +143,7 @@ public sealed class EndfieldWorkflowTests
         {
             var bytes=Encoding.UTF8.GetBytes("new game");var provider=new Provider(new(EndfieldChannel.Official,"1.1.0",new Uri("https://beyond.hycdn.cn/files"),new string('1',32),[Entry("Endfield.exe",bytes)],null,null)){Latest="1.2.0"};
             using var http=new HttpClient(new Handler(_=>Ok(bytes)));var install=new EndfieldInstallation{Channel=EndfieldChannel.Official,InstallRoot=Path.Combine(root,"game"),InstalledVersion="1.0.0",MaintenanceInProgress=true};
-            await Assert.ThrowsAsync<InvalidOperationException>(()=>new EndfieldMaintenanceService(provider,new(http,root),new(),root).SyncAsync(install,null,false));
+            await Assert.ThrowsAsync<InvalidOperationException>(()=>new EndfieldMaintenanceService(provider,new(http,root),new(static()=>{}),root,null,static()=>{}).SyncAsync(install,null,false));
             Assert.Equal("1.0.0",install.InstalledVersion);Assert.True(install.MaintenanceInProgress);Assert.True(File.Exists(Path.Combine(install.InstallRoot,".aster-maintenance.json")));
         }
         finally { DeleteRoot(root); }
@@ -122,7 +162,7 @@ public sealed class EndfieldWorkflowTests
             await File.WriteAllTextAsync(Path.Combine(game,"Endfield.exe"),"tampered");Assert.Null(await EndfieldInstallationInfo.ReadAsync(game));
             var provider=new Provider(new(EndfieldChannel.Official,"2.0.0",new Uri("https://beyond.hycdn.cn/files"),new string('1',32),[Entry("Endfield.exe",[1])],null,null));
             using var http=new HttpClient(new Handler(_=>throw new InvalidOperationException("No download expected")));
-            await Assert.ThrowsAsync<InvalidOperationException>(()=>new EndfieldMaintenanceService(provider,new(http,root),new(),root).SyncAsync(new(){Channel=EndfieldChannel.Official,InstallRoot=game,InstalledVersion="1.0.0"},null,true));
+            await Assert.ThrowsAsync<InvalidOperationException>(()=>new EndfieldMaintenanceService(provider,new(http,root),new(static()=>{}),root,null,static()=>{}).SyncAsync(new(){Channel=EndfieldChannel.Official,InstallRoot=game,InstalledVersion="1.0.0"},null,true));
         }
         finally { DeleteRoot(root); }
     }
@@ -192,8 +232,13 @@ public sealed class EndfieldWorkflowTests
     private sealed class Provider(EndfieldPackage package):IEndfieldDistributionProvider
     {
         public EndfieldPackage Package=package;public string? Latest;
+        public int PackageRequests;
         public Task<string> GetLatestVersionAsync(EndfieldChannel channel,string? installedVersion,CancellationToken cancellationToken=default)=>Task.FromResult(Latest??Package.Version);
-        public Task<EndfieldPackage> GetPackageAsync(EndfieldChannel channel,string? installedVersion,CancellationToken cancellationToken=default)=>Task.FromResult(Package);
+        public Task<EndfieldPackage> GetPackageAsync(EndfieldChannel channel,string? installedVersion,CancellationToken cancellationToken=default)
+        {
+            PackageRequests++;
+            return Task.FromResult(Package);
+        }
     }
     private sealed class Handler(Func<HttpRequestMessage,HttpResponseMessage> handler):HttpMessageHandler
     {

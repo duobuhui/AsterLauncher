@@ -102,7 +102,7 @@ public static class ResourceScheduleProjector
         return new()
         {
             Today = today, Revision = catalog.Revision, PublishedAt = catalog.PublishedAt,
-            Entries = entries.OrderBy(e => e.StartDate).ThenBy(e => e.StartsAt).ThenBy(e => e.Kind).ThenBy(e => e.Key, StringComparer.Ordinal).ToArray(),
+            Entries = ResourceCalendarOrdering.Order(entries),
             Codes = catalog.Codes.Where(c => c.GameId == gameId && RegionMatches(c.Region, region) && PlatformMatches(c.Platforms, platform))
                 .Select(c => ProjectCode(c, now)).OrderBy(c => c.IsExpired).ThenBy(c => c.IsUpcoming).ThenBy(c => c.Code, StringComparer.Ordinal).ToArray()
         };

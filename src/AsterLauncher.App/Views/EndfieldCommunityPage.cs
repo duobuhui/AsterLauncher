@@ -193,8 +193,7 @@ public sealed class EndfieldCommunityPage : Page
         Grid.SetColumn(axis, 1); header.Children.Add(axis);
         _timeline.Children.Add(header);
 
-        var entries = _viewModel.MonthEntries.OrderBy(e => e.Kind == "pool" ? 0 : 1)
-            .ThenBy(e => e.IsExpired).ThenBy(e => e.StartDate).ToArray();
+        var entries = _viewModel.MonthEntries.ToArray();
         if (entries.Length == 0) { _timeline.Children.Add(Caption("本月暂无已公布的安排。")); return; }
         foreach (var entry in entries)
         {

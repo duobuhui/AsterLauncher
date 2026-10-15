@@ -83,11 +83,17 @@ The Endfield pool cards use original XAML, a project-authored fallback texture, 
 
 | Source | Observed fact | Rights and use |
 | --- | --- | --- |
-| [Hypergryph public launcher endpoint](https://launcher.hypergryph.com/api/proxy/batch_proxy) | Channel/sub-channel 1/1 and 2/2 metadata; pkg, patch and pre_patch fields; signed CDN locations | Publisher service data. AsterLauncher sends public metadata requests and does not redistribute response bodies, signed URLs or game packages. |
+| [Hypergryph public launcher endpoint](https://launcher.hypergryph.com/api/proxy/batch_proxy) | Channel/sub-channel 1/1 and 2/2 metadata; formal patch target inherited from the enclosing version when absent; separate future pre_patch target; V2 mapping, hashes and signed CDN locations | Publisher service data. AsterLauncher sends public metadata requests and does not redistribute response bodies, signed URLs, archive passwords or game packages. |
 | [Hi3Helper Hypergryph API structures](https://github.com/misaka10843/Hi3Helper.Plugin.Hypergryph/blob/main/Hi3Helper.Hypergryph.Core/Management/Api/HgApiStructs.cs), [crypto research](https://github.com/misaka10843/Hi3Helper.Plugin.Hypergryph/blob/main/Hi3Helper.Hypergryph.Core/Utils/HgCrypto.cs), [installer research](https://github.com/misaka10843/Hi3Helper.Plugin.Hypergryph/blob/main/Hi3Helper.Hypergryph.Core/Management/HgGameInstaller.Install.cs) | Public response field shapes and encrypted game_files format were checked as protocol references | No source copied or linked; the new provider, decoder, downloader and transaction code are independently written. Recheck upstream revision and license before any future code reuse. |
 | [Microsoft CreateHardLinkW](https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-createhardlinkw) and [GetFileInformationByHandle](https://learn.microsoft.com/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle) | NTFS hard-link creation and volume/file ID verification | Windows API documentation; original P/Invoke declarations and sharing rules in AsterLauncher. |
 
 The channel badges use the existing packaged Endfield icon plus original text/glyph overlays. This work adds no copied launcher UI, third-party icon, or new publisher media.
+
+### HDiffPatch format references
+
+[HDiffPatch](https://github.com/sisong/HDiffPatch), by housisong / HouSisong, is MIT licensed ([upstream license](https://github.com/sisong/HDiffPatch/blob/master/LICENSE), Copyright (c) 2012-2025 housisong). Its primary [patch API](https://github.com/sisong/HDiffPatch/blob/master/libHDiffPatch/HPatch/patch.h) and [format reader](https://github.com/sisong/HDiffPatch/blob/master/libHDiffPatch/HPatch/patch.c) were consulted to establish HDIFFSF20 header, cover-delta and byte-RLE semantics. AsterLauncher independently implements a bounded, streaming decoder for the uncompressed format; no upstream source was copied into the project, and no hpatchz/native patch binary or additional decompression dependency is distributed.
+
+The public [Endfield V2 protocol notes](https://github.com/daydreamer-json/ak-endfield-api-archive/blob/main/MEMO.md) and archived publisher response metadata were factual references for VFS entry mapping and locating a tiny old source file on the publisher CDN. Mapping, old-file hashes and current target hashes were checked against public publisher data. No archival or launcher implementation was copied or bundled. Research probes and downloaded game samples remain outside the source/package under ignored `.artifacts`. These software licenses do not license game archives, artwork or other publisher media.
 
 ## Node.js v24.19.0 (Endfield public HTTPS transport)
 

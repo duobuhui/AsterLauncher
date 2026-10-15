@@ -176,6 +176,52 @@ public sealed class ResourceCalendarTests
         Assert.Equal("event", guideReward.Kind);
         Assert.Empty(catalog.Codes);
     }
+    [Fact]
+    public void PublishedOctober15FeedUsesAnIndependentFormalSiBanner()
+    {
+        var catalog = ResourceUpdateService.Parse(File.ReadAllBytes(Path.Combine(Fixture, "catalog.json")));
+        Assert.True(catalog.Revision >= 2026101501);
+        var si = Assert.Single(catalog.Pools, item => item.Key == "万物更新");
+        Assert.Equal("https://endfield.hypergryph.com/news/8548", si.Source);
+        var banner = Assert.Single(catalog.Images, item => item.Kind == "banner" && item.Key == si.Key);
+        Assert.Equal("https://web.hycdn.cn/upload/image/20261014/4aecb8b0646268c07144fc5a0acc42bf.jpg", banner.Source);
+        Assert.Equal(506443, banner.Size);
+        Assert.Equal("d25f39e9ce6cf375eb1ec7eeae6e6ad3eaaa09d809a1bb6b341f6282d2253c35", banner.Sha256);
+        var bytes = File.ReadAllBytes(Path.Combine(Fixture, banner.File));
+        Assert.Equal(banner.Size, bytes.LongLength);
+        Assert.Equal(banner.Sha256, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+        var minghe = Assert.Single(catalog.Images, item => item.Kind == "banner" && item.Key == "烟火邀星河");
+        Assert.Equal("images/endfield/starry-flow.png", minghe.File);
+        Assert.Contains("/_version_briefing/v1d6/", minghe.Source);
+    }
+
+    [Fact]
+    public void PublishedOctober15FeedUsesFinalNoticeForNewlyConfirmedCalendarFacts()
+    {
+        var catalog = ResourceUpdateService.Parse(File.ReadAllBytes(Path.Combine(Fixture, "catalog.json")));
+        const string source = "https://endfield.hypergryph.com/news/6094";
+        var challenge = Assert.Single(catalog.Announcements,
+            item => item.Key == "endfield-feng-bei-liu-ming-mo-lin-202610");
+        Assert.Equal("丰碑留名·魇林", challenge.Title);
+        Assert.Equal(source, challenge.Url);
+        var spaces = Assert.Single(catalog.Announcements,
+            item => item.Key == "endfield-mi-jing-xing-zhe-hua-wai-second-202611");
+        Assert.Equal(DateTimeOffset.Parse("2026-11-19T04:00:00+08:00"), spaces.StartsAt);
+        Assert.Null(spaces.EndsAt);
+        Assert.Null(spaces.EndsOn);
+        Assert.Equal(source, spaces.Url);
+        var compensation = Assert.Single(catalog.Announcements,
+            item => item.Key == "endfield-danqingdu-maintenance-compensation-20261015");
+        Assert.Equal(new DateOnly(2026, 10, 15), compensation.StartsOn);
+        Assert.Equal(new DateOnly(2026, 11, 26), compensation.EndsOn);
+        Assert.Null(compensation.StartsAt);
+        Assert.Null(compensation.EndsAt);
+        Assert.Contains("两封", compensation.Description);
+        Assert.Contains("900", compensation.Description);
+        Assert.Equal(source, compensation.Url);
+        Assert.Empty(catalog.Codes);
+    }
+
     private sealed class FeedHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)

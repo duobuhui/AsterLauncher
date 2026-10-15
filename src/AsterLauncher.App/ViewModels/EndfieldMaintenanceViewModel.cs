@@ -71,7 +71,11 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
     public string RemoteVersion => Current.RemoteVersion;
     public string StageText => Current.Stage;
     public string PlanText => Current.Plan;
-    public string PreloadText => Current.Preload;
+    public string PreloadText => Current.Preload == "尚未检查"
+        && _launcher.SelectedEndfieldInstallation is { } installation
+        && EndfieldPreloadStatusPolicy.HasCompletedRecord(installation)
+            ? CompletedPreloadText(installation, "正式更新会重新核对并复用缓存")
+            : Current.Preload;
     public string SharingText => Current.Sharing;
     public double Progress => Current.Progress;
     public string SpeedText => Current.Speed;
@@ -114,7 +118,9 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             || _launcher.SelectedEndfieldInstallation?.MaintenanceInProgress == true);
 
     public bool HasSelectedChannel => Channel is EndfieldChannel.Official or EndfieldChannel.Bilibili;
-    public bool CanPreload => HasSelectedChannel && Current.Patch is not null && !Current.Busy;
+    public bool CanPreload => HasSelectedChannel && Current.Patch is { } patch && !Current.Busy
+        && _launcher.SelectedEndfieldInstallation is { } installation
+        && !EndfieldPreloadStatusPolicy.IsCompletedOffer(installation, patch);
     public bool CanRepair => HasSelectedChannel && !Current.Busy
         && !string.IsNullOrWhiteSpace(_launcher.SelectedEndfieldInstallation?.InstalledVersion);
     public bool CanSetRoot => HasSelectedChannel && !Current.Busy;
@@ -187,8 +193,8 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             state.RemoteVersion = package.Version;
             state.HasTrustedPlan = true;
             state.Plan = $"缺失 {plan.Missing.Count} · 损坏 {plan.Corrupt.Count} · 需下载 {FormatBytes(plan.DownloadBytes)} · 预留空间 {FormatBytes(plan.EstimatedRequiredFreeBytes)}";
-            state.Patch = package.PrePatch;
-            state.Preload = package.PrePatch is null ? "未开放" : $"可预下载至 {package.PrePatch.TargetVersion}";
+            ApplyPreloadOffer(channel, installation, package.PrePatch);
+            await _launcher.PersistEndfieldInstallationAsync();
             SetStage(channel, "检查完成");
             if (Channel == channel) Refresh();
         });
@@ -220,26 +226,22 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                     if (token.IsCancellationRequested) return;
                     var target = State(item.Channel);
                     target.Download = $"{FormatBytes(item.CompletedBytes)} / {FormatBytes(item.TotalBytes)}";
+                    UpdateNetworkSpeed(target, item);
                     target.StageKind = item.Stage;
                     target.Stage = $"{item.Message} · {item.CompletedFiles}/{item.TotalFiles}";
                     target.Progress = item.TotalBytes > 0
                         ? Math.Clamp(100d * item.CompletedBytes / item.TotalBytes, 0, 100) : 0;
-                    {
-                        var now = DateTimeOffset.UtcNow;
-                        var elapsed = (now - target.LastSpeedAt).TotalSeconds;
-                        if (elapsed >= 1)
-                        {
-                            target.Speed = $"{FormatBytes((long)(Math.Max(0, item.CompletedBytes - target.LastSpeedBytes) / elapsed))}/s";
-                            target.LastSpeedAt = now;
-                            target.LastSpeedBytes = item.CompletedBytes;
-                        }
-                        if (Channel == item.Channel) Refresh();
-                    }
+                    if (Channel == item.Channel) Refresh();
                 }, item => item.Stage.ToString());
                 await Task.Run(() => _service.SyncAsync(installation, otherChannel, repairOnly, report, token), token);
                 await _launcher.PersistEndfieldInstallationAsync();
                 state.Stage = "文件校验完成";
                 state.HasUpdate = false;
+                if (!EndfieldPreloadStatusPolicy.HasCompletedRecord(installation))
+                {
+                    state.Patch = null;
+                    state.Preload = "当前版本已校验；可检查新的预下载";
+                }
                 if (Channel == channel) Refresh();
             });
         }
@@ -259,15 +261,15 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             try
             {
                 var patch = await Task.Run(() => _service.CheckPreloadAsync(installation, token), token);
-                State(channel).Patch = patch;
-                State(channel).Preload = patch is null ? "未开放" : $"可预下载至 {patch.TargetVersion}";
-                installation.PreloadState = patch is null ? EndfieldPreloadState.NotOpen : EndfieldPreloadState.Available;
+                ApplyPreloadOffer(channel, installation, patch);
             }
             catch
             {
                 State(channel).Patch = null;
-                State(channel).Preload = "检查失败；无法确认当前渠道的预下载是否开放";
-                installation.PreloadState = EndfieldPreloadState.CheckFailed;
+                EndfieldPreloadStatusPolicy.ApplyCheckFailure(installation);
+                State(channel).Preload = EndfieldPreloadStatusPolicy.HasCompletedRecord(installation)
+                    ? CompletedPreloadText(installation, "检查失败；此前的完成记录保留，正式更新会重新核对缓存")
+                    : "检查失败；无法确认当前渠道的预下载是否开放";
                 await _launcher.PersistEndfieldInstallationAsync();
                 if (Channel == channel) Refresh();
                 throw;
@@ -279,9 +281,8 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
 
     public async Task PreloadAsync()
     {
-        if (!HasSelectedChannel || Current.Patch is null || Current.Busy) return;
+        if (!CanPreload || Current.Patch is not { } patch) return;
         var channel = Channel;
-        var patch = Current.Patch;
         State(channel).Preloading = true;
         try { await RunBusyAsync(channel, async token =>
         {
@@ -294,9 +295,8 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
                 if(token.IsCancellationRequested) return;
                 var state = State(item.Channel);
                 state.Download = $"{FormatBytes(item.CompletedBytes)} / {FormatBytes(item.TotalBytes)}";
-                state.StageKind=item.Stage;
-                var now=DateTimeOffset.UtcNow;var elapsed=(now-state.LastSpeedAt).TotalSeconds;
-                if(elapsed>=1){state.Speed=$"{FormatBytes((long)(Math.Max(0,item.CompletedBytes-state.LastSpeedBytes)/elapsed))}/s";state.LastSpeedAt=now;state.LastSpeedBytes=item.CompletedBytes;}
+                UpdateNetworkSpeed(state, item);
+                state.StageKind = item.Stage;
                 state.Preload = $"{item.Message} · {item.CompletedFiles}/{item.TotalFiles}";
                 state.Progress = item.TotalBytes > 0 ? 100d * item.CompletedBytes / item.TotalBytes : 0;
                 if (Channel == item.Channel) Refresh();
@@ -434,6 +434,7 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
             SetStage(channel, exception switch
             {
                 HttpRequestException => "无法连接官方资源服务器；已下载并校验的缓存会保留。请检查网络后重试。",
+                EndfieldIncrementalUpdateException => "增量补丁无法安全应用；缓存已保留，已停止自动完整文件下载。请核对源文件或官方补丁。",
                 InvalidDataException => "文件校验失败，安装尚未完成。重新检查后可继续下载。",
                 IOException => "文件读写失败；请检查目标卷剩余空间、目录权限和占用情况，然后重试。",
                 _ => $"操作未完成（{exception.GetType().Name}）；请查看本地日志了解详情。"
@@ -496,6 +497,47 @@ public sealed class EndfieldMaintenanceViewModel : ObservableObject
         OnPropertyChanged(nameof(PrimaryActionGlyph));
         OnPropertyChanged(nameof(PrimaryActionText));
         OnPropertyChanged(nameof(PrimaryStartsMaintenance));
+    }
+
+    private void ApplyPreloadOffer(EndfieldChannel channel, EndfieldInstallation installation, EndfieldPatch? patch)
+    {
+        var state = State(channel);
+        state.Patch = patch;
+        EndfieldPreloadStatusPolicy.ApplyCheck(installation, patch);
+        state.Preload = !EndfieldPreloadStatusPolicy.HasCompletedRecord(installation)
+            ? patch is null ? "未开放" : $"可预下载至 {patch.TargetVersion}"
+            : patch is null
+                ? CompletedPreloadText(installation, "当前无新的预下载；正式更新会重新核对并复用缓存")
+                : EndfieldPreloadStatusPolicy.IsCompletedOffer(installation, patch)
+                    ? CompletedPreloadText(installation, "当前内容已下载；正式更新会重新核对并复用缓存")
+                    : CompletedPreloadText(installation, $"另有预下载至 {patch.TargetVersion}，需重新核对内容");
+    }
+
+    private static string CompletedPreloadText(EndfieldInstallation installation, string detail) =>
+        $"此前已完成 {installation.PreloadTargetVersion} 预下载；{detail}";
+
+    private static void UpdateNetworkSpeed(ChannelState state, EndfieldMaintenanceProgress item)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (item.Stage != EndfieldMaintenanceStage.Downloading || item.NetworkBytes is not { } networkBytes)
+        {
+            state.Speed = "";
+            state.LastSpeedAt = now;
+            state.LastSpeedBytes = item.NetworkBytes ?? 0;
+            return;
+        }
+        if (state.StageKind != EndfieldMaintenanceStage.Downloading || networkBytes < state.LastSpeedBytes)
+        {
+            state.Speed = "";
+            state.LastSpeedAt = now;
+            state.LastSpeedBytes = networkBytes;
+            return;
+        }
+        var elapsed = (now - state.LastSpeedAt).TotalSeconds;
+        if (elapsed < 1) return;
+        state.Speed = $"{FormatBytes((long)((networkBytes - state.LastSpeedBytes) / elapsed))}/s";
+        state.LastSpeedAt = now;
+        state.LastSpeedBytes = networkBytes;
     }
 
     private static string FormatBytes(long bytes) =>

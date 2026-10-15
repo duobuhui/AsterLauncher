@@ -40,13 +40,16 @@ public sealed class EndfieldDistributionProvider : IEndfieldDistributionProvider
         var encrypted = await _http.GetByteArrayAsync(manifestUri, cancellationToken);
         var files = EndfieldManifestDecoder.Decode(encrypted, manifestMd5);
 
-        EndfieldPatch? patch = ParsePatch(fullResponse, "patch");
+        EndfieldPatch? patch = ParsePatch(fullResponse, "patch", version);
         EndfieldPatch? preload = ParsePatch(fullResponse, "pre_patch");
         if (!string.IsNullOrWhiteSpace(installedVersion))
         {
             using var update = await GetLatestAsync(channel, installedVersion, cancellationToken);
             var updateResponse = FindResponse(update.RootElement);
-            patch = ParsePatch(updateResponse, "patch");
+            var updateVersion = RequiredString(updateResponse, "version");
+            if (!string.Equals(version, updateVersion, StringComparison.Ordinal))
+                throw new InvalidDataException("Publisher target version changed while reading update metadata. Retry the update check.");
+            patch = ParsePatch(updateResponse, "patch", updateVersion);
             preload = ParsePatch(updateResponse, "pre_patch");
         }
 
@@ -98,11 +101,19 @@ public sealed class EndfieldDistributionProvider : IEndfieldDistributionProvider
         throw new InvalidDataException("Publisher response has no get_latest_game_rsp.");
     }
 
-    private static EndfieldPatch? ParsePatch(JsonElement response, string name)
+    private static EndfieldPatch? ParsePatch(JsonElement response, string name, string? formalTargetVersion = null)
     {
         if (!response.TryGetProperty(name, out var raw) || raw.ValueKind != JsonValueKind.Object)
             return null;
         var version = OptionalString(raw, "version");
+        // Formal patches inherit the response target in the publisher's current schema.
+        // A future pre_patch has its own target and must never inherit the current release.
+        if (name == "patch")
+        {
+            if (string.IsNullOrWhiteSpace(version)) version = formalTargetVersion;
+            else if (!string.Equals(version, formalTargetVersion, StringComparison.Ordinal))
+                throw new InvalidDataException("Publisher patch target does not match its release version.");
+        }
         var packs = new List<EndfieldRemoteObject>();
         if (raw.TryGetProperty("patches", out var list) && list.ValueKind == JsonValueKind.Array)
         {
@@ -119,7 +130,7 @@ public sealed class EndfieldDistributionProvider : IEndfieldDistributionProvider
         return new EndfieldPatch(version, packs,
             OptionalMd5(raw, "md5"), OptionalLong(raw, "package_size"), OptionalString(raw, "cd_key"),
             OptionalString(raw, "v2_patch_info_url") is { Length: > 0 } info ? TrustedUri(info) : null,
-            OptionalMd5(raw, "v2_patch_info_md5"));
+            OptionalMd5(raw, "v2_patch_info_md5"), OptionalLong(raw, "v2_patch_info_size"));
     }
 
     private static EndfieldRemoteObject ParsePack(JsonElement raw) =>

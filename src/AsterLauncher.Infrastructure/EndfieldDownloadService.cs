@@ -35,6 +35,22 @@ public sealed class EndfieldDownloadService
         return EndfieldDistributionProvider.TrustedUri(builder.Uri.AbsoluteUri);
     }
 
+    /// <summary>Reads a verified complete cache object without starting a request or changing partial downloads.</summary>
+    public async Task<string?> TryGetCachedAsync(string md5, long size, CancellationToken cancellationToken = default)
+    {
+        if (md5.Length != 32 || !md5.All(Uri.IsHexDigit) || size < 0)
+            throw new ArgumentException("Invalid content identity.");
+        var key = DownloadTaskCache.ContentKey(md5, size);
+        var gate = _objectLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var path = SafeGamePath.Resolve(_cacheRoot, key);
+            return await MatchesAsync(path, size, md5, cancellationToken) ? path : null;
+        }
+        finally { gate.Release(); }
+    }
+
     public async Task<string> DownloadAsync(Uri initialUri, string md5, long size,
         Func<CancellationToken, Task<Uri>>? refreshUri = null,
         IProgress<long>? byteProgress = null, CancellationToken cancellationToken = default,

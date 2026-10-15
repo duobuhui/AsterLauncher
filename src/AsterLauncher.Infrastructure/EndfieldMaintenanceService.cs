@@ -16,16 +16,23 @@ public sealed class EndfieldMaintenanceService
     private readonly EndfieldSharingService _sharing;
     private readonly string _dataRoot;
     private readonly EndfieldArchiveService? _archives;
+    private readonly Action _ensureNotRunning;
 
     public EndfieldMaintenanceService(IEndfieldDistributionProvider provider,
         EndfieldDownloadService downloads, EndfieldSharingService sharing, string dataRoot,
         EndfieldArchiveService? archives = null)
+        : this(provider, downloads, sharing, dataRoot, archives, EnsureNotRunning) { }
+
+    internal EndfieldMaintenanceService(IEndfieldDistributionProvider provider,
+        EndfieldDownloadService downloads, EndfieldSharingService sharing, string dataRoot,
+        EndfieldArchiveService? archives, Action ensureNotRunning)
     {
         _provider = provider;
         _downloads = downloads;
         _sharing = sharing;
         _dataRoot = dataRoot;
         _archives = archives;
+        _ensureNotRunning = ensureNotRunning ?? throw new ArgumentNullException(nameof(ensureNotRunning));
     }
 
     public Task<string> GetLatestVersionAsync(
@@ -64,12 +71,13 @@ public sealed class EndfieldMaintenanceService
         bool repairOnly, IProgress<EndfieldMaintenanceProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        _ensureNotRunning();
         using var operation = LocalStorageGate.BeginOperation(_dataRoot);
         var root = RequireRoot(installation);
         var lockRoots = otherChannel?.InstallRoot is { Length: > 0 } otherRoot
             ? new[] { root, otherRoot } : new[] { root };
         await using var locks = await AcquireAsync(lockRoots, cancellationToken);
-        EnsureNotRunning();
+        _ensureNotRunning();
 
         Directory.CreateDirectory(root);
         var journal = SafeGamePath.Resolve(root, ".aster-maintenance.json");
@@ -83,6 +91,7 @@ public sealed class EndfieldMaintenanceService
         long bytes = 0;
         var completedFiles = 0;
         long completedBytes = 0;
+        var traffic = new TransferCounter();
         Report(EndfieldMaintenanceStage.Checking, "正在读取官方完整清单");
         var (package, plan) = await PlanAsync(installation, cancellationToken);
         if (repairOnly && !string.Equals(installation.InstalledVersion, package.Version, StringComparison.Ordinal))
@@ -118,7 +127,10 @@ public sealed class EndfieldMaintenanceService
         var drive = new DriveInfo(Path.GetPathRoot(root)!);
         var cacheDrive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(_dataRoot))!);
         var patchBytes = repairOnly ? 0 : package.Patch?.Packs.Sum(p => p.Size) ?? 0;
-        var cacheRequired = checked(bytes + patchBytes);
+        var useV2 = !repairOnly && package.Patch is { V2PatchInfoUri: not null } v2
+            && v2.TargetVersion == package.Version && !string.IsNullOrWhiteSpace(installation.InstalledVersion);
+        var metadataBytes = useV2 ? package.Patch!.V2PatchInfoSize ?? 0 : 0;
+        var cacheRequired = checked((useV2 ? 0 : bytes) + patchBytes + metadataBytes);
         await new DownloadTaskCache(_dataRoot).TrackAsync(TaskKey(installation,false),
             defects.Select(f=>DownloadTaskCache.ContentKey(f.Md5,f.Size))
                 .Concat(repairOnly ? [] : package.Patch?.Packs.Select(p=>DownloadTaskCache.ContentKey(p.Md5,p.Size)) ?? []),cancellationToken);
@@ -126,20 +138,60 @@ public sealed class EndfieldMaintenanceService
             + (patchBytes > 0 ? bytes + patchBytes : 0));
         var sameVolume = drive.Name.Equals(cacheDrive.Name, StringComparison.OrdinalIgnoreCase);
         var required = checked(targetRequired + (sameVolume ? cacheRequired : 0));
-        if (drive.AvailableFreeSpace < required || (!sameVolume && cacheDrive.AvailableFreeSpace < cacheRequired))
-            throw new IOException($"安装或缓存卷空间不足：目标卷预计需要 {required:N0} 字节，缓存需 {cacheRequired:N0} 字节。");
+
         var cached = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var patchStage = SafeGamePath.Resolve(root, ".aster-patch-" + Guid.NewGuid().ToString("N"));
         try
         {
-        if (!repairOnly && package.Patch is { } patch && patch.TargetVersion == package.Version
-            && !string.IsNullOrEmpty(installation.InstalledVersion) && _archives is not null)
+        Report(EndfieldMaintenanceStage.Verifying, "正在核验已下载缓存");
+        foreach (var file in defects)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await _downloads.TryGetCachedAsync(file.Md5, file.Size, cancellationToken) is { } complete)
+                cached[file.Path] = complete;
+        }
+        var patchDefects = defects.Where(file => !cached.ContainsKey(file.Path)).ToArray();
+        if (patchDefects.Length == 0)
+        {
+            cacheRequired = 0;
+            required = checked(bytes + defects.Select(file => file.Size).DefaultIfEmpty().Max());
+        }
+        else if (useV2)
+        {
+            cacheRequired = package.Patch!.Packs.Sum(pack => AdditionalCacheBytes(pack.Md5, pack.Size));
+            if (package.Patch.V2PatchInfoMd5 is { } infoMd5 && package.Patch.V2PatchInfoSize is > 0)
+                cacheRequired = checked(cacheRequired + AdditionalCacheBytes(infoMd5, package.Patch.V2PatchInfoSize.Value));
+            required = checked(targetRequired + (sameVolume ? cacheRequired : 0));
+        }
+        if (drive.AvailableFreeSpace < required || (!sameVolume && cacheDrive.AvailableFreeSpace < cacheRequired))
+            throw new IOException($"安装或缓存卷空间不足：目标卷预计需要 {required:N0} 字节，缓存需 {cacheRequired:N0} 字节。");
+        if (!repairOnly && patchDefects.Length > 0 && package.Patch is null
+            && installation.PreloadState == EndfieldPreloadState.Completed
+            && installation.PreloadSourceVersion == installation.InstalledVersion
+            && installation.PreloadTargetVersion == package.Version)
+            throw new EndfieldIncrementalUpdateException();
+        var attemptedPatch = false;
+        // Decide before staging whether a legacy ZIP is worth using. Once attempted, failure never authorizes full downloads.
+        if (patchDefects.Length > 0 && !repairOnly && package.Patch is { } patch && patch.TargetVersion == package.Version
+            && !string.IsNullOrEmpty(installation.InstalledVersion) && _archives is not null
+            && (patch.V2PatchInfoUri is not null || installation.PreloadState == EndfieldPreloadState.Completed
+                || patch.Packs.Sum(pack => pack.Size) <= patchDefects.Sum(file => file.Size)))
+        {
+            attemptedPatch = true;
             Report(EndfieldMaintenanceStage.Extracting, "正在核对正式补丁并复用已验证缓存");
-            foreach (var pair in await StagePatchAsync(installation, package, defects, patchStage, progress, cancellationToken))
-                cached[pair.Key] = pair.Value;
+            try
+            {
+                foreach (var pair in await StagePatchAsync(installation, package, patchDefects, patchStage, progress, traffic, cancellationToken))
+                    cached[pair.Key] = pair.Value;
+            }
+            catch (InvalidDataException exception)
+            {
+                throw new EndfieldIncrementalUpdateException(exception);
+            }
         }
         var remaining = defects.Where(f => !cached.ContainsKey(f.Path)).ToArray();
+        if ((useV2 || attemptedPatch) && remaining.Length > 0)
+            throw new EndfieldIncrementalUpdateException();
         bytes = remaining.Sum(f => f.Size);
         Report(EndfieldMaintenanceStage.Downloading, remaining.Length == 0 ? "无需下载"
             : package.Patch is null ? "正在下载缺失或损坏的文件" : "未复用的增量资源改用目标完整清单同步");
@@ -169,15 +221,15 @@ public sealed class EndfieldMaintenanceService
                         Interlocked.Exchange(ref lastProgressAt, now);
                         progress?.Report(new EndfieldMaintenanceProgress(installation.Channel,
                             EndfieldMaintenanceStage.Downloading, Volatile.Read(ref completedFiles), remaining.Length,
-                            transferBytes.Values.Sum(), bytes, "正在下载官方资源"));
-                    }), cancellationToken: token);
+                            transferBytes.Values.Sum(), bytes, "正在下载官方资源", traffic.Bytes));
+                    }), cancellationToken: token, transferredBytes: new InlineProgress<long>(traffic.Add));
                 transferBytes[file.Path] = file.Size;
                 cached[file.Path] = path;
                 var done = Interlocked.Increment(ref completedFiles);
                 var total = Interlocked.Add(ref completedBytes, file.Size);
                 progress?.Report(new EndfieldMaintenanceProgress(
                     installation.Channel, EndfieldMaintenanceStage.Downloading,
-                    done, remaining.Length, transferBytes.Values.Sum(), bytes, "正在下载"));
+                    done, remaining.Length, transferBytes.Values.Sum(), bytes, "正在下载", traffic.Bytes));
             });
 
         await WriteJournalAsync(journal, new MaintenanceRecord(installation.InstallationId, installation.Channel,
@@ -185,7 +237,7 @@ public sealed class EndfieldMaintenanceService
         Report(EndfieldMaintenanceStage.Applying, "正在安全替换当前渠道文件");
         foreach (var file in defects.Where(f => !IsChannelStateFile(f.Path)))
         {
-            EnsureNotRunning();
+            _ensureNotRunning();
             cancellationToken.ThrowIfCancellationRequested();
             var destination = SafeGamePath.Resolve(root, file.Path);
             await VerifiedFileCommit.CommitAsync(cached[file.Path], destination, file, cancellationToken);
@@ -203,13 +255,13 @@ public sealed class EndfieldMaintenanceService
         var exe = SafeGamePath.Resolve(root, "Endfield.exe");
         if (!File.Exists(exe)) throw new InvalidDataException("Verified manifest did not install Endfield.exe.");
 
-        EnsureNotRunning();
+        _ensureNotRunning();
         var currentVersion = await _provider.GetLatestVersionAsync(installation.Channel, null, cancellationToken);
         if (currentVersion != package.Version)
             throw new InvalidOperationException("官方目标版本已经变化，保留已验证文件；请重新检查并继续下载。");
         foreach (var file in package.Files.Where(f => IsChannelStateFile(f.Path)))
         {
-            EnsureNotRunning();
+            _ensureNotRunning();
             var destination = SafeGamePath.Resolve(root, file.Path);
             if (cached.TryGetValue(file.Path, out var config))
                 await VerifiedFileCommit.CommitAsync(config, destination, file, cancellationToken);
@@ -252,7 +304,7 @@ public sealed class EndfieldMaintenanceService
 
         void Report(EndfieldMaintenanceStage stage, string message) =>
             progress?.Report(new EndfieldMaintenanceProgress(installation.Channel, stage,
-                completedFiles, defects?.Count ?? 0, completedBytes, bytes, message));
+                completedFiles, defects?.Count ?? 0, completedBytes, bytes, message, traffic.Bytes));
     }
 
     public async Task<EndfieldSharingSummary> OptimizeAsync(
@@ -262,7 +314,7 @@ public sealed class EndfieldMaintenanceService
         var firstRoot = RequireRoot(first);
         var secondRoot = RequireRoot(second);
         await using var locks = await AcquireAsync([firstRoot, secondRoot], cancellationToken);
-        EnsureNotRunning();
+        _ensureNotRunning();
         var firstPackage = await _provider.GetPackageAsync(first.Channel, first.InstalledVersion, cancellationToken);
         var secondPackage = await _provider.GetPackageAsync(second.Channel, second.InstalledVersion, cancellationToken);
         return await _sharing.OptimizeAsync(firstRoot, secondRoot,
@@ -283,7 +335,7 @@ public sealed class EndfieldMaintenanceService
     {
         var root = RequireRoot(installation);
         await using var locks = await AcquireAsync([root], cancellationToken);
-        EnsureNotRunning();
+        _ensureNotRunning();
         return await _sharing.UnshareAsync(root, [], cancellationToken);
     }
 
@@ -342,6 +394,7 @@ public sealed class EndfieldMaintenanceService
             || !string.Equals(installation.InstalledVersion, sourceVersion, StringComparison.Ordinal))
             throw new InvalidDataException("The pre-download offer was replaced or withdrawn.");
         var count = 0;
+        var traffic = new TransferCounter();
         long bytes = 0;
         var total = patch.Packs.Sum(pack => pack.Size);
         await new DownloadTaskCache(_dataRoot).TrackAsync(TaskKey(installation,true),patch.Packs.Select(p=>DownloadTaskCache.ContentKey(p.Md5,p.Size)),cancellationToken);
@@ -363,13 +416,13 @@ public sealed class EndfieldMaintenanceService
                         transferBytes[pack.Md5] = value;
                         progress?.Report(new EndfieldMaintenanceProgress(installation.Channel,
                             EndfieldMaintenanceStage.Downloading, Volatile.Read(ref count), patch.Packs.Count,
-                            transferBytes.Values.Sum(), total, "正在预下载官方资源"));
-                    }), cancellationToken: token);
+                            transferBytes.Values.Sum(), total, "正在预下载官方资源", traffic.Bytes));
+                    }), cancellationToken: token, transferredBytes: new InlineProgress<long>(traffic.Add));
                 var done = Interlocked.Increment(ref count);
                 var currentBytes = Interlocked.Add(ref bytes, pack.Size);
                 progress?.Report(new EndfieldMaintenanceProgress(channel,
                     EndfieldMaintenanceStage.Downloading, done, patch.Packs.Count,
-                    currentBytes, total, "预下载文件已校验"));
+                    currentBytes, total, "预下载文件已校验", traffic.Bytes));
             });
         currentOffer = await CheckPreloadAsync(installation, cancellationToken);
         if (!SamePreloadContent(patch, currentOffer)
@@ -391,14 +444,36 @@ public sealed class EndfieldMaintenanceService
         File.Move(temp, path, true);
     }
     private async Task<IReadOnlyDictionary<string, string>> StagePatchAsync(EndfieldInstallation install,
-        EndfieldPackage package, IReadOnlyList<EndfieldManifestFile> defects, string stage, IProgress<EndfieldMaintenanceProgress>? progress, CancellationToken token)
+        EndfieldPackage package, IReadOnlyList<EndfieldManifestFile> defects, string stage, IProgress<EndfieldMaintenanceProgress>? progress, TransferCounter traffic, CancellationToken token)
     {
         var patch = package.Patch!;
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        // V2 mapping and HDiff payloads are never applied in-place; unsupported outputs use target-file sync.
-        // Full files inside a patch can still be reused after matching the authoritative target manifest.
-        if (patch.Packs.Sum(p => p.Size) > defects.Sum(f => f.Size)
-            && install.PreloadState != EndfieldPreloadState.Completed) return result;
+        // Eligibility was decided before staging; all attempted outputs must now verify before commit.
+        IReadOnlyDictionary<string, EndfieldV2PatchFile>? v2Files = null;
+        if (patch.V2PatchInfoUri is not null)
+        {
+            if (patch.V2PatchInfoMd5 is null || patch.V2PatchInfoSize is not (> 0 and <= 8 * 1024 * 1024))
+                throw new InvalidDataException("官方增量索引缺少有效校验或超出读取预算；已停止完整文件回退。");
+            var metadataSize = patch.V2PatchInfoSize.Value;
+            await new DownloadTaskCache(_dataRoot).TrackAsync(TaskKey(install, false),
+                [DownloadTaskCache.ContentKey(patch.V2PatchInfoMd5, metadataSize)], token);
+            var metadataPath = await _downloads.DownloadAsync(patch.V2PatchInfoUri, patch.V2PatchInfoMd5, metadataSize,
+                async refreshToken =>
+                {
+                    var fresh = await _provider.GetPackageAsync(install.Channel, install.InstalledVersion, refreshToken);
+                    if (fresh.Version != package.Version || !SamePreloadContent(patch, fresh.Patch)
+                        || fresh.Patch!.V2PatchInfoMd5 != patch.V2PatchInfoMd5 || fresh.Patch.V2PatchInfoSize != metadataSize)
+                        throw new InvalidDataException("官方增量索引已变更。");
+                    return fresh.Patch.V2PatchInfoUri ?? throw new InvalidDataException("官方增量索引已撤回。");
+                }, cancellationToken: token, transferredBytes: new InlineProgress<long>(traffic.Add));
+            v2Files = EndfieldV2PatchManifest.Read(await File.ReadAllBytesAsync(metadataPath, token), package.Version, package.Files);
+        }
+        var prefixBytes = new long[defects.Count + 1];
+        for (var index = 0; index < defects.Count; index++) prefixBytes[index + 1] = checked(prefixBytes[index] + defects[index].Size);
+        void ReportArchive(int completed, int total, string file) =>
+            progress?.Report(new EndfieldMaintenanceProgress(install.Channel, EndfieldMaintenanceStage.Extracting,
+                completed, total, prefixBytes[Math.Clamp(completed, 0, defects.Count)], prefixBytes[^1],
+                string.IsNullOrEmpty(file) ? "增量文件已生成" : "正在生成更新文件 · " + file, traffic.Bytes));
         var paths = new List<string>();
         long patchDone=0;var patchTotal=patch.Packs.Sum(p=>p.Size);
         foreach(var pack in patch.Packs)
@@ -409,29 +484,45 @@ public sealed class EndfieldMaintenanceService
                 if(fresh.Version!=package.Version||!SamePreloadContent(patch,fresh.Patch))throw new InvalidDataException("正式补丁已被替换。");
                 return fresh.Patch!.Packs.First(p=>p.Md5==pack.Md5&&p.Size==pack.Size).Uri;
             },new InlineProgress<long>(value=>progress?.Report(new EndfieldMaintenanceProgress(install.Channel,
-                EndfieldMaintenanceStage.Downloading,paths.Count,patch.Packs.Count,patchDone+value,patchTotal,"正在下载正式补丁"))),cancellationToken:token));
+                EndfieldMaintenanceStage.Downloading,paths.Count,patch.Packs.Count,patchDone+value,patchTotal,"正在下载正式补丁",traffic.Bytes))),cancellationToken:token,transferredBytes:new InlineProgress<long>(traffic.Add)));
             patchDone+=pack.Size;
-        }        try
-        {
-            var split = patch.Packs.All(p => System.Text.RegularExpressions.Regex.IsMatch(p.Uri.AbsolutePath, @"\.zip\.\d{3}$"));
-            if (split)
-            {
-                var ordered = patch.Packs.Select((p, i) => (Number: int.Parse(p.Uri.AbsolutePath[^3..]), Path: paths[i]))
-                    .OrderBy(p => p.Number).ToArray();
-                if (!ordered.Select(p => p.Number).SequenceEqual(Enumerable.Range(1, ordered.Length)))
-                    throw new InvalidDataException("补丁分卷不完整。");
-                foreach (var pair in await _archives!.StageAsync(ordered.Select(p => p.Path).ToArray(), stage, defects, patch.CdKey, token))
-                    result[pair.Key] = pair.Value;
-            }
-            else
-            {
-                for (var i = 0; i < paths.Count; i++)
-                    foreach (var pair in await _archives!.StageAsync([paths[i]], Path.Combine(stage, i.ToString()), defects, patch.CdKey, token))
-                        result[pair.Key] = pair.Value;
-            }
         }
-        catch (InvalidDataException) { result.Clear(); } // Explicit target-manifest fallback, no success version yet.
+        var split = patch.Packs.All(p => System.Text.RegularExpressions.Regex.IsMatch(p.Uri.AbsolutePath, @"\.zip\.\d{3}$"));
+        if (split)
+        {
+            var ordered = patch.Packs.Select((p, i) => (Number: int.Parse(p.Uri.AbsolutePath[^3..]), Path: paths[i]))
+                .OrderBy(p => p.Number).ToArray();
+            if (!ordered.Select(p => p.Number).SequenceEqual(Enumerable.Range(1, ordered.Length)))
+                throw new InvalidDataException("补丁分卷不完整。");
+            foreach (var pair in await _archives!.StageAsync(ordered.Select(p => p.Path).ToArray(), stage, defects, patch.CdKey, token, v2Files, install.InstallRoot, ReportArchive))
+                result[pair.Key] = pair.Value;
+        }
+        else
+        {
+            for (var i = 0; i < paths.Count; i++)
+                foreach (var pair in await _archives!.StageAsync([paths[i]], Path.Combine(stage, i.ToString()), defects, patch.CdKey, token, v2Files, install.InstallRoot, ReportArchive))
+                    result[pair.Key] = pair.Value;
+        }
         return result;
+    }
+    private long AdditionalCacheBytes(string md5, long size)
+    {
+        var key = DownloadTaskCache.ContentKey(md5, size);
+        var path = SafeGamePath.Resolve(_dataRoot, "endfield/objects/" + key);
+        if (File.Exists(path) && new FileInfo(path).Length == size) return 0;
+        var partial = SafeGamePath.Resolve(_dataRoot, "endfield/objects/" + key + ".part");
+        var prefix = File.Exists(partial) ? new FileInfo(partial).Length : 0;
+        return prefix >= 0 && prefix <= size ? size - prefix : size;
+    }
+
+    private sealed class TransferCounter
+    {
+        private long _bytes;
+        public long Bytes => Interlocked.Read(ref _bytes);
+        public void Add(long bytes)
+        {
+            if (bytes > 0) Interlocked.Add(ref _bytes, bytes);
+        }
     }
     private sealed class InlineProgress<T>(Action<T> action) : IProgress<T>
     {

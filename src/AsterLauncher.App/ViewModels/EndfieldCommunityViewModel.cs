@@ -21,8 +21,8 @@ public sealed class EndfieldCommunityViewModel(ResourceUpdateService resources, 
     public string UpdatedText => Snapshot.PublishedAt is { } date
         ? $"资料更新 {date.ToOffset(TimeSpan.FromHours(8)):yyyy/MM/dd} · 北京时间"
         : "尚未取得公开资料 · 北京时间";
-    public IReadOnlyList<ResourceCalendarEntry> MonthEntries => Filtered()
-        .Where(e => e.Overlaps(Month, Month.AddMonths(1).AddDays(-1))).ToArray();
+    public IReadOnlyList<ResourceCalendarEntry> MonthEntries => ResourceCalendarOrdering.Order(Filtered()
+        .Where(e => e.Overlaps(Month, Month.AddMonths(1).AddDays(-1))));
     public IReadOnlyList<ResourceCalendarEntry> SelectedEntries => ForDay(SelectedDate);
     public IReadOnlyList<ResourceCodeEntry> AvailableCodes => Snapshot.Codes.Where(c => !c.IsExpired).ToArray();
     public IReadOnlyList<ResourceCodeEntry> ExpiredCodes => Snapshot.Codes.Where(c => c.IsExpired).ToArray();
@@ -65,8 +65,8 @@ public sealed class EndfieldCommunityViewModel(ResourceUpdateService resources, 
         if (filter is not ("all" or "pool" or "event" or "updates" or "livestream")) return;
         Filter = filter; OnPropertyChanged(nameof(Filter));
     }
-    public IReadOnlyList<ResourceCalendarEntry> ForDay(DateOnly date) => Filtered().Where(e => e.Overlaps(date, date))
-        .OrderBy(e => e.StartDate == date ? 0 : 1).ThenBy(e => e.Kind == "pool" ? 1 : 0).ThenBy(e => e.Title, StringComparer.Ordinal).ToArray();
+    public IReadOnlyList<ResourceCalendarEntry> ForDay(DateOnly date) =>
+        ResourceCalendarOrdering.Order(Filtered().Where(e => e.Overlaps(date, date)), date);
     private IEnumerable<ResourceCalendarEntry> Filtered() => Snapshot.Entries.Where(e => Filter == "all"
         || Filter == "updates" && e.Kind is "version" or "maintenance" || e.Kind == Filter);
 

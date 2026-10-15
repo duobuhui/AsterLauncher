@@ -35,7 +35,7 @@ public sealed class EndfieldMaintenanceTests
             var original = Encoding.UTF8.GetBytes("immutable resource");
             await File.WriteAllBytesAsync(first, original);
             var file = Entry(relative, original);
-            var summary = await new EndfieldSharingService().OptimizeAsync(
+            var summary = await new EndfieldSharingService(static () => { }).OptimizeAsync(
                 official, bilibili, [file], [file]);
             Assert.Equal(1, summary.FileCount);
             Assert.Equal(original.Length, summary.SharedBytes);
@@ -80,7 +80,7 @@ public sealed class EndfieldMaintenanceTests
             var filesA = new[] { Entry(shared, bytes), Entry(config, bytes), Entry(different, bytes) };
             var filesB = new[] { Entry(shared, bytes), Entry(config, bytes),
                 Entry(different, Encoding.UTF8.GetBytes("different")) };
-            var sharing = new EndfieldSharingService();
+            var sharing = new EndfieldSharingService(static () => { });
             var result = await sharing.OptimizeAsync(a, b, filesA, filesB);
             Assert.Equal(1, result.FileCount);
             Assert.False(WindowsHardLink.Identity(SafeGamePath.Resolve(a, config))
@@ -112,7 +112,7 @@ public sealed class EndfieldMaintenanceTests
             await File.WriteAllBytesAsync(path, Encoding.UTF8.GetBytes("abd"));
             Assert.False(await VerifiedFileCommit.MatchesAsync(path, Entry("same-size", original)));
             Assert.False(WindowsHardLink.CanShareVolume(root, @"Z:\no-such-install"));
-            var summary = await new EndfieldSharingService().OptimizeAsync(
+            var summary = await new EndfieldSharingService(static () => { }).OptimizeAsync(
                 root, @"Z:\no-such-install", [], []);
             Assert.Equal(0, summary.EstimatedSavedBytes);
         }
@@ -299,7 +299,7 @@ public sealed class EndfieldMaintenanceTests
                 [new EndfieldRemoteObject(new Uri("https://beyond.hycdn.cn/patch"), md5, bytes.Length)],
                 md5, bytes.Length);
             var service = new EndfieldMaintenanceService(new FixedPreloadProvider(patch), download,
-                new EndfieldSharingService(), root);
+                new EndfieldSharingService(static () => { }), root, null, static () => { });
             var installation = new EndfieldInstallation
             {
                 Channel = EndfieldChannel.Official,
@@ -334,7 +334,7 @@ public sealed class EndfieldMaintenanceTests
             using var client = new HttpClient(new Handler(_ =>
                 throw new InvalidOperationException("No download should start.")));
             var service = new EndfieldMaintenanceService(new FixedPreloadProvider(null),
-                new EndfieldDownloadService(client, root), new EndfieldSharingService(), root);
+                new EndfieldDownloadService(client, root), new EndfieldSharingService(static () => { }), root, null, static () => { });
             var installation = new EndfieldInstallation
             {
                 Channel = EndfieldChannel.Official,

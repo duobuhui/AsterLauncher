@@ -63,7 +63,7 @@ public sealed record EndfieldRemoteObject(Uri Uri, string Md5, long Size);
 
 public sealed record EndfieldPatch(string TargetVersion, IReadOnlyList<EndfieldRemoteObject> Packs,
     string? ContentMd5, long? PackageSize, string? CdKey = null,
-    Uri? V2PatchInfoUri = null, string? V2PatchInfoMd5 = null);
+    Uri? V2PatchInfoUri = null, string? V2PatchInfoMd5 = null, long? V2PatchInfoSize = null);
 
 public sealed record EndfieldMaintenanceProgress(
     EndfieldChannel Channel,
@@ -72,7 +72,7 @@ public sealed record EndfieldMaintenanceProgress(
     int TotalFiles,
     long CompletedBytes,
     long TotalBytes,
-    string Message);
+    string Message, long? NetworkBytes = null);
 
 public sealed record EndfieldRepairPlan(
     EndfieldChannel Channel,
