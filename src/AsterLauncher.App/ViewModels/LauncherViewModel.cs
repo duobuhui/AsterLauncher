@@ -11,6 +11,8 @@ public sealed class LauncherViewModel : ObservableObject
 {
     private readonly IConfigurationStore _configurationStore;
     private readonly GameLaunchOrchestrator _orchestrator;
+    private readonly EndfieldLaunchCoordinator _endfieldLaunch;
+    private readonly Dictionary<string, CancellationTokenSource> _launchWaits = new(StringComparer.OrdinalIgnoreCase);
     private readonly PlaytimeTrackingService _playtimeTracking;
     private readonly SemaphoreSlim _runtimeRefreshGate = new(1, 1);
     private bool _runtimeStopping;
@@ -34,10 +36,11 @@ public sealed class LauncherViewModel : ObservableObject
         IConfigurationStore configurationStore,
         GameLaunchOrchestrator orchestrator,
         IEnumerable<IGameAdapter> builtInAdapters,
-        ILogger<LauncherViewModel> logger, PlaytimeTrackingService playtimeTracking)
+        ILogger<LauncherViewModel> logger, PlaytimeTrackingService playtimeTracking, EndfieldLaunchCoordinator endfieldLaunch)
     {
         _configurationStore = configurationStore;
         _orchestrator = orchestrator;
+        _endfieldLaunch = endfieldLaunch;
         _playtimeTracking = playtimeTracking;
         _builtInAdapters = builtInAdapters.ToList();
         _logger = logger;
@@ -118,6 +121,8 @@ public sealed class LauncherViewModel : ObservableObject
 
     public bool IsLaunching => CurrentGame is not null && _activeLaunchGameIds.Contains(CurrentLaunchKey);
 
+    public bool HasActiveLaunches => _activeLaunchGameIds.Count > 0 || _endfieldLaunch.HasPendingStarts;
+
     private string CurrentLaunchKey => CurrentGame?.Id == BuiltInGameIds.Endfield
         ? $"endfield:{SelectedEndfieldChannel}" : CurrentGame is { } game && HoYoInstallationIdentity.HasChannels(game.Id) ? $"{game.Id}:{game.State.SelectedHoYoChannel}" : CurrentGame?.Id ?? string.Empty;
 
@@ -142,6 +147,7 @@ public sealed class LauncherViewModel : ObservableObject
             if (SetProperty(ref _isRunning, value))
             {
                 OnPropertyChanged(nameof(RunningStatusText));
+                OnPropertyChanged(nameof(LaunchButtonText));
             }
         }
     }
@@ -164,7 +170,7 @@ public sealed class LauncherViewModel : ObservableObject
         && (CurrentGame.Id != BuiltInGameIds.Endfield || SelectedEndfieldInstallation?.MaintenanceInProgress != true)
         && !HasHoYoMaintenance(CurrentGame);
 
-    public string LaunchButtonText => IsLaunching ? "运行中…" : "启动游戏";
+    public string LaunchButtonText => IsLaunching ? IsRunning ? "运行中…" : "等待游戏启动…" : "启动游戏";
 
     public string RunningStatusText => IsRunning ? "运行中" : "未运行";
     public string PlaytimeTrackingText => CurrentGame?.IsExternalLaunch == true ? "云游戏及模拟器暂不统计时长。"
@@ -708,6 +714,30 @@ public sealed class LauncherViewModel : ObservableObject
 
     public void ReportExternalLaunch(string message) => StatusText = message;
 
+    public async Task SaveEndfieldLaunchOptionsAsync(EndfieldLaunchMode mode, string path, int seconds, bool confirmed)
+    {
+        var installation = SelectedEndfieldInstallation;
+        if (installation is null || IsLaunching || CurrentGame?.Id != BuiltInGameIds.Endfield)
+            throw new InvalidOperationException("当前服务器无法修改启动方式。");
+        if (!confirmed || !Path.IsPathFullyQualified(path) || !File.Exists(path)
+            || path.StartsWith(@"\\", StringComparison.Ordinal) || path[2..].Contains(':')
+            || !string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("请选择当前服务器的启动器 EXE 并确认关联。");
+        installation.LaunchMode = mode == EndfieldLaunchMode.ExperimentalBridge ? mode : EndfieldLaunchMode.OfficialLauncher;
+        installation.LauncherExecutablePath = Path.GetFullPath(path);
+        installation.LauncherAssociationConfirmed = true;
+        installation.LauncherDetectionTimeoutSeconds = Math.Clamp(seconds, 60, 300);
+        await _configurationStore.SaveAsync(_configuration);
+        OnPropertyChanged(nameof(SelectedEndfieldInstallation));
+    }
+
+    public void CancelLaunchWait()
+    {
+        if (CurrentGame?.Id == BuiltInGameIds.Endfield && !IsRunning
+            && SelectedProfile?.Steps.Any(step => step.IsEnabled && step.TakesOverGameLaunch) != true
+            && _launchWaits.TryGetValue(CurrentLaunchKey, out var waiting)) waiting.Cancel();
+    }
+
     public async Task<LaunchSessionResult?> LaunchSelectedAsync()
     {
         if (CurrentGame?.IsExternalLaunch == true)
@@ -748,6 +778,10 @@ public sealed class LauncherViewModel : ObservableObject
         var selectedGame = CurrentGame;
         var selectedProfile = SelectedProfile;
         var launchKey = CurrentLaunchKey;
+        var endfieldInstallation = selectedGame.Id == BuiltInGameIds.Endfield ? SelectedEndfieldInstallation : null;
+
+        using var launchWait = new CancellationTokenSource();
+        _launchWaits[launchKey] = launchWait;
         SetLaunching(launchKey, true);
         StatusText = "正在执行启动方案…";
         _logger.LogInformation("Launch button accepted for {GameId} with profile {ProfileId}", selectedGame.Id, selectedProfile.Id);
@@ -764,14 +798,34 @@ public sealed class LauncherViewModel : ObservableObject
 
         try
         {
-            var result = await _orchestrator.LaunchAsync(request, progress);
+            if (await selectedGame.Adapter.ProcessDetector.IsRunningAsync(selectedGame.Adapter.Definition, selectedGame.EffectiveExecutablePath, launchWait.Token))
+            {
+                StatusText = "游戏已经运行，正在接续记录时长。";
+                return new(Guid.NewGuid(), LaunchSessionStatus.Completed, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, [], StatusText);
+            }
+            var result = endfieldInstallation is not null
+                ? await _endfieldLaunch.LaunchAsync(request, endfieldInstallation, progress, launchWait.Token)
+                : await _orchestrator.LaunchAsync(request, progress, launchWait.Token);
+            if (launchWait.IsCancellationRequested)
+                result = result with { Status = LaunchSessionStatus.Cancelled, Message = "已取消等待；已打开的启动器或游戏会继续运行。" };
             if (string.Equals(CurrentLaunchKey, launchKey, StringComparison.OrdinalIgnoreCase))
                 StatusText = result.Message;
             // Process observations own play time; launch orchestration never settles a second interval.
             return result;
         }
+        catch (OperationCanceledException) when (launchWait.IsCancellationRequested)
+        {
+            StatusText = "已取消等待；已打开的启动器或游戏会继续运行。";
+            return new(Guid.NewGuid(), LaunchSessionStatus.Cancelled, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, [], StatusText);
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusText = exception.Message;
+            return new(Guid.NewGuid(), LaunchSessionStatus.Aborted, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, [], StatusText);
+        }
         finally
         {
+            _launchWaits.Remove(launchKey);
             SetLaunching(launchKey, false);
             await RefreshRunningStateAsync();
         }
@@ -1127,6 +1181,7 @@ public sealed class LauncherViewModel : ObservableObject
     {
         _runtimeStopping = true;
         _runtimeTimer.Stop();
+        await _endfieldLaunch.WaitForPendingStartsAsync();
         await _runtimeRefreshGate.WaitAsync();
         try
         {

@@ -103,9 +103,11 @@ public static class LauncherDataPaths
         cancellationToken.ThrowIfCancellationRequested();
         // Keep a new observer from acquiring the old data root while it is being copied.
         // Runtime locks are not migrated; durable requests and receipts are copied normally.
+        using var bridgeGuard = AcquireBridgeRelocationGuard(source);
         using var observerLease = AcquirePlaytimeRelocationGuard(source);
         CopyDirectory(source, target, skipUpdates: false,
-            excludedFile: observerLease is null ? null : Path.GetFullPath(observerLease.Name));
+            excludedFile: observerLease is null ? null : Path.GetFullPath(observerLease.Name),
+            excludedFiles: bridgeGuard?.ExcludedPaths);
         var selectionFile = Path.Combine(appDirectory, LocationFileName);
         var temporaryFile = selectionFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -120,6 +122,62 @@ public static class LauncherDataPaths
         }
 
         return true;
+    }
+
+    private static BridgeRelocationGuard? AcquireBridgeRelocationGuard(string source)
+    {
+        if (!Directory.Exists(source)) return null;
+        var launchRoot = SafeGamePath.Resolve(source, "launch");
+        if (!Directory.Exists(launchRoot)) return null;
+        var guard = new BridgeRelocationGuard();
+        try
+        {
+            foreach (var directory in Directory.EnumerateDirectories(launchRoot))
+            {
+                var name = Path.GetFileName(directory);
+                if (name.Length != 32 || !name.All(Uri.IsHexDigit)) continue;
+                var path = SafeGamePath.Resolve(source, $"launch/{name}/active.lock");
+                if (Directory.Exists(path)) throw new InvalidDataException("Invalid launch runtime lease.");
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    var lease = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                    guard.Add(lease);
+                }
+                catch (FileNotFoundException) { } // A completed worker deleted its own runtime lease.
+                catch (DirectoryNotFoundException) { } // A completed session was retired concurrently.
+            }
+            return guard;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            guard.Dispose();
+            throw new InvalidOperationException(
+                "终末地启动辅助进程仍在运行，请先退出游戏并等待辅助进程结束，再迁移数据目录", exception);
+        }
+        catch
+        {
+            guard.Dispose();
+            throw;
+        }
+    }
+
+    private sealed class BridgeRelocationGuard : IDisposable
+    {
+        private readonly List<FileStream> _leases = [];
+        public HashSet<string> ExcludedPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public void Add(FileStream lease)
+        {
+            _leases.Add(lease);
+            ExcludedPaths.Add(Path.GetFullPath(lease.Name));
+        }
+
+        public void Dispose()
+        {
+            foreach (var lease in _leases) lease.Dispose();
+            _leases.Clear();
+        }
     }
 
     private static FileStream? AcquirePlaytimeRelocationGuard(string source)
@@ -144,7 +202,8 @@ public static class LauncherDataPaths
         return path.StartsWith(parent, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void CopyDirectory(string source, string target, bool skipUpdates, string? excludedFile = null)
+    private static void CopyDirectory(string source, string target, bool skipUpdates, string? excludedFile = null,
+        IReadOnlySet<string>? excludedFiles = null)
     {
         if (!Directory.Exists(source)) return;
         var pending = new Queue<(string Source, string Target)>();
@@ -154,6 +213,7 @@ public static class LauncherDataPaths
             Directory.CreateDirectory(pair.Target);
             foreach (var entry in Directory.EnumerateFileSystemEntries(pair.Source))
             {
+                if (excludedFiles?.Contains(Path.GetFullPath(entry)) == true) continue;
                 if (excludedFile is not null && (string.Equals(Path.GetFullPath(entry), excludedFile, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(Path.GetFullPath(entry), Path.Combine(Path.GetDirectoryName(excludedFile)!, "receipts.write.lock"), StringComparison.OrdinalIgnoreCase)))
                     continue;

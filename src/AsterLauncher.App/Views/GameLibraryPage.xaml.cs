@@ -1,6 +1,7 @@
 using AsterLauncher.App.Services;
 using AsterLauncher.App.ViewModels;
 using AsterLauncher.Core;
+using AsterLauncher.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI;
@@ -37,6 +38,7 @@ public sealed partial class GameLibraryPage : Page
     private long _contentRevision;
     private bool _isRailCompact;
     private bool _isLaunchExpanded;
+    private bool _endfieldLaunchOptionsOpen;
     private UIElement? _activeSurface;
     private string _activeFeatureTag = string.Empty;
 
@@ -78,6 +80,10 @@ public sealed partial class GameLibraryPage : Page
         {
             if (args.PropertyName is nameof(LauncherViewModel.SelectedEndfieldChannel) or nameof(LauncherViewModel.SelectedLaunchTarget))
                 UpdateEndfieldControls();
+            else if (args.PropertyName is nameof(LauncherViewModel.SelectedEndfieldInstallation)
+                or nameof(LauncherViewModel.SelectedProfile) or nameof(LauncherViewModel.IsLaunching)
+                or nameof(LauncherViewModel.IsRunning) or nameof(LauncherViewModel.CurrentGame))
+                UpdateEndfieldLaunchControls();
         };
     }
 
@@ -333,7 +339,128 @@ public sealed partial class GameLibraryPage : Page
         MaintenanceDivider.Visibility = maintenance ? Visibility.Visible : Visibility.Collapsed;
         MaintenanceColumn.Width = maintenance ? new GridLength(1.4, GridUnitType.Star) : new GridLength(0);
         LaunchExpansionContent.ColumnSpacing = maintenance ? 24 : 0;
+        UpdateEndfieldLaunchControls();
+    }
+
+    private void UpdateEndfieldLaunchControls()
+    {
+        if (EndfieldLaunchModeRow is null) return;
+        var isLocalEndfield = _launcher.CurrentGame is { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false };
+        var installation = _launcher.SelectedEndfieldInstallation;
+        EndfieldLaunchModeRow.Visibility = isLocalEndfield ? Visibility.Visible : Visibility.Collapsed;
+        EndfieldLaunchModeButton.IsEnabled = isLocalEndfield && installation is not null
+            && !_launcher.IsRunning && !_launcher.IsLaunching && !_endfieldLaunchOptionsOpen;
+        var custom = _launcher.SelectedProfile?.Steps.Any(step => step.IsEnabled && step.TakesOverGameLaunch) == true;
+        EndfieldLaunchModeText.Text = custom ? "自定义方案接管"
+            : installation?.LaunchMode == EndfieldLaunchMode.ExperimentalBridge ? "无界面启动桥 · 实验性"
+            : "官方启动器接管";
+        if (!custom && (string.IsNullOrWhiteSpace(installation?.LauncherExecutablePath) || installation?.LauncherAssociationConfirmed != true))
+            EndfieldLaunchModeText.Text += " · 待设置";
+        ToolTipService.SetToolTip(EndfieldLaunchModeText, installation?.LauncherExecutablePath);
+        CancelLaunchWaitButton.Visibility = isLocalEndfield && !custom && _launcher.IsLaunching && !_launcher.IsRunning
+            ? Visibility.Visible : Visibility.Collapsed;
         RefreshLaunchSurfaceLayout();
+    }
+
+    private void CancelLaunchWait_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_launcher.CurrentGame is { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false }
+            && _launcher.SelectedProfile?.Steps.Any(step => step.IsEnabled && step.TakesOverGameLaunch) != true
+            && _launcher.IsLaunching && !_launcher.IsRunning) _launcher.CancelLaunchWait();
+    }
+
+    private async void EndfieldLaunchMode_OnClick(object sender, RoutedEventArgs e)
+        => await ConfigureEndfieldLaunchAsync();
+
+    private async Task<bool> ConfigureEndfieldLaunchAsync()
+    {
+        if (_endfieldLaunchOptionsOpen || _launcher.IsRunning || _launcher.IsLaunching
+            || _launcher.CurrentGame is not { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false } game
+            || _launcher.SelectedEndfieldInstallation is not { } installation
+            || installation.Channel is not (EndfieldChannel.Official or EndfieldChannel.Bilibili)) return false;
+        _endfieldLaunchOptionsOpen = true;
+        UpdateEndfieldLaunchControls();
+        try
+        {
+            var discovery = new EndfieldLauncherDiscovery();
+            var candidates = await discovery.DiscoverAsync(installation.Channel, null, CancellationToken.None);
+            if (!IsCurrentInstallation() || _launcher.IsRunning || _launcher.IsLaunching) return false;
+            var initialPath = string.IsNullOrWhiteSpace(installation.LauncherExecutablePath)
+                ? candidates.FirstOrDefault()?.ExecutablePath ?? string.Empty : installation.LauncherExecutablePath;
+            var channelLabel = installation.Channel == EndfieldChannel.Official ? "国服官服" : "哔哩哔哩服";
+            var input = new EndfieldLaunchOptionsInput
+            {
+                ChannelLabel = channelLabel,
+                Mode = installation.LaunchMode,
+                OfficialLauncherPath = initialPath,
+                DetectionTimeoutSeconds = installation.LauncherDetectionTimeoutSeconds,
+                IsChannelAssociationConfirmed = installation.LauncherAssociationConfirmed
+                    && !string.IsNullOrWhiteSpace(installation.LauncherExecutablePath),
+                Candidates = candidates.Select(candidate => new EndfieldLauncherChoice
+                {
+                    Path = candidate.ExecutablePath,
+                    Label = Path.GetFileName(candidate.ExecutablePath) + " · " + (candidate.Channel switch
+                    {
+                        EndfieldChannel.Official => "官服信息",
+                        EndfieldChannel.Bilibili => "哔哩哔哩服信息",
+                        _ => "服务器未确认"
+                    }),
+                    Status = LauncherStatus(candidate)
+                }).ToArray(),
+                InspectPathAsync = async (path, cancellationToken) =>
+                {
+                    var inspected = await discovery.DiscoverAsync(installation.Channel, path, cancellationToken);
+                    var manual = inspected.FirstOrDefault(candidate => candidate.IsManualSelection);
+                    return manual is null ? new EndfieldLauncherPathStatus
+                    {
+                        Title = "所选路径不可用", Message = "请选择本机现有的启动器 EXE；网络路径或缺失文件无法使用。"
+                    } : LauncherStatus(manual);
+                }
+            };
+            var dialog = new EndfieldLaunchOptionsDialog(App.MainWindow, _filePicker, input)
+            {
+                XamlRoot = XamlRoot, RequestedTheme = ActualTheme
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary || dialog.Result is not { } result
+                || !IsCurrentInstallation() || _launcher.IsRunning || _launcher.IsLaunching) return false;
+            await _launcher.SaveEndfieldLaunchOptionsAsync(result.Mode, result.OfficialLauncherPath,
+                result.DetectionTimeoutSeconds, result.IsChannelAssociationConfirmed);
+            return IsCurrentInstallation();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException
+            or ArgumentException or System.ComponentModel.Win32Exception or System.Security.SecurityException
+            or System.Security.Cryptography.CryptographicException)
+        {
+            _logger.LogWarning("Endfield launch options could not be saved: {ErrorType}", exception.GetType().Name);
+            await ShowMessageAsync("启动方式未保存", "无法读取或验证启动器，请重新选择对应服务器的本地启动器 EXE。");
+            return false;
+        }
+        finally
+        {
+            _endfieldLaunchOptionsOpen = false;
+            UpdateEndfieldLaunchControls();
+        }
+
+        bool IsCurrentInstallation() => ReferenceEquals(_launcher.CurrentGame, game)
+            && !game.IsExternalLaunch && _launcher.SelectedEndfieldChannel == installation.Channel
+            && _launcher.SelectedEndfieldInstallation?.InstallationId == installation.InstallationId;
+    }
+
+    private static EndfieldLauncherPathStatus LauncherStatus(EndfieldLauncherCandidate candidate)
+    {
+        var trust = candidate.Trust;
+        var publisher = string.IsNullOrWhiteSpace(trust.Publisher) ? "未识别" : trust.Publisher;
+        var bridge = !string.IsNullOrWhiteSpace(candidate.BridgeParentPath);
+        return new()
+        {
+            Title = trust.IsSignatureValid ? "所选文件签名有效" : "已选择启动器 · 签名未通过验证",
+            Message = $"{trust.Message} 发布者：{publisher}。"
+                + (bridge ? "已找到受信任的 Games.exe，可尝试实验性启动桥。" : "未找到可用的官方 Games.exe，当前仅支持普通接管。")
+                + "请确认此启动器对应当前服务器。",
+            IsLauncherUsable = true,
+            SupportsExperimentalBridge = bridge,
+            RequiresChannelConfirmation = true
+        };
     }
 
     private async Task SelectContextGameAsync(GameCardViewModel game)
@@ -803,6 +930,7 @@ public sealed partial class GameLibraryPage : Page
     {
         try
         {
+            if (_endfieldLaunchOptionsOpen) return;
             if (_launcher.CurrentGame is { IsOfficialCloud: true } cloudGame)
             {
                 if (OfficialCloudCatalog.Get(cloudGame.Id) is { } entry
@@ -843,13 +971,20 @@ public sealed partial class GameLibraryPage : Page
                     return;
                 }
                 if (_endfield.PrimaryStartsMaintenance) { await StartEndfieldSyncAsync(); return; }
+                if (_launcher.IsRunning || _launcher.IsLaunching) return;
+                if (_launcher.SelectedProfile?.Steps.Any(step => step.IsEnabled && step.TakesOverGameLaunch) != true
+                    && (_launcher.SelectedEndfieldInstallation is not { } installation
+                        || string.IsNullOrWhiteSpace(installation.LauncherExecutablePath) || !installation.LauncherAssociationConfirmed)
+                    && !await ConfigureEndfieldLaunchAsync()) return;
+                if (_launcher.IsRunning || _launcher.IsLaunching) return;
             }
+            if (_launcher.IsRunning || _launcher.IsLaunching) return;
             var result = await ViewModel.LaunchAsync();
             if (result is null)
             {
                 await ShowLaunchFailureAsync(ViewModel.LaunchStatusText);
             }
-            else if (result.Status != LaunchSessionStatus.Completed)
+            else if (result.Status is not (LaunchSessionStatus.Completed or LaunchSessionStatus.Cancelled))
             {
                 var stepDetails = string.Join("\n", result.Steps.Where(step => !step.Result.IsSuccess)
                     .Select(step => $"{step.Step.Name}：{step.Result.Message}"));

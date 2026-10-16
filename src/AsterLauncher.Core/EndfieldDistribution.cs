@@ -41,6 +41,11 @@ public sealed class EndfieldInstallation
     public string? ScreenshotDirectory { get; set; }
     public bool MaintenanceInProgress { get; set; }
     public Guid? SelectedLaunchProfileId { get; set; }
+    [System.Text.Json.Serialization.JsonConverter(typeof(EndfieldLaunchModeJsonConverter))]
+    public EndfieldLaunchMode LaunchMode { get; set; } = EndfieldLaunchMode.OfficialLauncher;
+    public string? LauncherExecutablePath { get; set; }
+    public bool LauncherAssociationConfirmed { get; set; }
+    public int LauncherDetectionTimeoutSeconds { get; set; } = 180;
     public EndfieldPreloadState PreloadState { get; set; }
     public string? PreloadSourceVersion { get; set; }
     public string? PreloadTargetVersion { get; set; }

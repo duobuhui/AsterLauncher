@@ -141,6 +141,14 @@ public partial class App : Application
         services.AddSingleton<DialogLaunchDecisionService>();
         services.AddSingleton<ILaunchDecisionService>(provider => provider.GetRequiredService<DialogLaunchDecisionService>());
         services.AddSingleton<GameLaunchOrchestrator>();
+        services.AddSingleton<EndfieldLauncherTrust>();
+        services.AddSingleton(p => new EndfieldLauncherDiscovery(trust: p.GetRequiredService<EndfieldLauncherTrust>()));
+        services.AddSingleton<EndfieldLaunchBridgeService>();
+        services.AddSingleton(p => new EndfieldLaunchCoordinator(
+            p.GetRequiredService<ICompanionProcessService>(), p.GetRequiredService<ILaunchDecisionService>(),
+            p.GetRequiredService<ILogger<GameLaunchOrchestrator>>(), p.GetRequiredService<EndfieldLauncherDiscovery>(),
+            p.GetRequiredService<EndfieldLaunchBridgeService>(), LauncherDataPaths.ResolveDataDirectory(),
+            Path.Combine(AppContext.BaseDirectory, "Services", "StartEndfieldBridge.ps1")));
         foreach (var adapter in BuiltInGameCatalog.CreateAdapters())
         {
             services.AddSingleton(typeof(IGameAdapter), adapter);

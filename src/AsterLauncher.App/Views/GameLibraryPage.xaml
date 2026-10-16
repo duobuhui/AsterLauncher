@@ -337,10 +337,16 @@
                                                         <TextBlock Text="{Binding ProfileSummary}" Foreground="{ThemeResource GlassTextBrush}" FontSize="13" TextWrapping="Wrap" />
                                                         <TextBlock Text="{Binding LaunchStatusText}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" TextWrapping="Wrap" />
                                                         <TextBlock Text="{Binding Launcher.CompanionSummary}" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" TextWrapping="Wrap" />
+                                                        <Button x:Name="CancelLaunchWaitButton" Content="取消等待" Style="{StaticResource FloatingButtonStyle}" HorizontalAlignment="Left" Visibility="Collapsed" Click="CancelLaunchWait_OnClick" AutomationProperties.Name="取消等待游戏启动" AutomationProperties.AutomationId="CancelLaunchWait" />
                                                     </StackPanel>
                                                     <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding CurrentProfiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" DisplayMemberPath="Name" AutomationProperties.Name="选择启动方案或客户端">
                                                         <ComboBox.Header><TextBlock Text="启动方案 / 客户端" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" /></ComboBox.Header>
                                                     </ComboBox>
+                                                    <Grid x:Name="EndfieldLaunchModeRow" ColumnSpacing="8" Visibility="Collapsed">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                        <Button x:Name="EndfieldLaunchModeButton" Content="启动方式" Style="{StaticResource FloatingButtonStyle}" Click="EndfieldLaunchMode_OnClick" AutomationProperties.Name="设置终末地启动方式" AutomationProperties.AutomationId="EndfieldLaunchOptions" />
+                                                        <TextBlock x:Name="EndfieldLaunchModeText" Grid.Column="1" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                                                    </Grid>
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                                         <Button Tag="profiles" Content="编辑方案" Style="{StaticResource FloatingButtonStyle}" Click="NavigateMenu_OnClick" />
                                                         <Button Tag="tools" Content="辅助工具" Style="{StaticResource FloatingButtonStyle}" Click="NavigateMenu_OnClick" />

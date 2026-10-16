@@ -140,6 +140,102 @@ public sealed class LauncherDataPathsTests : IDisposable
         Assert.False(await LauncherDataPaths.RelocateAsync(source, executableDirectory: executableDirectory, sourceDirectory: source));
     }
 
+    [Fact]
+    public async Task Relocate_ActiveEndfieldBridgeRefusesBeforeDataOrSelectionChanges()
+    {
+        var executableDirectory = Path.Combine(_root, "release");
+        var source = Path.Combine(executableDirectory, "Data");
+        var target = Path.Combine(_root, "chosen");
+        var session = Path.Combine(source, "launch", new string('a', 32));
+        Directory.CreateDirectory(session);
+        Directory.CreateDirectory(target);
+        var settings = Path.Combine(source, "launcher.settings.json");
+        var selection = Path.Combine(executableDirectory, "asterlauncher.data-location.json");
+        await File.WriteAllTextAsync(settings, "original settings");
+        var originalSelection = System.Text.Json.JsonSerializer.Serialize(new { directory = source });
+        await File.WriteAllTextAsync(selection, originalSelection);
+        using var keeper = new FileStream(Path.Combine(session, "active.lock"), FileMode.OpenOrCreate,
+            FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            LauncherDataPaths.RelocateAsync(target, executableDirectory: executableDirectory, sourceDirectory: source));
+
+        Assert.Equal("终末地启动辅助进程仍在运行，请先退出游戏并等待辅助进程结束，再迁移数据目录", error.Message);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(target));
+        Assert.Equal("original settings", await File.ReadAllTextAsync(settings));
+        Assert.Equal(originalSelection, await File.ReadAllTextAsync(selection));
+    }
+
+    [Fact]
+    public async Task Relocate_ReleasedBridgeLeaseAllowsMoveWithoutCopyingRuntimeLock()
+    {
+        var executableDirectory = Path.Combine(_root, "release");
+        var source = Path.Combine(executableDirectory, "Data");
+        var target = Path.Combine(_root, "chosen");
+        var sessionId = new string('b', 32);
+        var session = Path.Combine(source, "launch", sessionId);
+        Directory.CreateDirectory(session);
+        Directory.CreateDirectory(target);
+        var leasePath = Path.Combine(session, "active.lock");
+        var settings = Path.Combine(source, "launcher.settings.json");
+        await File.WriteAllTextAsync(settings, "preserved settings");
+        await File.WriteAllTextAsync(Path.Combine(session, "result.json"), "completed acknowledgement");
+        using (var keeper = new FileStream(leasePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                LauncherDataPaths.RelocateAsync(target, executableDirectory: executableDirectory, sourceDirectory: source));
+        }
+
+        Assert.True(await LauncherDataPaths.RelocateAsync(target, executableDirectory: executableDirectory,
+            sourceDirectory: source));
+
+        Assert.Equal("preserved settings", await File.ReadAllTextAsync(Path.Combine(target, "launcher.settings.json")));
+        Assert.Equal("completed acknowledgement",
+            await File.ReadAllTextAsync(Path.Combine(target, "launch", sessionId, "result.json")));
+        Assert.False(File.Exists(Path.Combine(target, "launch", sessionId, "active.lock")));
+        Assert.Equal(target, LauncherDataPaths.ResolveDataDirectory(executableDirectory, null));
+        Assert.Equal("preserved settings", await File.ReadAllTextAsync(settings));
+        using var available = new FileStream(leasePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+    }
+
+    [Fact]
+    public async Task Relocate_FailedBridgeGuardReleasesAlreadyAcquiredInactiveLeases()
+    {
+        var executableDirectory = Path.Combine(_root, "release");
+        var source = Path.Combine(executableDirectory, "Data");
+        var target = Path.Combine(_root, "chosen");
+        var inactive = Path.Combine(source, "launch", new string('c', 32));
+        var active = Path.Combine(source, "launch", new string('d', 32));
+        Directory.CreateDirectory(inactive);
+        Directory.CreateDirectory(active);
+        Directory.CreateDirectory(target);
+        var inactivePath = Path.Combine(inactive, "active.lock");
+        await File.WriteAllTextAsync(inactivePath, "");
+        using var keeper = new FileStream(Path.Combine(active, "active.lock"), FileMode.OpenOrCreate,
+            FileAccess.ReadWrite, FileShare.None);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            LauncherDataPaths.RelocateAsync(target, executableDirectory: executableDirectory, sourceDirectory: source));
+
+        using var stillAvailable = new FileStream(inactivePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(target));
+        Assert.False(File.Exists(Path.Combine(executableDirectory, "asterlauncher.data-location.json")));
+    }
+
+    [Fact]
+    public async Task Relocate_SameDirectoryRemainsNoOpWhileBridgeIsActive()
+    {
+        var executableDirectory = Path.Combine(_root, "release");
+        var source = Path.Combine(executableDirectory, "Data");
+        var session = Path.Combine(source, "launch", new string('e', 32));
+        Directory.CreateDirectory(session);
+        using var keeper = new FileStream(Path.Combine(session, "active.lock"), FileMode.OpenOrCreate,
+            FileAccess.ReadWrite, FileShare.None);
+
+        Assert.False(await LauncherDataPaths.RelocateAsync(source, executableDirectory: executableDirectory,
+            sourceDirectory: source));
+    }
+
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("ASTERLAUNCHER_DATA_HOME", _originalDataHome);

@@ -107,6 +107,11 @@ public sealed partial class SettingsPage : Page
 
     private async void RelocateData_OnClick(object sender, RoutedEventArgs e)
     {
+        if (_viewModel.HasActiveLaunches)
+        {
+            DataDirectoryResultText.Text = "游戏正在启动、等待或运行，请先结束游戏会话，再迁移数据目录。";
+            return;
+        }
         DataDirectoryResultText.Text = "正在复制启动器数据…";
         try
         {

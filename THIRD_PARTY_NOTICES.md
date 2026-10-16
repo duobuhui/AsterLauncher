@@ -129,3 +129,9 @@ Absolute UTC+8 boundaries are derived from the publisher's [launch notice](https
 
 ## Windows typography and resource data
 Ordinary UI text uses the installed Microsoft YaHei UI font; no font file is redistributed. Resource-update protocol, cache and UI integration are original project code and introduce no dependency. Publisher media/provenance in the public resource feed is covered by ASSET_SOURCES.md; image rights are not granted by the project code license.
+
+## Endfield launch compatibility research (0.2.7)
+
+[Better-Endfield's 1.6.3 launcher-check research](https://github.com/Dr-hydra/Better-Endfield/blob/5c1fbc1890d6eb0831fbdebbc6d2881dae7c6e35/docs/host/research/1.6.3/launcher-check/LAUNCHER_CHECK.md) was consulted as a description of the parent-name and Authenticode checks. AsterLauncher's discovery, trust validation, Windows process declarations, keeper and UI are independently implemented; no code or binary from that project is copied or redistributed. Local official launcher components remain the user's installed publisher files and are not packaged with AsterLauncher.
+
+Windows behavior follows Microsoft's [process attribute documentation](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute), [Job object documentation](https://learn.microsoft.com/windows/win32/procthread/job-objects), and [WinVerifyTrust API](https://learn.microsoft.com/windows/win32/api/wintrust/nf-wintrust-winverifytrust). No new dependency or publisher media is introduced.
