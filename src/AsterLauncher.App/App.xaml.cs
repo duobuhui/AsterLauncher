@@ -148,7 +148,7 @@ public partial class App : Application
             p.GetRequiredService<ICompanionProcessService>(), p.GetRequiredService<ILaunchDecisionService>(),
             p.GetRequiredService<ILogger<GameLaunchOrchestrator>>(), p.GetRequiredService<EndfieldLauncherDiscovery>(),
             p.GetRequiredService<EndfieldLaunchBridgeService>(), LauncherDataPaths.ResolveDataDirectory(),
-            Path.Combine(AppContext.BaseDirectory, "Services", "StartEndfieldBridge.ps1")));
+            Path.Combine(AppContext.BaseDirectory, "Services", "StartEndfieldBridge.ps1"), p.GetRequiredService<DialogLaunchDecisionService>()));
         foreach (var adapter in BuiltInGameCatalog.CreateAdapters())
         {
             services.AddSingleton(typeof(IGameAdapter), adapter);

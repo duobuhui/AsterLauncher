@@ -125,6 +125,12 @@ public sealed partial class MainWindow : Window
                 {
                     _logger.LogInformation("Applying initial window bounds {X},{Y} {Width}x{Height} at rasterization scale {Scale}", targetX, targetY, targetWidth, targetHeight, scale);
                     AppWindow.MoveAndResize(new RectInt32(targetX, targetY, targetWidth, targetHeight));
+#if DEBUG
+                    // UI-only preview; its return value never starts a process or invokes UAC.
+                    if (EndfieldMaintenanceUiFixture.Enabled
+                        && Environment.GetEnvironmentVariable("ASTERLAUNCHER_UI_TEST_BRIDGE_CONSENT") == "1")
+                        DispatcherQueue.TryEnqueue(async () => await _decisionService.ConfirmAsync());
+#endif
                 });
 
             }

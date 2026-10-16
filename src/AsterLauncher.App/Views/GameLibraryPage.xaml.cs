@@ -39,6 +39,8 @@ public sealed partial class GameLibraryPage : Page
     private bool _isRailCompact;
     private bool _isLaunchExpanded;
     private bool _endfieldLaunchOptionsOpen;
+    private bool _endfieldLaunchChoiceQueued;
+    private readonly HashSet<Guid> _endfieldLaunchChoicePrompted = [];
     private UIElement? _activeSurface;
     private string _activeFeatureTag = string.Empty;
 
@@ -117,6 +119,7 @@ public sealed partial class GameLibraryPage : Page
             SetRailCompact(false, false);
             UpdateLibraryLayout();
             ShowFeature("overview");
+            QueueEndfieldLaunchChoicePrompt();
             DispatcherQueue.TryEnqueue(async () =>
             {
                 if (_launcher.CurrentGame?.IsExternalLaunch == true) return;
@@ -352,16 +355,45 @@ public sealed partial class GameLibraryPage : Page
             && !_launcher.IsRunning && !_launcher.IsLaunching && !_endfieldLaunchOptionsOpen;
         var custom = _launcher.SelectedProfile?.Steps.Any(step => step.IsEnabled && step.TakesOverGameLaunch) == true;
         EndfieldLaunchModeText.Text = custom ? "自定义方案接管"
-            : installation?.LaunchMode == EndfieldLaunchMode.ExperimentalBridge ? "无界面启动桥 · 实验性"
-            : "官方启动器接管";
-        if (!custom && (string.IsNullOrWhiteSpace(installation?.LauncherExecutablePath) || installation?.LauncherAssociationConfirmed != true))
+            : installation?.LaunchMode == EndfieldLaunchMode.ExperimentalBridge ? "直接启动游戏 · 实验性"
+            : "打开官方启动器";
+        if (!custom && (installation is null || installation.LaunchChoiceRevision < 1
+            || string.IsNullOrWhiteSpace(installation.LauncherExecutablePath) || !installation.LauncherAssociationConfirmed))
             EndfieldLaunchModeText.Text += " · 待设置";
         ToolTipService.SetToolTip(EndfieldLaunchModeText, installation?.LauncherExecutablePath);
         CancelLaunchWaitButton.Visibility = isLocalEndfield && !custom && _launcher.IsLaunching && !_launcher.IsRunning
             ? Visibility.Visible : Visibility.Collapsed;
         RefreshLaunchSurfaceLayout();
+        QueueEndfieldLaunchChoicePrompt();
     }
 
+    private bool ShouldPromptEndfieldLaunchChoice() => IsLoaded && XamlRoot is not null
+        && !_endfieldLaunchOptionsOpen && !_launcher.IsRunning && !_launcher.IsLaunching
+        && _launcher.CurrentGame is { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false, IsInstalled: true }
+        && _launcher.SelectedEndfieldInstallation is { LaunchChoiceRevision: < 1 } installation
+        && installation.Channel is EndfieldChannel.Official or EndfieldChannel.Bilibili
+        && !_endfieldLaunchChoicePrompted.Contains(installation.InstallationId)
+        && _launcher.SelectedProfile?.Steps.Any(step => step.IsEnabled && step.TakesOverGameLaunch) != true;
+
+    private void QueueEndfieldLaunchChoicePrompt()
+    {
+        if (_endfieldLaunchChoiceQueued || !ShouldPromptEndfieldLaunchChoice()) return;
+        var game = _launcher.CurrentGame;
+        var installation = _launcher.SelectedEndfieldInstallation!;
+        _endfieldLaunchChoiceQueued = true;
+        if (!DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, async () =>
+        {
+            _endfieldLaunchChoiceQueued = false;
+            if (!ReferenceEquals(_launcher.CurrentGame, game)
+                || _launcher.SelectedEndfieldInstallation?.InstallationId != installation.InstallationId
+                || _launcher.SelectedEndfieldChannel != installation.Channel || !ShouldPromptEndfieldLaunchChoice()) return;
+            try { await ConfigureEndfieldLaunchAsync(isAutomatic: true); }
+            catch (Exception exception)
+            {
+                _logger.LogWarning("First Endfield launch choice could not be shown: {ErrorType}", exception.GetType().Name);
+            }
+        })) _endfieldLaunchChoiceQueued = false;
+    }
     private void CancelLaunchWait_OnClick(object sender, RoutedEventArgs e)
     {
         if (_launcher.CurrentGame is { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false }
@@ -372,16 +404,19 @@ public sealed partial class GameLibraryPage : Page
     private async void EndfieldLaunchMode_OnClick(object sender, RoutedEventArgs e)
         => await ConfigureEndfieldLaunchAsync();
 
-    private async Task<bool> ConfigureEndfieldLaunchAsync()
+    private async Task<bool> ConfigureEndfieldLaunchAsync(bool isAutomatic = false)
     {
         if (_endfieldLaunchOptionsOpen || _launcher.IsRunning || _launcher.IsLaunching
             || _launcher.CurrentGame is not { Id: BuiltInGameIds.Endfield, IsExternalLaunch: false } game
             || _launcher.SelectedEndfieldInstallation is not { } installation
             || installation.Channel is not (EndfieldChannel.Official or EndfieldChannel.Bilibili)) return false;
         _endfieldLaunchOptionsOpen = true;
+        _endfieldLaunchChoicePrompted.Add(installation.InstallationId);
         UpdateEndfieldLaunchControls();
         try
         {
+            if (game.IsInstalled && await game.Adapter.ProcessDetector.IsRunningAsync(game.Adapter.Definition, game.EffectiveExecutablePath)) return false;
+            if (!IsCurrentInstallation()) return false;
             var discovery = new EndfieldLauncherDiscovery();
             var candidates = await discovery.DiscoverAsync(installation.Channel, null, CancellationToken.None);
             if (!IsCurrentInstallation() || _launcher.IsRunning || _launcher.IsLaunching) return false;
@@ -432,7 +467,8 @@ public sealed partial class GameLibraryPage : Page
             or System.Security.Cryptography.CryptographicException)
         {
             _logger.LogWarning("Endfield launch options could not be saved: {ErrorType}", exception.GetType().Name);
-            await ShowMessageAsync("启动方式未保存", "无法读取或验证启动器，请重新选择对应服务器的本地启动器 EXE。");
+            if (!isAutomatic)
+                await ShowMessageAsync("启动方式未保存", "请重新选择当前服务器使用的官方启动器，再保存选择。");
             return false;
         }
         finally
@@ -974,7 +1010,7 @@ public sealed partial class GameLibraryPage : Page
                 if (_launcher.IsRunning || _launcher.IsLaunching) return;
                 if (_launcher.SelectedProfile?.Steps.Any(step => step.IsEnabled && step.TakesOverGameLaunch) != true
                     && (_launcher.SelectedEndfieldInstallation is not { } installation
-                        || string.IsNullOrWhiteSpace(installation.LauncherExecutablePath) || !installation.LauncherAssociationConfirmed)
+                        || installation.LaunchChoiceRevision < 1 || string.IsNullOrWhiteSpace(installation.LauncherExecutablePath) || !installation.LauncherAssociationConfirmed)
                     && !await ConfigureEndfieldLaunchAsync()) return;
                 if (_launcher.IsRunning || _launcher.IsLaunching) return;
             }

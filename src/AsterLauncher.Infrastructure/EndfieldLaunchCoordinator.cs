@@ -13,10 +13,12 @@ public sealed class EndfieldLaunchCoordinator(
     EndfieldLauncherDiscovery discovery,
     EndfieldLaunchBridgeService bridge,
     string dataRoot,
-    string helperScript)
+    string helperScript,
+    IEndfieldBridgeElevationConsent? elevationConsent = null)
 {
     private readonly object _pendingGate = new();
     private readonly HashSet<Task> _pendingStarts = [];
+    private bool _stopping;
 
     public bool HasPendingStarts
     {
@@ -31,6 +33,7 @@ public sealed class EndfieldLaunchCoordinator(
 
         lock (_pendingGate)
         {
+            if (_stopping) throw new InvalidOperationException("启动器正在退出，已停止新的启动请求。");
             if (_pendingStarts.Count > 0)
                 throw new InvalidOperationException("上一次实验性启动仍在确认中，请稍候并检查游戏状态，避免重复启动。");
         }
@@ -49,13 +52,16 @@ public sealed class EndfieldLaunchCoordinator(
         }
         var plan = EndfieldLaunchPlan.Create(request.Profile, installation, request.ExecutablePath, launcher);
         var contextProcesses = plan.ManagedStepId is Guid managedId && bridgeParent is not null
-            ? new EndfieldBridgeProcessService(processes, managedId, () => TrackStartAsync(bridge.LaunchAsync(
-                request.ExecutablePath, bridgeParent, plan.Profile.GameWorkingDirectory,
-                request.Game.DefaultArguments.Concat(ArgumentTokenizer.Parse(request.Profile.GameArguments)).ToArray(),
-                dataRoot, helperScript, CancellationToken.None)))
+            ? new EndfieldBridgeProcessService(processes, managedId, () => EndfieldBridgeElevationRetry.RunAsync(
+                () => TrackStartAsync(() => bridge.LaunchAsync(request.ExecutablePath, bridgeParent,
+                    plan.Profile.GameWorkingDirectory, GameArguments(), dataRoot, helperScript, CancellationToken.None)),
+                () => TrackStartAsync(() => bridge.LaunchElevatedAsync(request.ExecutablePath, bridgeParent,
+                    plan.Profile.GameWorkingDirectory, GameArguments(), dataRoot, helperScript, CancellationToken.None)),
+                elevationConsent, cancellationToken))
             : plan.ManagedStepId is Guid officialStepId
                 ? new EndfieldOfficialLauncherProcessService(processes, officialStepId)
                 : processes;
+        string[] GameArguments() => request.Game.DefaultArguments.Concat(ArgumentTokenizer.Parse(request.Profile.GameArguments)).ToArray();
         var orchestrator = new GameLaunchOrchestrator(contextProcesses, decisions, logger);
         var contextProgress = new InlineProgress(item =>
         {
@@ -72,16 +78,29 @@ public sealed class EndfieldLaunchCoordinator(
     public async Task WaitForPendingStartsAsync()
     {
         Task[] pending;
-        lock (_pendingGate) pending = _pendingStarts.ToArray();
+        lock (_pendingGate)
+        {
+            _stopping = true;
+            pending = _pendingStarts.ToArray();
+        }
         try { await Task.WhenAll(pending); }
         catch (Exception) { /* Fixed startup errors are already returned to the launch session. */ }
     }
 
-    private async Task<EndfieldBridgeLaunchResult> TrackStartAsync(Task<EndfieldBridgeLaunchResult> task)
+    private async Task<EndfieldBridgeLaunchResult> TrackStartAsync(Func<Task<EndfieldBridgeLaunchResult>> start)
     {
-        lock (_pendingGate) _pendingStarts.Add(task);
-        try { return await task; }
-        finally { lock (_pendingGate) _pendingStarts.Remove(task); }
+        var marker = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_pendingGate)
+        {
+            if (_stopping) throw new EndfieldBridgeLaunchException("launcher_stopping", "启动器正在退出，未创建新的辅助进程。");
+            _pendingStarts.Add(marker.Task);
+        }
+        try { return await start(); }
+        finally
+        {
+            marker.TrySetResult();
+            lock (_pendingGate) _pendingStarts.Remove(marker.Task);
+        }
     }
 
     private sealed class InlineProgress(Action<LaunchProgress> report) : IProgress<LaunchProgress>
@@ -112,8 +131,21 @@ internal sealed class EndfieldBridgeProcessService(ICompanionProcessService inne
         catch (OperationCanceledException) { throw; }
         catch (EndfieldBridgeLaunchException exception)
         {
-            return new(ProcessLaunchStatus.Failed,
-                "实验性启动桥未能确认启动。请先检查游戏状态，可切回官方接管；不会自动重复启动。（错误：" + exception.Code + "）");
+            if (exception.Code is "elevation_declined" or "elevation_cancelled")
+                return new(ProcessLaunchStatus.UacCancelled, "已取消本次管理员授权，未重试启动。");
+            var reason = exception.NativeError switch
+            {
+                740 => "官方组件需要管理员权限。请确认本次授权，或使用官方启动器接管。",
+                5 => "Windows 拒绝访问，请检查权限或系统拦截提示。",
+                2 or 3 => "启动组件或目录不存在，请重新选择官方启动器。",
+                32 => "启动文件正被其他程序占用，请稍后重试。",
+                193 or 216 => "启动组件的格式或系统架构不兼容。",
+                _ => "请先检查游戏状态，可切回官方接管；不会自动重复启动。"
+            };
+            var detail = exception.Code;
+            if (exception.NativeStage is not null) detail += " / " + exception.NativeStage;
+            if (exception.NativeError is int native) detail += " / Win32 " + native;
+            return new(ProcessLaunchStatus.Failed, "实验性启动桥未能确认启动。" + reason + "（错误：" + detail + "）");
         }
         catch (Exception)
         {

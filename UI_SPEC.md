@@ -94,3 +94,8 @@ The gacha header has one compact account selector shared by records and statisti
 ## Endfield launch modes (0.2.7)
 
 The local Endfield launch expansion contains one compact launch-mode row. Its dialog shows the current server, official handoff selected by default, a discovered-launcher list or EXE picker, actual signer status, explicit channel association, and 1/3/5-minute detection timeout. Experimental bridge is visibly labeled and requires a verified official component; switching modes does not replace the game EXE or saved launch profile. Cloud mode hides this row. During initial waiting a cancel action stops waiting without closing launcher/game; launch-mode editing is disabled while starting or running. Existing custom takeover is shown as the effective behavior.
+## Endfield first-use choice (0.2.8)
+
+On the first local Endfield selection, explain that the new game checks its launcher origin. Show two plain choices: open the official launcher (recommended) or start directly (experimental). Keep the current server, associated launcher, concise availability status, and primary action on one screen with no scrolling panel. Confirm unknown server association explicitly. Save a per-installation choice revision; dismissing the automatic prompt postpones it only for the current session. A later launch remains blocked until configuration is complete.
+
+Only a confirmed native error 740 during official-parent creation can offer a separate one-time administrator consent dialog. Default to Cancel. Explain that the helper and game, rather than the main Aster UI, receive the permission. Never display UAC on first-use choice, on arbitrary failures, or without that explicit runtime confirmation.

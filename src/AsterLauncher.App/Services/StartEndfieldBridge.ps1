@@ -1,3 +1,4 @@
+param([string]$RequestPipe, [string]$IpcTemporaryDirectory)
 # Internal worker: one bounded JSON request on stdin, never a saved command line.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -36,11 +37,38 @@ function Get-LocalPath($Value, [bool]$Directory) {
     return $path
 }
 
-function Write-Result([string]$Status, [string]$ErrorCode, [int]$GamePid, [int]$ParentPid) {
+# Compiler scratch is disposable; a game's temporary identity must survive repeated launches.
+# Derive it from the installed EXE path, never a request GUID, game version, or login data.
+function Set-GameTemporaryEnvironment([string]$DataRoot, [string]$GameExecutable) {
+    $verifiedData = Get-LocalPath $DataRoot $true
+    $verifiedGame = Get-LocalPath $GameExecutable $false
+    $identity = $verifiedGame.ToUpperInvariant()
+    $hash = [Security.Cryptography.SHA256]::Create()
+    try { $key = [BitConverter]::ToString($hash.ComputeHash($utf8.GetBytes($identity))).Replace('-', '').ToLowerInvariant() }
+    finally { $hash.Dispose() }
+    $runtime = [IO.Path]::Combine($verifiedData, 'launch', 'runtime')
+    $installation = [IO.Path]::Combine($runtime, $key)
+    $temporary = [IO.Path]::Combine($installation, 'temp')
+    foreach ($directory in @($runtime, $installation, $temporary)) {
+        Assert-PlainPath $directory
+        [void][IO.Directory]::CreateDirectory($directory)
+        Assert-PlainPath $directory
+    }
+    # Only the helper's original compiler scratch is cleaned. Never inspect or package
+    # runtime contents: SDK-owned state may live here and belongs to the game.
+    $env:TEMP = $temporary
+    $env:TMP = $temporary
+    return $temporary
+}
+
+function Write-Result([string]$Status, [string]$ErrorCode, [int]$GamePid, [int]$ParentPid,
+    [Nullable[int]]$NativeError = $null, $NativeStage = $null) {
     if ($null -eq $resultPath -or -not $canPublish) { return }
+    if ($null -ne $NativeError -and ($NativeError -lt 0 -or $NativeError -gt 65535)) { $NativeError = $null }
+    if ($NativeStage -notin @('initialize_attribute_list', 'update_attribute_list', 'create_process')) { $NativeStage = $null }
     $record = [ordered]@{
         schemaVersion = 1; requestId = $requestId; status = $Status; errorCode = $ErrorCode
-        gamePid = $GamePid; parentPid = $ParentPid
+        gamePid = $GamePid; parentPid = $ParentPid; nativeError = $NativeError; nativeStage = $NativeStage
     }
     $temporary = $resultPath + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
     try {
@@ -69,7 +97,16 @@ using System.Text;
 public sealed class EndfieldBridgeFailure : Exception
 {
     public string Code { get; private set; }
-    public EndfieldBridgeFailure(string code) : base(code) { Code = code; }
+    public int? NativeError { get; private set; }
+    public string NativeStage { get; private set; }
+    public EndfieldBridgeFailure(string code) : this(code, null, null) { }
+    public EndfieldBridgeFailure(string code, int? nativeError, string nativeStage) : base(code)
+    {
+        Code = code;
+        if (nativeError.HasValue && nativeError.Value >= 0 && nativeError.Value <= 65535) NativeError = nativeError;
+        if (nativeStage == "initialize_attribute_list" || nativeStage == "update_attribute_list" || nativeStage == "create_process")
+            NativeStage = nativeStage;
+    }
 }
 
 public sealed class EndfieldBridgeSession : IDisposable
@@ -332,18 +369,28 @@ public static class EndfieldBridgeNative
         string workingDirectory, uint flags, IntPtr attribute, IntPtr attributedHandle, string failure)
     {
         UIntPtr size = UIntPtr.Zero;
-        InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
-        if (size == UIntPtr.Zero || size.ToUInt64() > 1048576) throw new EndfieldBridgeFailure(failure);
+        bool querySucceeded = InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+        int queryError = querySucceeded ? 0 : Marshal.GetLastWin32Error();
+        // The initial size query is expected to fail with ERROR_INSUFFICIENT_BUFFER.
+        if ((!querySucceeded && queryError != 122) || size == UIntPtr.Zero || size.ToUInt64() > 1048576)
+            throw new EndfieldBridgeFailure(failure, queryError, "initialize_attribute_list");
         IntPtr list = Marshal.AllocHGlobal(checked((int)size.ToUInt64()));
         IntPtr value = Marshal.AllocHGlobal(IntPtr.Size);
         bool initialized = false;
         try
         {
             initialized = InitializeProcThreadAttributeList(list, 1, 0, ref size);
-            if (!initialized) throw new EndfieldBridgeFailure(failure);
+            if (!initialized)
+            {
+                int nativeError = Marshal.GetLastWin32Error();
+                throw new EndfieldBridgeFailure(failure, nativeError, "initialize_attribute_list");
+            }
             Marshal.WriteIntPtr(value, attributedHandle);
             if (!UpdateProcThreadAttribute(list, 0, attribute, value, new UIntPtr((uint)IntPtr.Size), IntPtr.Zero, IntPtr.Zero))
-                throw new EndfieldBridgeFailure(failure);
+            {
+                int nativeError = Marshal.GetLastWin32Error();
+                throw new EndfieldBridgeFailure(failure, nativeError, "update_attribute_list");
+            }
             STARTUPINFOEX startup = new STARTUPINFOEX();
             startup.startupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFOEX)); startup.attributeList = list;
             PROCESS_INFORMATION result;
@@ -351,7 +398,10 @@ public static class EndfieldBridgeNative
             if (!CreateProcessW(executable, command, IntPtr.Zero, IntPtr.Zero, false,
                 flags | EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
                 IntPtr.Zero, workingDirectory, ref startup, out result))
-                throw new EndfieldBridgeFailure(failure);
+            {
+                int nativeError = Marshal.GetLastWin32Error();
+                throw new EndfieldBridgeFailure(failure, nativeError, "create_process");
+            }
             return result;
         }
         finally
@@ -405,9 +455,22 @@ public static class EndfieldBridgeNative
 '@
 
 try {
-    $inputStream = [Console]::OpenStandardInput()
+    $inputStream = $null
     $memory = [IO.MemoryStream]::new()
     try {
+        if (-not [string]::IsNullOrEmpty($RequestPipe) -or -not [string]::IsNullOrEmpty($IpcTemporaryDirectory)) {
+            if ($RequestPipe -cnotmatch '^AsterLauncher\.EndfieldBridge\.[a-f0-9]{32}$' -or
+                [string]::IsNullOrEmpty($IpcTemporaryDirectory)) { throw 'Invalid request channel.' }
+            $ipcTemporary = Get-LocalPath $IpcTemporaryDirectory $true
+            $env:TEMP = $ipcTemporary
+            $env:TMP = $ipcTemporary
+            $env:PSModuleAnalysisCachePath = [IO.Path]::Combine($ipcTemporary, 'ModuleAnalysisCache')
+            Set-Location -LiteralPath $ipcTemporary
+            [Environment]::CurrentDirectory = $ipcTemporary
+            $inputStream = [IO.Pipes.NamedPipeClientStream]::new('.', $RequestPipe, [IO.Pipes.PipeDirection]::In)
+            $inputStream.Connect(10000)
+        }
+        else { $inputStream = [Console]::OpenStandardInput() }
         $buffer = [byte[]]::new(1024)
         while (($count = $inputStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
             if ($memory.Length + $count -gt 32768) { throw 'Request is too large.' }
@@ -415,7 +478,7 @@ try {
         }
         $request = $utf8.GetString($memory.ToArray()) | ConvertFrom-Json
     }
-    finally { $memory.Dispose(); $inputStream.Dispose() }
+    finally { $memory.Dispose(); if ($null -ne $inputStream) { $inputStream.Dispose() } }
     if ($null -eq $request -or $request.schemaVersion -ne 1 -or
         $request.requestId -isnot [string] -or $request.requestId -cnotmatch '^[a-f0-9]{32}$') { throw 'Invalid request.' }
     $requestId = $request.requestId
@@ -468,6 +531,7 @@ try {
         $cancelPath = [IO.Path]::Combine($sessionRoot, 'cancel.request')
         Assert-PlainPath $cancelPath
         if ([IO.File]::Exists($cancelPath)) { throw [EndfieldBridgeFailure]::new('request_cancelled') }
+        $null = Set-GameTemporaryEnvironment $data $game
         $session = [EndfieldBridgeNative]::StartOwned($official, $game, $working, [string[]]$request.arguments)
     }
     finally { $heldOfficial.Dispose() }
@@ -483,9 +547,13 @@ try {
 catch {
     # Never persist input, paths, command lines, or arbitrary exception text.
     $code = 'request_invalid'
+    $nativeError = $null
+    $nativeStage = $null
     $exception = $_.Exception
     while ($null -ne $exception) {
-        if ($exception.GetType().Name -eq 'EndfieldBridgeFailure') { $code = $exception.Code; break }
+        if ($exception.GetType().Name -eq 'EndfieldBridgeFailure') {
+            $code = $exception.Code; $nativeError = $exception.NativeError; $nativeStage = $exception.NativeStage; break
+        }
         $exception = $exception.InnerException
     }
     if ($nativeReady -and $code -eq 'request_invalid') { $code = 'native_operation_failed' }
@@ -497,7 +565,7 @@ catch {
         $session = $null
         try { Write-Result 'completed' 'result_unavailable' $gamePidValue $parentPidValue } catch { }
     }
-    else { try { Write-Result 'failed' $code 0 0 } catch { } }
+    else { try { Write-Result 'failed' $code 0 0 $nativeError $nativeStage } catch { } }
     exit 1
 }
 finally {

@@ -45,6 +45,7 @@ public sealed class EndfieldInstallation
     public EndfieldLaunchMode LaunchMode { get; set; } = EndfieldLaunchMode.OfficialLauncher;
     public string? LauncherExecutablePath { get; set; }
     public bool LauncherAssociationConfirmed { get; set; }
+    public int LaunchChoiceRevision { get; set; }
     public int LauncherDetectionTimeoutSeconds { get; set; } = 180;
     public EndfieldPreloadState PreloadState { get; set; }
     public string? PreloadSourceVersion { get; set; }

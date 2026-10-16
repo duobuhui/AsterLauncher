@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
 using AsterLauncher.Core;
 
 namespace AsterLauncher.Infrastructure;
@@ -78,7 +81,8 @@ public sealed class PathAwareGameProcessDetector : IGameProcessDetector
 
                 try
                 {
-                    if (string.Equals(NormalizePath(process.MainModule?.FileName), normalizedExpectedPath, StringComparison.OrdinalIgnoreCase))
+                    if (ReadExecutablePath(process.Id) is { } actualPath
+                        && PlaytimeTrackingService.SameExecutablePath(normalizedExpectedPath, actualPath))
                     {
                         matches.Add(process);
                     }
@@ -96,6 +100,24 @@ public sealed class PathAwareGameProcessDetector : IGameProcessDetector
 
         return matches;
     }
+
+    private static string? ReadExecutablePath(int processId)
+    {
+        // Module enumeration asks for VM_READ, which a normal launcher cannot obtain for an
+        // elevated game. Query only the image path while keeping full-path identity checks.
+        using var handle = OpenProcess(0x1000, false, processId);
+        if (handle.IsInvalid) return null;
+        var path = new StringBuilder(32768);
+        var length = path.Capacity;
+        return QueryFullProcessImageName(handle, 0, path, ref length) ? path.ToString() : null;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern SafeProcessHandle OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int processId);
+
+    [DllImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, StringBuilder name, ref int size);
 
     private static string? NormalizePath(string? path)
     {

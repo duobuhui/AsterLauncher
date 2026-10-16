@@ -726,6 +726,7 @@ public sealed class LauncherViewModel : ObservableObject
         installation.LaunchMode = mode == EndfieldLaunchMode.ExperimentalBridge ? mode : EndfieldLaunchMode.OfficialLauncher;
         installation.LauncherExecutablePath = Path.GetFullPath(path);
         installation.LauncherAssociationConfirmed = true;
+        installation.LaunchChoiceRevision = 1;
         installation.LauncherDetectionTimeoutSeconds = Math.Clamp(seconds, 60, 300);
         await _configurationStore.SaveAsync(_configuration);
         OnPropertyChanged(nameof(SelectedEndfieldInstallation));
@@ -806,6 +807,8 @@ public sealed class LauncherViewModel : ObservableObject
             var result = endfieldInstallation is not null
                 ? await _endfieldLaunch.LaunchAsync(request, endfieldInstallation, progress, launchWait.Token)
                 : await _orchestrator.LaunchAsync(request, progress, launchWait.Token);
+            if (endfieldInstallation is not null && result.Steps.Any(step => step.Result.Status == ProcessLaunchStatus.UacCancelled))
+                result = result with { Status = LaunchSessionStatus.Cancelled, Message = "已取消本次管理员授权，可切回官方启动器接管。" };
             if (launchWait.IsCancellationRequested)
                 result = result with { Status = LaunchSessionStatus.Cancelled, Message = "已取消等待；已打开的启动器或游戏会继续运行。" };
             if (string.Equals(CurrentLaunchKey, launchKey, StringComparison.OrdinalIgnoreCase))
