@@ -4,21 +4,20 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:infra="using:AsterLauncher.Infrastructure"
     Loaded="Page_OnLoaded">
-    <Grid Padding="28,24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <Grid>
-
-            <Button Content="刷新" HorizontalAlignment="Right" VerticalAlignment="Center" Click="Refresh_OnClick" />
+    <Grid Padding="{StaticResource FeaturePagePadding}">
+        <Border Style="{StaticResource CommunitySurfaceStyle}" AutomationProperties.AutomationId="LogsSurface">
+        <Grid RowSpacing="12">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding LogPath}" FontSize="12" VerticalAlignment="Center" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" />
+            <Button Grid.Column="1" Content="刷新" VerticalAlignment="Center" Click="Refresh_OnClick" />
         </Grid>
-        <Border Grid.Row="1" Margin="0,14,0,10" Background="{ThemeResource HeroGlassBrush}" CornerRadius="12" Padding="10,6"><TextBlock Text="{Binding LogPath}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" /></Border>
-        <ListView Grid.Row="2" ItemsSource="{Binding Entries}" SelectionMode="None" Background="{ThemeResource FrostedPanelBrush}" ScrollViewer.VerticalScrollBarVisibility="Auto">
+        <ListView Grid.Row="1" ItemsSource="{Binding Entries}" SelectionMode="None" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListView.ItemContainerStyle><Style TargetType="ListViewItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Padding" Value="0" /><Setter Property="MinHeight" Value="0" /></Style></ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="infra:LauncherLogEntry">
-                    <Border BorderBrush="#32DDEBFF" BorderThickness="0,0,0,1" Padding="8,9">
+                    <Border BorderBrush="{ThemeResource SubtleStrokeBrush}" BorderThickness="0,0,0,1" Padding="8,9">
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />
@@ -35,5 +34,7 @@
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
+        </Grid>
+        </Border>
     </Grid>
 </Page>

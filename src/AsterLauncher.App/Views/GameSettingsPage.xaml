@@ -5,11 +5,13 @@
     xmlns:infra="using:AsterLauncher.Infrastructure"
     Loaded="Page_OnLoaded">
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Padding="28,24" Spacing="16" HorizontalAlignment="Stretch">
+        <StackPanel Padding="{StaticResource FeaturePagePadding}" Spacing="16" HorizontalAlignment="Stretch">
 
 
-            <TextBlock x:Name="ExternalEntryInfo" Visibility="Collapsed" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
-            <Border x:Name="ServerPanel" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
+            <Border x:Name="ExternalEntrySurface" Style="{StaticResource CommunitySurfaceStyle}" Visibility="Collapsed" AutomationProperties.AutomationId="ExternalGameSettingsSurface">
+                <TextBlock x:Name="ExternalEntryInfo" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
+            </Border>
+            <Border x:Name="ServerPanel" Style="{StaticResource CommunitySurfaceStyle}" AutomationProperties.AutomationId="GameSettingsSurface">
                 <StackPanel Spacing="10">
                     <TextBlock Text="安装服务器" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock Text="选择已有游戏目录所属的服务器。仅登记安装信息，不修改游戏文件；切换到另一服请使用游戏图标的右键菜单。" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" />
@@ -17,7 +19,7 @@
                     <StackPanel Orientation="Horizontal" Spacing="8"><ComboBox x:Name="ServerBox" Width="150" AutomationProperties.Name="安装服务器"><ComboBoxItem Content="请选择" /><ComboBoxItem Content="官服" /><ComboBoxItem Content="哔哩哔哩服" /></ComboBox><Button Content="选择 EXE" Click="SelectServerExecutable_OnClick" /><Button Content="确认服务器" Style="{StaticResource ThemePrimaryButtonStyle}" Click="ConfirmServer_OnClick" /></StackPanel>
                 </StackPanel>
             </Border>
-            <Border Visibility="{x:Bind EndfieldSettings.Visibility, Mode=OneWay}" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
+            <Border Visibility="{x:Bind EndfieldSettings.Visibility, Mode=OneWay}" Style="{StaticResource CommunitySurfaceStyle}">
                 <StackPanel Spacing="12">
                     <Grid><TextBlock Text="终末地画面设置" FontSize="20" FontWeight="SemiBold" /><Button Content="重新读取" HorizontalAlignment="Right" Click="ReadDisplay_OnClick" /></Grid>
                     <TextBlock Text="两服共用。关闭游戏后修改，下次启动生效。" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" FontSize="13" />
@@ -39,7 +41,7 @@
                     <TextBlock Text="{x:Bind EndfieldSettings.Status, Mode=OneWay}" FontSize="13" TextWrapping="Wrap" Foreground="{ThemeResource GlassMutedTextBrush}" />
                 </StackPanel>
             </Border>
-            <Border Visibility="{x:Bind EndfieldSettings.Visibility, Mode=OneWay}" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
+            <Border Visibility="{x:Bind EndfieldSettings.Visibility, Mode=OneWay}" Style="{StaticResource CommunitySurfaceStyle}">
                 <StackPanel Spacing="10">
                     <Grid><TextBlock Text="游戏照片" FontSize="20" FontWeight="SemiBold" /><StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"><Button Content="选择文件夹" Click="SelectPhotoDirectory_OnClick" /><Button Content="打开文件夹" Click="OpenPhotoDirectory_OnClick" /><Button Content="刷新" Click="ReadDisplay_OnClick" /></StackPanel></Grid>
                     <TextBlock Text="{x:Bind EndfieldSettings.PhotoDirectory, Mode=OneWay}" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />
@@ -51,7 +53,7 @@
                 </StackPanel>
             </Border>
             <Expander x:Name="PresentationExpander" Header="游戏信息与背景" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-            <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="16" Padding="18">
+            <Border Style="{StaticResource CommunitySurfaceStyle}">
                 <Grid ColumnSpacing="18" RowSpacing="14">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>

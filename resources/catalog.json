@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026101502,
-  "publishedAt": "2026-10-15T08:20:57.890Z",
+  "revision": 2026102101,
+  "publishedAt": "2026-10-21T15:23:28.054Z",
   "pools": [
     {
       "gameId": "endfield",
@@ -337,7 +337,7 @@
       "title": "烟火生缘",
       "startsOn": "2026-10-15",
       "endsOn": "2026-11-26",
-      "description": "版本更新维护后开启，限时经营任务在下一版本维护前结束；缘缘庄经营玩法之后仍可体验。"
+      "description": "版本更新维护后开启，10月22日04:00更新活动内容；限时经营任务在下一版本维护前结束，缘缘庄经营玩法之后仍可体验。"
     },
     {
       "gameId": "endfield",

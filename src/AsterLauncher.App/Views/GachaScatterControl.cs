@@ -24,9 +24,7 @@ public sealed class GachaScatterControl : UserControl
         _body.Children.Add(_title);
         _body.Children.Add(_plot);
         _body.Children.Add(_detail);
-        Content = new Border { Child = _body, Padding = new(14), CornerRadius = new(12),
-            Background = AsterLauncher.App.Services.AppearanceBrushes.Get("HeroGlassBrush"),
-            BorderBrush = AsterLauncher.App.Services.AppearanceBrushes.Get("GlassEdgeBrush"), BorderThickness = new(1) };
+        Content = new Border { Child = _body, Style = (Style)Application.Current.Resources["CommunitySurfaceStyle"] };
         SizeChanged += (_, _) => Draw();
         ActualThemeChanged += (_, _) => Draw();
     }
@@ -65,7 +63,7 @@ public sealed class GachaScatterControl : UserControl
         {
             _plot.Children.Add(new Line { X1 = X(average), X2 = X(average), Y1 = 20, Y2 = baseline,
                 Stroke = accent, StrokeThickness = 1, StrokeDashArray = [3, 3] });
-            var label = new TextBlock { Text = $"均值 {average:0.0}", FontSize = 12, Foreground = muted };
+            var label = new TextBlock { Text = $"平均 {average:0.0} 抽", FontSize = 12, Foreground = muted };
             Canvas.SetLeft(label, Math.Clamp(X(average) - 28, 0, width - 75));
             Canvas.SetTop(label, 0);
             _plot.Children.Add(label);
@@ -129,7 +127,7 @@ public sealed class GachaScatterControl : UserControl
         var complete = _points.Count(p => p.Complete);
 
         _detail.Text = _points.Count == 0 ? "暂无出货记录"
-            : $"{_points.Count} 次出货 · {complete} 个完整间隔。抽数越高越醒目；同位置记录越多，点越大。空心点含历史不完整记录，不完整间隔不计入均值。"
+            : $"{_points.Count} 次出货 · {complete} 段记录用于平均值。越靠左，所需抽数越少；点击圆点查看物品。同位置记录越多，点越大；空心点含不完整历史。"
                 + (_maximum > _referenceMaximum ? $" 横轴已扩展至 {_maximum} 抽以显示全部记录。" : "");
     }
 

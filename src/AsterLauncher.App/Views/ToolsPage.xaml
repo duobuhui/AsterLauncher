@@ -4,12 +4,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:core="using:AsterLauncher.Core">
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Padding="28,24" Spacing="16" HorizontalAlignment="Stretch">
+        <StackPanel Padding="{StaticResource FeaturePagePadding}" Spacing="16" HorizontalAlignment="Stretch">
 
             <ItemsControl ItemsSource="{Binding CurrentCompanionTools}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="core:CompanionTool">
-                        <Border Style="{StaticResource CommunitySurfaceStyle}" Background="{ThemeResource HeroGlassBrush}" Margin="0,4">
+                        <Border Style="{StaticResource CommunitySurfaceStyle}" Margin="0,0,0,10" AutomationProperties.AutomationId="ToolsSurface">
                             <Grid ColumnSpacing="18">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />

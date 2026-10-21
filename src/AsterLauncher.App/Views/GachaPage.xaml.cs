@@ -26,6 +26,8 @@ public sealed partial class GachaPage : Page
     private bool _showStatistics;
     private int _refreshRevision;
     private bool _cloudLinkDialogOpen;
+    private string _accountHelp = "";
+    private string _recordHelp = "";
 
     private readonly IResourceCatalogProvider _resources;
     private void Resource_OnUpdated(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(async () => { if (IsLoaded) await RefreshAsync(); });
@@ -34,12 +36,17 @@ public sealed partial class GachaPage : Page
         _launcher = launcher;
         _resources = resources;
         Loaded += (_, _) => _resources.Updated += Resource_OnUpdated;
-        Unloaded += (_, _) => _resources.Updated -= Resource_OnUpdated;
+        Unloaded += (_, _) =>
+        {
+            CloseCommandMenus();
+            _resources.Updated -= Resource_OnUpdated;
+        };
         _archive = archive;
         _endfieldArchive = endfieldArchive;
         _accountSelection = accountSelection;
         _filePicker = filePicker;
         InitializeComponent();
+        StatisticsPoolHost.Content = StatisticsView.PoolSelector;
         HistoryPoolItems.ItemTemplate = PoolItems.ItemTemplate;
         PoolLeftItems.ItemTemplate = PoolItems.ItemTemplate;
         PoolRightItems.ItemTemplate = PoolItems.ItemTemplate;
@@ -49,8 +56,15 @@ public sealed partial class GachaPage : Page
 
     private async void Page_OnLoaded(object sender, RoutedEventArgs e)
     {
+        CloseCommandMenus();
         await RefreshAsync();
         GachaScrollViewer.ChangeView(null, 0, null, true);
+    }
+
+    private void CloseCommandMenus()
+    {
+        GachaCommands.IsOpen = false;
+        ExportMenuButton.Flyout?.Hide();
     }
 
     private async Task RefreshAsync()
@@ -80,11 +94,12 @@ public sealed partial class GachaPage : Page
         NewEndfieldAccountButton.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
         GachaAccountSelector.Visibility = GachaCapabilities.SupportsRecords(gameId) ? Visibility.Visible : Visibility.Collapsed;
         CaptureButton.Visibility = isEndfield || supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
-        CaptureButton.Content = "增量同步";
-        CloudSyncHint.Visibility = _launcher.CurrentGame?.IsOfficialCloud == true ? Visibility.Visible : Visibility.Collapsed;
+        CaptureButton.Label = "增量同步";
+        ToolTipService.SetToolTip(CaptureButton, _launcher.CurrentGame?.IsOfficialCloud == true
+            ? "粘贴官方记录链接同步；也可导入已有记录。" : "获取当前账号的新记录；补齐更早记录请使用右上角更多中的全量同步。");
         FullCaptureButton.Visibility = isEndfield || supportsUigfCapture ? Visibility.Visible : Visibility.Collapsed;
-        ImportButton.Content = isEndfield ? "导入终末地 JSON" : "导入 UIGF v4 JSON";
-        ExportButton.Content = isEndfield ? "导出终末地 JSON" : "导出 UIGF v4.2 JSON";
+        ToolTipService.SetToolTip(ImportButton, isEndfield ? "导入终末地 JSON" : "导入 UIGF v4 JSON");
+        ExportButton.Text = isEndfield ? "导出终末地 JSON" : "导出 UIGF v4.2 JSON";
         ExportCsvButton.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
         EndfieldAnalysisPanel.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
         EndfieldPityStrip.Visibility = isEndfield ? Visibility.Visible : Visibility.Collapsed;
@@ -99,7 +114,9 @@ public sealed partial class GachaPage : Page
             var selectedId = _endfieldArchive.SelectedAccountId;
             SetAccountChoices(accounts.Select(account => new AccountChoice(account.Id, account.Name)).ToArray(), selectedId);
             var name = accounts.FirstOrDefault(account => account.Id == selectedId)?.Name ?? "当前账号";
-            AccountHintText.Text = $"终末地记录未提供可靠 UID。同步和导入写入“{name}”；请先核对游戏内账号，不同账号请新建档案。";
+            _accountHelp = $"终末地记录没有可靠 UID。同步和导入将写入“{name}”，请先核对游戏内账号；其他账号请在更多菜单中新建档案。";
+            _recordHelp = "免费抽与计入保底的抽数分别统计。首条六星前的记录可能不完整，显示的本地计数不代表完整历史。";
+            ToolTipService.SetToolTip(GachaAccountSelector, _accountHelp);
             var endfieldSummary = await _endfieldArchive.GetSummaryAsync();
             var analysis = await _endfieldArchive.GetAnalysisAsync();
             if (!IsCurrent()) return;
@@ -147,18 +164,19 @@ public sealed partial class GachaPage : Page
             await StatisticsView.SetUigfAsync(analysis, uid);
             if (!IsCurrent()) return;
             CurrentGameText.Text = gameName;
-            UigfRulesText.Text = gameId switch
+            _recordHelp = gameId switch
             {
                 BuiltInGameIds.GenshinImpact => "角色活动祈愿 301 / 400 共用计数，武器、常驻和集录分别统计；不推断定轨或 UP。",
                 BuiltInGameIds.ZenlessZoneZero => "各调频类别分别统计 S / A / B 级；特殊类别保底规则待核对，不推断 UP。",
-                _ => "同类跃迁共用五星计数；特殊类别保留原始记录，不推断 UP。"
+                _ => "同类跃迁共用五星计数；Fate[UBW]角色与光锥联动跃迁分别显示，不与普通活动跃迁合并。未确认的保底与 UP 规则不做推断。"
             };
             UigfEmptyText.Text = $"暂无{gameName}记录；同步或导入 UIGF 后显示。";
             var numbered = analysis.Accounts.OrderBy(account => account.Uid, StringComparer.Ordinal)
                 .Select((account, index) => (account.Uid, Number: index + 1)).ToDictionary(item => item.Uid, item => item.Number, StringComparer.Ordinal);
             SetAccountChoices(analysis.Accounts.Select(account => new AccountChoice(account.Uid,
                 $"账号 {numbered[account.Uid]} · {account.AccountLabel}")).ToArray(), uid);
-            AccountHintText.Text = "记录和统计使用同一个账号；同步、导入按记录中的 UID 合并，当前选择保持不变。";
+            _accountHelp = "记录和统计使用当前选中的同一个账号。同步与导入按记录内的 UID 合并，切换这里不会切换游戏账号。";
+            ToolTipService.SetToolTip(GachaAccountSelector, _accountHelp);
             ShowUigfAccount(uid);
             ApplyStatisticsView();
             return;
@@ -175,6 +193,7 @@ public sealed partial class GachaPage : Page
 
     private void ClearAccountView()
     {
+        _accountHelp = _recordHelp = "";
         _analysis = UigfGachaAnalysis.Empty;
         _poolCardCount = 0;
         HistoryPoolItems.ItemsSource = null;
@@ -280,7 +299,7 @@ public sealed partial class GachaPage : Page
         RecordsTab.IsChecked = !_showStatistics;
         StatisticsTab.IsChecked = _showStatistics;
         StatisticsView.Visibility = _showStatistics ? Visibility.Visible : Visibility.Collapsed;
-        ExportPanel.Visibility = _showStatistics ? Visibility.Collapsed : Visibility.Visible;
+        StatisticsPoolHost.Visibility = _showStatistics ? Visibility.Visible : Visibility.Collapsed;
         var endfield = _launcher.CurrentGame?.Id == BuiltInGameIds.Endfield;
         EndfieldAnalysisPanel.Visibility = !_showStatistics && endfield ? Visibility.Visible : Visibility.Collapsed;
         EndfieldPityStrip.Visibility = !_showStatistics && endfield ? Visibility.Visible : Visibility.Collapsed;
@@ -288,6 +307,20 @@ public sealed partial class GachaPage : Page
         UigfAnalysisPanel.Visibility = !_showStatistics && uigf ? Visibility.Visible : Visibility.Collapsed;
         UigfPityStrip.Visibility = !_showStatistics && uigf ? Visibility.Visible : Visibility.Collapsed;
         GachaScrollViewer.ChangeView(null, 0, null, true);
+    }
+    private async void Help_OnClick(object sender, RoutedEventArgs e)
+    {
+        var help = new StackPanel { Spacing = 12, MaxWidth = 460 };
+        foreach (var text in new[] { _accountHelp, _recordHelp,
+            "平均出货抽数只使用两次出货之间完整的记录；首条出货前缺失的历史不计入平均值。",
+            "增量同步获取新记录；全量同步用于补齐更早记录。导入会合并去重，不覆盖现有档案。" }.Where(text => text.Length > 0))
+            help.Children.Add(new TextBlock { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap });
+        await new ContentDialog
+        {
+            XamlRoot = XamlRoot, RequestedTheme = ActualTheme,
+            Title = "记录与统计说明", Content = help, CloseButtonText = "知道了",
+            DefaultButton = ContentDialogButton.Close
+        }.ShowAsync();
     }
     private void ShowUigfAccount(string? uid)
     {
@@ -596,12 +629,14 @@ public sealed partial class GachaPage : Page
             && GachaCapabilities.SupportsRecords(_launcher.CurrentGame?.Id);
         BusyRing.IsActive = _busy || _refreshing > 0;
         GachaAccountSelector.IsEnabled = enabled;
+        StatisticsView.PoolSelector.IsEnabled = enabled;
         NewEndfieldAccountButton.IsEnabled = enabled;
         CaptureButton.IsEnabled = enabled;
         FullCaptureButton.IsEnabled = enabled;
         ImportButton.IsEnabled = enabled;
         ExportButton.IsEnabled = enabled;
         ExportCsvButton.IsEnabled = enabled;
+        ExportMenuButton.IsEnabled = enabled;
     }
     private void ShowResult(GachaImportResult result)
     {

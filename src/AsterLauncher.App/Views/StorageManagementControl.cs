@@ -42,7 +42,7 @@ public sealed class StorageManagementControl:UserControl
                 if(legacy)panel.Children.Add(new TextBlock{Text="包含旧配置、时长和抽卡档案。请先确认已迁移或备份，再选择删除。",FontSize=12,TextWrapping=TextWrapping.Wrap});
                 var details=new Expander{Header="查看文件列表",HorizontalAlignment=HorizontalAlignment.Stretch};
                 details.Content=new TextBox{Text=string.Join(Environment.NewLine,files.Select(f=>$"{f.Relative}  ·  {Bytes(f.Size)}").Concat(directories.Select(d=>$"{(d.Relative.Length==0?"此目录":d.Relative)}  ·  空目录"))),IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MaxHeight=160};panel.Children.Add(details);
-                _items.Children.Add(new Border{Child=panel,Padding=new(14),CornerRadius=new(12),Background=(Brush)Application.Current.Resources["HeroGlassBrush"],BorderBrush=(Brush)Application.Current.Resources["GlassEdgeBrush"],BorderThickness=new(1)});
+                _items.Children.Add(new Border{Child=panel,Style=(Style)Application.Current.Resources["InsetSurfaceBorderStyle"]});
                 _groups.Add((box,files,directories));
             }
             _result.Text=$"找到 {scan.Files.Count} 个可清理文件、{scan.EmptyDirectories.Count} 个空目录，文件大小 {Bytes(scan.Files.Sum(f=>f.Size))}；保护或跳过 {scan.ProtectedFiles} 项。"+string.Join(" ",scan.Notes);

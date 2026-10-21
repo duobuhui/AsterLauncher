@@ -163,13 +163,15 @@
                 <Setter Property="MinHeight" Value="34" />
                 <Setter Property="Padding" Value="12,6" />
                 <Setter Property="FontSize" Value="14" />
+                <Setter Property="Foreground" Value="{ThemeResource GlassTextBrush}" />
             </Style>
+            <Thickness x:Key="FeaturePagePadding">18,12,18,18</Thickness>
             <Style x:Key="CardBorderStyle" TargetType="Border">
-                <Setter Property="Background" Value="{ThemeResource FrostedPanelBrush}" />
-                <Setter Property="BorderBrush" Value="{ThemeResource SubtleStrokeBrush}" />
+                <Setter Property="Background" Value="{ThemeResource HeroGlassBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource GlassEdgeBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="16" />
-                <Setter Property="Padding" Value="20" />
+                <Setter Property="Padding" Value="16" />
             </Style>
             <Style x:Key="CommunitySurfaceStyle" TargetType="Border" BasedOn="{StaticResource CardBorderStyle}">
                 <Setter Property="Padding" Value="16" />

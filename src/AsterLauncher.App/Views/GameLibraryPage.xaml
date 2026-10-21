@@ -187,7 +187,7 @@
         <Grid Grid.Column="1" Background="Transparent">
             <Grid.RowDefinitions><RowDefinition Height="64" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
-            <Border Height="52" Margin="18,0,18,0" HorizontalAlignment="Left" VerticalAlignment="Center" Background="{ThemeResource HeroGlassBrush}" BorderBrush="#2BFFFFFF" BorderThickness="1" CornerRadius="16">
+            <Border Height="52" Margin="18,0,18,0" HorizontalAlignment="Left" VerticalAlignment="Center" Style="{StaticResource CommunitySurfaceStyle}" Padding="0" AutomationProperties.AutomationId="WorkspaceNavigationSurface">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <ScrollViewer HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Hidden" VerticalScrollMode="Disabled" VerticalAlignment="Center">
                     <StackPanel x:Name="SecondaryNavigation" Orientation="Horizontal" VerticalAlignment="Center" Padding="6" Spacing="2">
@@ -380,8 +380,9 @@
                 <Frame x:Name="FeatureTransitionFrame" Visibility="Collapsed" Background="Transparent" IsNavigationStackEnabled="False" />
 
                 <ScrollViewer x:Name="AddGamePanel" Visibility="Collapsed" Background="Transparent" VerticalScrollBarVisibility="Auto">
-                    <Grid Margin="28,20,28,28" RowSpacing="16" HorizontalAlignment="Stretch" VerticalAlignment="Top">
+                    <Grid Margin="{StaticResource FeaturePagePadding}" RowSpacing="12" HorizontalAlignment="Stretch" VerticalAlignment="Top">
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <Border Style="{StaticResource CommunitySurfaceStyle}" AutomationProperties.AutomationId="LibrarySurface">
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <StackPanel Spacing="3">
@@ -392,10 +393,11 @@
                                 <StackPanel Orientation="Horizontal" Spacing="7"><FontIcon Glyph="&#xE74D;" FontSize="14" /><TextBlock Text="清除未安装" /></StackPanel>
                             </Button>
                         </Grid>
+                        </Border>
                         <Grid x:Name="LibraryColumns" Grid.Row="1" ColumnSpacing="16" RowSpacing="16">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                            <Border Grid.Column="0" Padding="18" HorizontalAlignment="Stretch" VerticalAlignment="Top" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource SubtleStrokeBrush}" BorderThickness="1" CornerRadius="18">
+                            <Border Grid.Column="0" Style="{StaticResource CommunitySurfaceStyle}" HorizontalAlignment="Stretch" VerticalAlignment="Top">
                                 <StackPanel Spacing="10">
                                     <TextBlock Text="左栏游戏" FontSize="17" FontWeight="SemiBold" />
                                     <ListView x:Name="LibraryVisibleList" ItemsSource="{Binding Launcher.Games}" Background="Transparent" SelectionMode="None" CanDragItems="True" CanReorderItems="True" AllowDrop="True" DragItemsCompleted="LibraryVisibleList_OnDragItemsCompleted" AutomationProperties.Name="拖动调整左栏游戏顺序">
@@ -422,7 +424,7 @@
                                 </StackPanel>
                             </Border>
                             <StackPanel x:Name="LibraryRightColumn" Grid.Column="1" Spacing="16">
-                                <Border Padding="18" HorizontalAlignment="Stretch" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource SubtleStrokeBrush}" BorderThickness="1" CornerRadius="18">
+                                <Border Style="{StaticResource CommunitySurfaceStyle}" HorizontalAlignment="Stretch">
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="未显示的内置游戏" FontSize="17" FontWeight="SemiBold" />
                                         <ListView x:Name="LibraryHiddenList" ItemsSource="{Binding Launcher.LibraryGames}" Background="Transparent" SelectionMode="None" CanDragItems="True" CanReorderItems="True" AllowDrop="True" DragItemsCompleted="LibraryHiddenList_OnDragItemsCompleted" AutomationProperties.Name="拖动调整库内游戏顺序">
@@ -445,7 +447,7 @@
                                         </ListView>
                                     </StackPanel>
                                 </Border>
-                                <Border Padding="18" HorizontalAlignment="Stretch" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource SubtleStrokeBrush}" BorderThickness="1" CornerRadius="18">
+                                <Border Style="{StaticResource CommunitySurfaceStyle}" HorizontalAlignment="Stretch">
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="添加游戏程序" FontSize="17" FontWeight="SemiBold" />
                                         <TextBlock Text="选择游戏程序；已支持的游戏会自动加入左栏。" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" />

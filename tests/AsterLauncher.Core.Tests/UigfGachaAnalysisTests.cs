@@ -27,6 +27,36 @@ public sealed class UigfGachaAnalysisTests
         Assert.Equal(0, new UigfPityIndicator("特殊", 20, null).Percent);
     }
     [Fact]
+    public void StarRail_NamesFateCollaborationPools_AndKeepsCountsSeparateFromOrdinaryWarps()
+    {
+        var account = Assert.Single(UigfGachaAnalyzer.Analyze(Root("hkrpg", User("100000001",
+            Pull("1", "11", "5", "姬子", "normal"),
+            Pull("2", "21", "5", "Saber", "fate-first"),
+            Pull("3", "21", "3", "光锥", "fate-second"),
+            Pull("4", "21", "5", "Archer", "fate-second"),
+            Pull("5", "22", "5", "没有回报的加冕", "fate-light-cone"),
+            Pull("6", "22", "3", "光锥", "fate-light-cone"),
+            Pull("7", "999", "5", "未知物品", "unknown"))), BuiltInGameIds.HonkaiStarRail).Accounts);
+        var roles = account.Sections.Single(section => section.Type == "21");
+        var cones = account.Sections.Single(section => section.Type == "22");
+        Assert.Equal("Fate[UBW] 角色联动跃迁", roles.Title);
+        Assert.True(roles.IsFeaturedCharacter);
+        Assert.Equal(3, roles.RecordCount);
+        Assert.Equal(2, roles.HighRarityPulls[0].LocalPullCount);
+        Assert.True(roles.HighRarityPulls[0].HasPreviousHighRarity);
+        Assert.Equal("Fate[UBW] 光锥联动跃迁", cones.Title);
+        Assert.False(cones.IsFeaturedCharacter);
+        Assert.Equal(1, cones.PityCount);
+        Assert.Null(roles.PityMaximum);
+        Assert.Null(cones.PityMaximum);
+        Assert.Equal(0, account.Sections.Single(section => section.Type == "11").PityCount);
+        Assert.Null(account.Sections.Single(section => section.Type == "999").PityMaximum);
+        var stats = GachaStatisticsAnalyzer.Analyze(BuiltInGameIds.HonkaiStarRail, account);
+        Assert.Null(stats.Single(pool => pool.Type == "21").FeaturedMaximum);
+        Assert.All(stats.Single(pool => pool.Type == "21").HighPoints, point => Assert.Equal(GachaUpStatus.Unknown, point.UpStatus));
+    }
+
+    [Fact]
     public void Genshin_Combines301And400_SeparatesWeaponAndChronicled_AndUsesOnlyCompleteIntervals()
     {
         var root = Root("hk4e", User("100000001",

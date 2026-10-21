@@ -71,7 +71,7 @@
                 </StackPanel>
             </Grid>
         </DataTemplate>        <DataTemplate x:Key="UigfBannerTemplate" x:DataType="core:UigfBannerAnalysis">
-            <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" ToolTipService.ToolTip="{x:Bind PoolTooltip}">
+            <Border Style="{StaticResource InsetSurfaceBorderStyle}" Padding="0" ToolTipService.ToolTip="{x:Bind PoolTooltip}">
                 <Expander Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                     <Expander.Header>
                         <StackPanel Padding="11,5" Spacing="2" HorizontalAlignment="Stretch">
@@ -91,48 +91,70 @@
             </Border>
         </DataTemplate>
     </Page.Resources>
-    <ScrollViewer x:Name="GachaScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" SizeChanged="GachaScrollViewer_OnSizeChanged">
-        <StackPanel Padding="28,24" Spacing="10" HorizontalAlignment="Stretch">
-            <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="12" Padding="12,9"><Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-
-                <ComboBox x:Name="GachaAccountSelector" MinWidth="175" MaxWidth="235" DisplayMemberPath="Label" PlaceholderText="暂无账号" AutomationProperties.Name="抽卡账号" SelectionChanged="GachaAccountSelector_SelectionChanged" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+    <Grid Padding="{StaticResource FeaturePagePadding}" RowSpacing="10">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Border Style="{StaticResource CommunitySurfaceStyle}" Padding="12,9" AutomationProperties.AutomationId="GachaSurface" AutomationProperties.Name="抽卡页面">
+            <Grid RowSpacing="6" ColumnSpacing="12">
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel Spacing="1" VerticalAlignment="Center">
                     <TextBlock x:Name="CurrentGameText" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="ArchiveSummaryText" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-                <ProgressRing x:Name="BusyRing" Grid.Column="2" Width="20" Height="20" VerticalAlignment="Center" IsActive="False" />
-                <Button x:Name="CaptureButton" Grid.Column="3" Content="同步记录" Style="{StaticResource ThemePrimaryButtonStyle}" Click="Capture_OnClick" VerticalAlignment="Center" />
-                <Button x:Name="FullCaptureButton" Grid.Column="4" Content="全量同步" Click="FullCapture_OnClick" VerticalAlignment="Center" Visibility="Collapsed" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" />
-            </Grid></Border>
-
-            <TextBlock x:Name="CloudSyncHint" Text="云游戏同步需要手动提供官方记录链接；也可导入已有记录。" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
-            <Grid ColumnSpacing="10">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                <TextBlock x:Name="AccountHintText" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
-                <Button x:Name="NewEndfieldAccountButton" Grid.Column="1" Content="新建账号档案" Click="NewEndfieldAccount_OnClick" Visibility="Collapsed" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                    <ToggleButton x:Name="RecordsTab" Content="抽卡记录" IsChecked="True" Click="RecordsTab_OnClick" AutomationProperties.AutomationId="GachaRecordsTab" />
+                    <ToggleButton x:Name="StatisticsTab" Content="抽卡统计" Click="StatisticsTab_OnClick" AutomationProperties.AutomationId="GachaStatisticsTab" />
+                </StackPanel>
+                <CommandBar x:Name="GachaCommands" Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Right" HorizontalContentAlignment="Right" Background="Transparent" DefaultLabelPosition="Right" IsDynamicOverflowEnabled="True" ClosedDisplayMode="Compact" AutomationProperties.Name="抽卡操作" AutomationProperties.AutomationId="GachaCommandSurface">
+                    <CommandBar.Resources>
+                        <SolidColorBrush x:Key="CommandBarBackgroundOpen" Color="Transparent" />
+                        <SolidColorBrush x:Key="CommandBarBorderBrushOpen" Color="Transparent" />
+                        <Thickness x:Key="CommandBarBorderThicknessOpen">0</Thickness>
+                    </CommandBar.Resources>
+                    <CommandBar.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,6,0">
+                            <ProgressRing x:Name="BusyRing" Width="18" Height="18" VerticalAlignment="Center" IsActive="False" />
+                            <ComboBox x:Name="GachaAccountSelector" Width="175" MinWidth="145" DisplayMemberPath="Label" PlaceholderText="暂无账号" AutomationProperties.Name="抽卡账号" AutomationProperties.AutomationId="GachaAccountSelector" SelectionChanged="GachaAccountSelector_SelectionChanged" VerticalAlignment="Center" />
+                            <ContentControl x:Name="StatisticsPoolHost" Visibility="Collapsed" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </CommandBar.Content>
+                    <CommandBar.PrimaryCommands>
+                        <AppBarButton x:Name="CaptureButton" Label="增量同步" Icon="Sync" Click="Capture_OnClick" AutomationProperties.Name="增量同步" AutomationProperties.AutomationId="GachaIncrementalSync" />
+                        <AppBarButton x:Name="ImportButton" Label="导入" Icon="Import" Click="Import_OnClick" AutomationProperties.Name="导入记录" AutomationProperties.AutomationId="GachaImport" />
+                        <AppBarButton x:Name="ExportMenuButton" Label="导出" Icon="Save" AutomationProperties.Name="导出记录" AutomationProperties.AutomationId="GachaExportMenu">
+                            <AppBarButton.Flyout><MenuFlyout>
+                                <MenuFlyoutItem x:Name="ExportButton" Text="导出 JSON" Click="Export_OnClick" AutomationProperties.AutomationId="GachaExportJson" />
+                                <MenuFlyoutItem x:Name="ExportCsvButton" Text="导出 CSV" Visibility="Collapsed" Click="ExportCsv_OnClick" AutomationProperties.AutomationId="GachaExportCsv" />
+                            </MenuFlyout></AppBarButton.Flyout>
+                        </AppBarButton>
+                    </CommandBar.PrimaryCommands>
+                    <CommandBar.SecondaryCommands>
+                        <AppBarButton x:Name="FullCaptureButton" Label="全量同步" Icon="Refresh" Click="FullCapture_OnClick" Visibility="Collapsed" AutomationProperties.Name="全量同步" AutomationProperties.AutomationId="GachaFullSync" />
+                        <AppBarButton x:Name="NewEndfieldAccountButton" Label="新建账号档案" Icon="Add" Click="NewEndfieldAccount_OnClick" Visibility="Collapsed" AutomationProperties.AutomationId="GachaNewArchive" />
+                        <AppBarButton Label="记录与统计说明" Icon="Help" Click="Help_OnClick" AutomationProperties.AutomationId="GachaHelp" />
+                    </CommandBar.SecondaryCommands>
+                </CommandBar>
             </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <ToggleButton x:Name="RecordsTab" Content="抽卡记录" IsChecked="True" Click="RecordsTab_OnClick" />
-                <ToggleButton x:Name="StatisticsTab" Content="统计详情" Click="StatisticsTab_OnClick" />
-            </StackPanel>
+        </Border>
+        <ScrollViewer x:Name="GachaScrollViewer" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled" SizeChanged="GachaScrollViewer_OnSizeChanged">
+        <StackPanel Spacing="10" HorizontalAlignment="Stretch">
             <views:GachaStatisticsControl x:Name="StatisticsView" Visibility="Collapsed" />
             <Grid x:Name="EndfieldPityStrip" ColumnSpacing="8" Visibility="Collapsed" ToolTipService.ToolTip="按本地记录估算；缺失的历史记录会影响计数，免费抽不计入保底。">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,6">
+                <Border Style="{StaticResource CommunitySurfaceStyle}" Padding="10,6">
                     <Grid ColumnSpacing="6"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <TextBlock Text="常驻已垫" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
                         <TextBlock x:Name="StandardPityText" Grid.Column="1" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
                     </Grid>
                 </Border>
-                <Border Grid.Column="1" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,6">
+                <Border Grid.Column="1" Style="{StaticResource CommunitySurfaceStyle}" Padding="10,6">
                     <Grid ColumnSpacing="6" RowSpacing="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                         <TextBlock x:Name="LimitedPityLabel" Text="小保底已垫" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <TextBlock x:Name="LimitedPityText" Grid.Column="1" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
                         <ProgressBar x:Name="LimitedPityBar" Grid.Row="1" Grid.ColumnSpan="2" Height="4" Minimum="0" Maximum="100" Value="0" Foreground="{ThemeResource PageTitleBrush}" Background="#798A9AAB" ToolTipService.ToolTip="按当前寻访类型累计 80 抽六星保底；重构池之间共用，免费十连不计入。" />
                     </Grid>
                 </Border>
-                <Border Grid.Column="2" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,6">
+                <Border Grid.Column="2" Style="{StaticResource CommunitySurfaceStyle}" Padding="10,6">
                     <Grid ColumnSpacing="6" RowSpacing="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                         <TextBlock x:Name="UpRemainingLabel" Text="UP池剩余" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <TextBlock x:Name="UpRemainingText" Grid.Column="1" FontSize="15" FontWeight="SemiBold" Foreground="{ThemeResource PageTitleBrush}" />
@@ -154,14 +176,14 @@
                     </ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="core:EndfieldPoolAnalysis">
-                            <Border BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="13" Padding="1">
+                            <Border Style="{StaticResource CommunitySurfaceStyle}" Padding="1">
                                 <Grid>
-                                    <Border CornerRadius="12" Opacity="0.94" Height="76" VerticalAlignment="Top">
+                                    <Border CornerRadius="15" Opacity="0.94" Height="76" VerticalAlignment="Top">
                                         <Border.Background>
                                             <ImageBrush Stretch="UniformToFill" ImageSource="{x:Bind BannerImageKey, Converter={StaticResource PoolBannerImageConverter}}" />
                                         </Border.Background>
                                     </Border>
-                                    <Border CornerRadius="12" Background="{ThemeResource PoolCardOverlayBrush}" />
+                                    <Border CornerRadius="15" Background="{ThemeResource PoolCardOverlayBrush}" />
                                     <StackPanel HorizontalAlignment="Stretch">
                                         <Expander AutomationProperties.Name="{x:Bind PoolName}" Background="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                             <Expander.Resources><SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" /><SolidColorBrush x:Key="ExpanderHeaderBackgroundPointerOver" Color="#18FFFFFF" /><SolidColorBrush x:Key="ExpanderHeaderBackgroundPressed" Color="#28FFFFFF" /></Expander.Resources>
@@ -189,7 +211,7 @@
                                             <ItemsControl ItemsSource="{x:Bind PreviousPhases}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="core:EndfieldPoolAnalysis">
-                                                        <Border Margin="10,0,10,8" Padding="10,7" Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="9">
+                                                        <Border Margin="10,0,10,8" Style="{StaticResource InsetSurfaceBorderStyle}" Padding="10,7">
                                                             <StackPanel Spacing="4">
                                                                 <Grid ColumnSpacing="8">
                                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -226,7 +248,7 @@
                 <ItemsRepeater.Layout><UniformGridLayout MinItemWidth="155" MinColumnSpacing="8" MinRowSpacing="5" ItemsStretch="Fill" /></ItemsRepeater.Layout>
                 <ItemsRepeater.ItemTemplate>
                     <DataTemplate x:DataType="core:UigfPityIndicator">
-                        <Border Background="{ThemeResource HeroGlassBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="10,5">
+                        <Border Style="{StaticResource CommunitySurfaceStyle}" Padding="10,5">
                             <StackPanel Spacing="2"><Grid ColumnSpacing="6">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="{x:Bind Title}" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" TextTrimming="CharacterEllipsis" />
@@ -237,16 +259,12 @@
                 </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
             <StackPanel x:Name="UigfAnalysisPanel" Visibility="Collapsed" Spacing="7" SizeChanged="UigfAnalysisPanel_OnSizeChanged">
-                <Grid ColumnSpacing="10">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="UigfRulesText" TextWrapping="Wrap" FontSize="12" Foreground="{ThemeResource GlassMutedTextBrush}" VerticalAlignment="Center" />
-                </Grid>
                 <TextBlock x:Name="UigfEmptyText" Text="暂无星穹铁道记录；同步或导入 UIGF 后显示。" FontSize="13" Foreground="{ThemeResource GlassMutedTextBrush}" Visibility="Collapsed" />
                 <ItemsRepeater x:Name="UigfSections">
                     <ItemsRepeater.Layout><StackLayout Spacing="8" /></ItemsRepeater.Layout>
                     <ItemsRepeater.ItemTemplate>
                         <DataTemplate x:DataType="core:UigfPoolSection">
-                            <Border x:Name="UigfSectionBorder" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="11,8">
+                            <Border x:Name="UigfSectionBorder" Style="{StaticResource CommunitySurfaceStyle}" Padding="11,8">
                                 <StackPanel Spacing="5">
                                     <Grid ColumnSpacing="8">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -288,13 +306,7 @@
                     </ItemsRepeater>
                 </Grid>
             </StackPanel>
-            <Border x:Name="ExportPanel" Background="{ThemeResource FrostedPanelBrush}" BorderBrush="{ThemeResource GlassEdgeBrush}" BorderThickness="1" CornerRadius="10" Padding="8">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <Button x:Name="ImportButton" Content="导入 UIGF v4 JSON" Click="Import_OnClick" />
-                    <Button x:Name="ExportButton" Content="导出 UIGF v4.2 JSON" Click="Export_OnClick" />
-                    <Button x:Name="ExportCsvButton" Content="导出 CSV" Visibility="Collapsed" Click="ExportCsv_OnClick" />
-                </StackPanel>
-            </Border>
         </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+    </Grid>
 </Page>

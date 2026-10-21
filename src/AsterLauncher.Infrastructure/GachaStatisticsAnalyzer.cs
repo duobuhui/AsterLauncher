@@ -59,7 +59,9 @@ public static class GachaStatisticsAnalyzer
             or (BuiltInGameIds.HonkaiStarRail, "11") or (BuiltInGameIds.ZenlessZoneZero, "2");
         var equipment = (game, type) is (BuiltInGameIds.GenshinImpact, "302")
             or (BuiltInGameIds.HonkaiStarRail, "12") or (BuiltInGameIds.ZenlessZoneZero, "3");
-        if (!character && !equipment) return GachaUpStatus.NotApplicable;
+        if (!character && !equipment)
+            return game == BuiltInGameIds.HonkaiStarRail && type is "21" or "22"
+                ? GachaUpStatus.Unknown : GachaUpStatus.NotApplicable;
         var name = pull.Name;
         if (!DateTime.TryParseExact(pull.RawTime, "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
             DateTimeStyles.None, out var time)) return GachaUpStatus.Unknown;

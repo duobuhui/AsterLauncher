@@ -88,7 +88,7 @@ internal static class UigfGachaAnalyzer
         [
             new("11", "角色活动跃迁", 90, true), new("12", "光锥活动跃迁", 80),
             new("1", "群星跃迁", 90), new("2", "始发跃迁", null),
-            new("21", "特殊跃迁 · 类别 21", null), new("22", "特殊跃迁 · 类别 22", null)
+            new("21", "Fate[UBW] 角色联动跃迁", null, true), new("22", "Fate[UBW] 光锥联动跃迁", null)
         ]),
         BuiltInGameIds.ZenlessZoneZero => ("nap", "4", "3", "2",
         [

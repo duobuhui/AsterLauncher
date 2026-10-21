@@ -12,8 +12,11 @@ public sealed class GachaStatisticsControl : UserControl
 {
     private readonly StackPanel _body = new() { Spacing = 12 };
     private string? _selectedUid;
-    private readonly ComboBox _pool = new() { MinWidth = 160 };
-    private readonly TextBlock _summary = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap };
+    private readonly ComboBox _pool = new() { Width = 165, MinWidth = 145 };
+    public ComboBox PoolSelector => _pool;
+    private readonly TextBlock _summaryTitle = new() { FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+    private readonly Grid _summaryMetrics = new() { ColumnSpacing = 14 };
+    private readonly TextBlock _summaryDetail = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _rules = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly Grid _plots = new() { ColumnSpacing = 12, RowSpacing = 12 };
     private readonly GachaScatterControl _highPlot = new();
@@ -34,13 +37,13 @@ public sealed class GachaStatisticsControl : UserControl
 
     public GachaStatisticsControl()
     {
-        var selectors = new Grid { ColumnSpacing = 10 };
-        selectors.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        selectors.Children.Add(_pool);
         AutomationProperties.SetName(_pool,"统计卡池");
-        _body.Children.Add(selectors);
-        _body.Children.Add(new Border { Child=_summary, Padding=new(14), CornerRadius=new(12),
-            Background=Brush("HeroGlassBrush"),BorderBrush=Brush("GlassEdgeBrush"),BorderThickness=new(1) });
+        AutomationProperties.SetAutomationId(_pool, "GachaStatisticsPoolSelector");
+        for (var column = 0; column < 3; column++) _summaryMetrics.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        var summary = new StackPanel { Spacing = 10 };
+        summary.Children.Add(_summaryTitle); summary.Children.Add(_summaryMetrics); summary.Children.Add(_summaryDetail);
+        _summaryTitle.Foreground = Brush("GlassTextBrush"); _summaryDetail.Foreground = Brush("GlassMutedTextBrush");
+        _body.Children.Add(new Border { Child = summary, Style = (Style)Application.Current.Resources["CommunitySurfaceStyle"] });
         _plots.ColumnDefinitions.Add(new() { Width=new GridLength(1,GridUnitType.Star) });
         _plots.ColumnDefinitions.Add(new() { Width=new GridLength(1,GridUnitType.Star) });
         _plots.RowDefinitions.Add(new() { Height=GridLength.Auto });
@@ -48,13 +51,13 @@ public sealed class GachaStatisticsControl : UserControl
         _plots.Children.Add(_highPlot); _plots.Children.Add(_upPlot); _body.Children.Add(_plots);
         SizeChanged+=(_,_)=>LayoutPlots();
         _rules.Margin = new(12, 0, 12, 12);
-        _body.Children.Add(new Expander { Header = "统计说明", Content = _rules,
+        _body.Children.Add(new Expander { Header = "统计口径", Content = _rules,
             HorizontalAlignment = HorizontalAlignment.Stretch, Background = Brush("HeroGlassBrush"),
-            BorderBrush = Brush("GlassEdgeBrush"), BorderThickness = new(1), CornerRadius = new(12) });
+            BorderBrush = Brush("GlassEdgeBrush"), BorderThickness = new(1), CornerRadius = new(16) });
         _editor.Background = Brush("HeroGlassBrush");
         _editor.BorderBrush = Brush("GlassEdgeBrush");
         _editor.BorderThickness = new(1);
-        _editor.CornerRadius = new(12);
+        _editor.CornerRadius = new(16);
         var editor = new StackPanel { Spacing = 10 };
         editor.Children.Add(new TextBlock { Text="部分角色加入可歪名单后，仅凭名字无法区分 UP。选择具体记录进行校对，可随时恢复自动判定。",FontSize=12,TextWrapping=TextWrapping.Wrap });
         AutomationProperties.SetName(_record,"校对出货记录"); editor.Children.Add(_record);
@@ -123,41 +126,63 @@ public sealed class GachaStatisticsControl : UserControl
     }
     private void Render()
     {
+        ToolTipService.SetToolTip(_pool, _pool.SelectedItem switch
+        {
+            GachaPoolStatistics selected => selected.Title,
+            EndfieldCategory selected => selected.Title,
+            EndfieldWeaponSelection selected => selected.Title,
+            _ => "选择要统计的卡池"
+        });
         if(_endfield is not null)
         {
             _highPlot.Visibility=_upPlot.Visibility=_editor.Visibility=Visibility.Collapsed;
             if(_pool.SelectedItem is EndfieldWeaponSelection weapon)
             {
                 var p=weapon.Pool;
-                _summary.Text=$"{p.Title} · 武器申领 · {p.Draws} 条出货记录\n六星 {p.SixStars}（{100d*p.SixStars/Math.Max(1,p.Draws):0.00}%） · 五星 {p.FiveStars} · 其他星级 {p.OtherRarity}";
+                ShowSummary(p.Title, $"五星 {p.FiveStars} 件 · 其他星级 {p.OtherRarity} 件。按已记录的武器件数统计，不推算申领次数或保底。",
+                    new("已记录武器", $"{p.Draws:N0} 件", "不含赠送事件"),
+                    new("六星武器", $"{p.SixStars:N0} 件", "来自当前申领池"),
+                    new("六星占比", $"{100d*p.SixStars/Math.Max(1,p.Draws):0.00}%", "六星件数 ÷ 记录件数"));
                 _rules.Text="武器池按池标识独立统计，仅计算出货记录，赠送事件不计入。档案未提供抽数、定轨及 UP 判定的完整规则，暂不推算保底或绘制散点图。";
                 return;
             }
             _rules.Text="终末地暂不提供出货散点图。付费抽、免费抽和 UP 分别统计；重构池保底跨期继承，免费出货不重置付费保底。";
-            if(_pool.SelectedItem is not EndfieldCategory category){_summary.Text="暂无可统计的终末地寻访记录。";return;}
+            if(_pool.SelectedItem is not EndfieldCategory category){ShowSummary("暂无寻访记录", "在右上角同步或导入后，可查看当前账号的统计。");return;}
             var pools=Flatten(_endfield.Pools).Where(p=>p.Category==category.Category).ToArray();
             var total=pools.Sum(p=>p.DrawCount); var six=pools.Sum(p=>p.SixStarPulls.Count);
-            _summary.Text=$"{category.Title} · 共 {total} 抽 · {pools.Length} 个卡池 / 分期\n付费 {pools.Sum(p=>p.PaidDrawCount)} · 免费 {pools.Sum(p=>p.FreeDrawCount)} · 六星 {six} · 六星占比 {(total>0?100d*six/total:0):0.00}%\n付费六星 {six-pools.Sum(p=>p.FreeSixStarCount)} · 免费六星 {pools.Sum(p=>p.FreeSixStarCount)} · 已识别 UP {pools.Sum(p=>p.SixStarPulls.Count(s=>s.IsFeatured))}";
+            var freeSix = pools.Sum(p=>p.FreeSixStarCount);
+            ShowSummary(category.Title, $"计入保底 {pools.Sum(p=>p.PaidDrawCount)} 抽 · 免费 {pools.Sum(p=>p.FreeDrawCount)} 抽\n六星中：非免费 {six-freeSix} 次 · 免费 {freeSix} 次 · 已确认 UP {pools.Sum(p=>p.SixStarPulls.Count(s=>s.IsFeatured))} 次",
+                new("总抽数", $"{total:N0} 抽", $"覆盖 {pools.Length} 个卡池 / 分期"),
+                new("六星出货", $"{six:N0} 次", "包含免费抽获得的六星"),
+                new("六星占比", $"{(total>0?100d*six/total:0):0.00}%", "本地记录占比，非单抽概率"));
             return;
         }
         if(_pool.SelectedItem is not GachaPoolStatistics pool)
         {
             _highPlot.Visibility=_upPlot.Visibility=_editor.Visibility=Visibility.Collapsed;
-            _summary.Text="暂无抽卡记录。同步或导入后可查看统计。"; _rules.Text=""; return;
+            ShowSummary("暂无抽卡记录", "在右上角同步或导入后，可查看当前账号的统计。"); _rules.Text=""; return;
         }
         var complete=pool.HighPoints.Where(p=>p.Complete).Select(p=>p.Pulls).Order().ToArray();
         var median=complete.Length==0?"—":((complete[(complete.Length-1)/2]+complete[complete.Length/2])/2d).ToString("0.0");
         var identified=pool.FeaturedCount+pool.NonFeaturedCount;
+        var highLabel=_analysis.GameId==BuiltInGameIds.ZenlessZoneZero?"S级":"五星";
         var middleLabel=_analysis.GameId==BuiltInGameIds.ZenlessZoneZero?"A级":"四星";
         var lowLabel=_analysis.GameId==BuiltInGameIds.ZenlessZoneZero?"B级":"三星";
-        _summary.Text=$"{pool.Title} · {pool.Draws} 抽 · {pool.HighLabel} {pool.HighCount}（{100d*pool.HighCount/Math.Max(1,pool.Draws):0.00}%） · {middleLabel} {pool.MiddleCount} · {lowLabel} {pool.LowCount}\n完整出货间隔 {complete.Length} 个 · 均值 {Mean(pool.Average)} · 中位数 {median} · 最短 {pool.Minimum?.ToString()??"—"} / 最长 {pool.Maximum?.ToString()??"—"} 抽 · 本地已垫 {pool.CurrentPity}"+(pool.FeaturedMaximum is not null?$"\n已识别 UP {pool.FeaturedCount} · 非 UP {pool.NonFeaturedCount} · 待校对 {pool.UnknownCount}"+(identified>0?$" · UP 占比 {pool.FeaturedCount*100d/identified:0.00}%（含保底）":""):"");
+        var detail = $"当前未出{highLabel}：{(pool.HighCount>0?"":"≥")}{pool.CurrentPity} 抽 · 最少 / 最多：{pool.Minimum?.ToString()??"—"} / {pool.Maximum?.ToString()??"—"} 抽 · 中位数：{median} 抽";
+        if (pool.FeaturedMaximum is not null)
+            detail += $"\nUP {pool.FeaturedCount} 次 · 非 UP {pool.NonFeaturedCount} 次 · 待确认 {pool.UnknownCount} 次 · 平均 UP 所需 {Mean(pool.FeaturedAverage)}"
+                + (identified>0?$" · 已判定出货中 UP 占 {pool.FeaturedCount*100d/identified:0.0}%":"");
+        ShowSummary(pool.Title, detail,
+            new("总抽数", $"{pool.Draws:N0} 抽", $"{middleLabel} {pool.MiddleCount} · {lowLabel} {pool.LowCount}"),
+            new($"{highLabel}出货", $"{pool.HighCount:N0} 次", $"本地出货占比 {100d*pool.HighCount/Math.Max(1,pool.Draws):0.00}%"),
+            new($"平均{highLabel}所需", Mean(pool.Average), complete.Length>0?$"按 {complete.Length} 段完整记录计算":"至少两次出货后计算"));
         _highPlot.Visibility=Visibility.Visible;
         var max=pool.PityMaximum??Math.Max(10,pool.HighPoints.Select(p=>p.Pulls).DefaultIfEmpty(10).Max());
-        _highPlot.SetData(pool.HighLabel+"出货散点",pool.HighPoints,max,pool.Average);
+        _highPlot.SetData(highLabel+"出货抽数",pool.HighPoints,max,pool.Average);
         _upPlot.Visibility=pool.FeaturedMaximum is not null?Visibility.Visible:Visibility.Collapsed;
         LayoutPlots();
-        if(pool.FeaturedMaximum is int upMax)_upPlot.SetData("UP "+pool.HighLabel+"出货散点",pool.FeaturedPoints,upMax,pool.FeaturedAverage);
-        _rules.Text="横轴为两次出货之间的抽数，各卡池分别计算。相同抽数合并在一个位置，点击圆点查看全部物品和日期；均值不包含历史不完整的间隔。"
+        if(pool.FeaturedMaximum is int upMax)_upPlot.SetData("UP "+highLabel+"出货抽数",pool.FeaturedPoints,upMax,pool.FeaturedAverage);
+        _rules.Text="总抽数、出货次数和占比来自当前账号的本地档案。平均所需抽数、最少、最多和中位数只使用两次出货之间完整的记录，不包含首条出货前可能缺失的历史。图上越靠左，表示该次出货所需抽数越少。"
             +(pool.FeaturedMaximum is not null?" UP 间隔从上一件确定的 UP 物品起算；待校对结果会中断可确认的间隔，该段不计入均值。UP 占比包含保底出货，不等于小保底胜率。":"")
             +(pool.PityMaximum is null?" 此类卡池的横轴按本地记录范围绘制，不代表保底上限。":"")
             +(_analysis.GameId==BuiltInGameIds.GenshinImpact&&pool.Type=="302"?" 武器 UP 指当期任一 UP 武器，不表示定轨目标。":"");
@@ -196,6 +221,26 @@ public sealed class GachaStatisticsControl : UserControl
         catch(Exception ex) when(ex is IOException or InvalidDataException){_correctionInfo.Text="校对未保存，请检查数据目录权限及校对文件。";}
     }
     private static string Mean(double? value)=>value is double mean?$"{mean:0.0} 抽":"—";
+    private void ShowSummary(string title, string detail, params SummaryMetric[] metrics)
+    {
+        _summaryTitle.Text = title;
+        _summaryDetail.Text = detail;
+        _summaryMetrics.Children.Clear();
+        _summaryMetrics.Visibility = metrics.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        for (var index = 0; index < metrics.Length; index++)
+        {
+            var metric = metrics[index];
+            var content = new StackPanel { Spacing = 3 };
+            content.Children.Add(new TextBlock { Text = metric.Label, FontSize = 12, Foreground = Brush("GlassMutedTextBrush"), TextWrapping = TextWrapping.Wrap });
+            var value = new TextBlock { Text = metric.Value, FontSize = 23, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = Brush("PageTitleBrush"), TextWrapping = TextWrapping.Wrap };
+            AutomationProperties.SetAutomationId(value, "GachaMetricValue" + index);
+            content.Children.Add(value);
+            content.Children.Add(new TextBlock { Text = metric.Hint, FontSize = 12, Foreground = Brush("GlassMutedTextBrush"), TextWrapping = TextWrapping.Wrap });
+            Grid.SetColumn(content, index);
+            _summaryMetrics.Children.Add(content);
+        }
+    }
+    private sealed record SummaryMetric(string Label, string Value, string Hint);
     private static Brush Brush(string name)=>AsterLauncher.App.Services.AppearanceBrushes.Get(name);
     private static HashSet<string> ReadKnownItems(string game)
     {

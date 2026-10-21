@@ -42,7 +42,7 @@ public sealed class EndfieldCommunityPage : Page
     public EndfieldCommunityPage(EndfieldCommunityViewModel viewModel, IResourceCatalogProvider resources, LauncherViewModel launcher)
     {
         _viewModel = viewModel; _resources = resources; _launcher = launcher;
-        var body = new StackPanel { Spacing = 16, Padding = new(24, 8, 24, 24) };
+        var body = new StackPanel { Spacing = 16, Padding = (Thickness)Application.Current.Resources["FeaturePagePadding"] };
         var top = new Grid { ColumnSpacing = 12 };
         top.ColumnDefinitions.Add(new() { Width = new(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -52,7 +52,9 @@ public sealed class EndfieldCommunityPage : Page
         _refresh = ActionButton("更新资料", async () => await _viewModel.RefreshAsync(), "SecondaryButtonStyle");
         AutomationProperties.SetName(_refresh, "更新终末地日历资料");
         Grid.SetColumn(_refresh, 1); top.Children.Add(_refresh);
-        var statusCard = Surface(top); statusCard.Padding = new(12); body.Children.Add(statusCard);
+        var statusCard = Surface(top);
+        AutomationProperties.SetAutomationId(statusCard, "CalendarSurface");
+        body.Children.Add(statusCard);
         body.Children.Add(_message);
 
         var calendarBody = new StackPanel { Spacing = 12 };

@@ -86,7 +86,7 @@ public sealed partial class GameSettingsPage : Page
     {
         var game = _viewModel.CurrentGame;
         ServerPanel.Visibility = game is not null && !game.IsExternalLaunch && (game.Id == Core.BuiltInGameIds.Endfield || Core.HoYoInstallationIdentity.HasChannels(game.Id)) ? Visibility.Visible : Visibility.Collapsed;
-        ExternalEntryInfo.Visibility = game?.IsExternalLaunch == true ? Visibility.Visible : Visibility.Collapsed;
+        ExternalEntrySurface.Visibility = game?.IsExternalLaunch == true ? Visibility.Visible : Visibility.Collapsed;
         ExternalEntryInfo.Text = game?.IsOfficialCloud == true
             ? "当前使用官方云游戏。画面选项请在云游戏内设置；下方游戏信息中的 EXE 保留给本地安装使用。"
             : "当前使用模拟器入口。可右键游戏图标选择模拟器 EXE；下方游戏信息中的 EXE 保留给本地启动方案使用。";

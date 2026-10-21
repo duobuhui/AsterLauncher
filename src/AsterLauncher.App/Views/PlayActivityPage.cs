@@ -11,7 +11,7 @@ namespace AsterLauncher.App.Views;
 public sealed class PlayActivityPage : Page
 {
     private readonly LauncherViewModel _launcher;
-    private readonly StackPanel _body = new() { Spacing = 14, Padding = new Thickness(28,24,28,24) };
+    private readonly StackPanel _body = new() { Spacing = 14 };
     private readonly ComboBox _period = new() { MinWidth = 130 };
     private readonly Grid _calendar = new() { ColumnSpacing = 3, RowSpacing = 3 };
     private readonly TextBlock _summary = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap };
@@ -24,6 +24,7 @@ public sealed class PlayActivityPage : Page
     public PlayActivityPage(LauncherViewModel launcher)
     {
         _launcher = launcher;
+        _body.Padding = (Thickness)Application.Current.Resources["FeaturePagePadding"];
         var heading = new Grid();
         heading.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
@@ -32,8 +33,12 @@ public sealed class PlayActivityPage : Page
         heading.Children.Add(_title);
         Grid.SetColumn(_period, 1); heading.Children.Add(_period);
         AutomationProperties.SetName(_period, "游玩记录年份");
-        _body.Children.Add(heading);
-        _body.Children.Add(_summary);
+        var context = new StackPanel { Spacing = 10 };
+        context.Children.Add(heading);
+        context.Children.Add(_summary);
+        var contextSurface = new Border { Child = context, Style = (Style)Application.Current.Resources["CommunitySurfaceStyle"] };
+        AutomationProperties.SetAutomationId(contextSurface, "PlayActivitySurface");
+        _body.Children.Add(contextSurface);
         var panel = new StackPanel { Spacing = 10 };
         panel.Children.Add(_calendar);
         var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
@@ -47,8 +52,7 @@ public sealed class PlayActivityPage : Page
         legend.Children.Add(new TextBlock { Text = "多 · 15 分钟 / 1 小时 / 3 小时", FontSize = 12 });
         panel.Children.Add(legend);
         panel.Children.Add(_selected);
-        _body.Children.Add(new Border { Child = panel, Padding = new(16), CornerRadius = new(14),
-            Background = Brush("HeroGlassBrush"), BorderBrush = Brush("GlassEdgeBrush"), BorderThickness = new(1) });
+        _body.Children.Add(new Border { Child = panel, Style = (Style)Application.Current.Resources["CommunitySurfaceStyle"] });
         _body.Children.Add(_legacy);
         _body.Children.Add(new TextBlock { Text = "本地游戏按实际进程计时；退出启动器后仍记录至该游戏结束。云游戏及模拟器不计时。", FontSize = 12, TextWrapping = TextWrapping.Wrap });
         Content = new ScrollViewer { Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
