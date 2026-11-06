@@ -111,3 +111,14 @@ The 2026-10-13 data refresh adds schedule metadata from the [official version-co
 The resource-feed banner for 「万物更新」 now uses the independent original published in the [official October 14 pool announcement](https://endfield.hypergryph.com/news/8548), replacing the temporary version-guide recommendation visual. The [original JPEG](https://web.hycdn.cn/upload/image/20261014/4aecb8b0646268c07144fc5a0acc42bf.jpg) is retained byte-for-byte as resources/images/endfield/rejuvenation.jpg: 1650×300, 506443 bytes, SHA-256 d25f39e9ce6cf375eb1ec7eeae6e6ad3eaaa09d809a1bb6b341f6282d2253c35. It is a complete standalone pool banner, not a crop from a collage, a character demonstration, or the earlier version guide. Publisher rights remain with Hypergryph / GRYPHLINE; this provenance record does not grant an image license.
 
 The Minghe portrait and 「烟火邀星河」 temporary banner still share the attributed version-guide file; an independent formal banner has not been verified. The October 15 [final version notice](https://endfield.hypergryph.com/news/6094) supplies calendar facts and adds no other media.
+
+## Endfield formal Minghe and Tangtang pool banners (2026-11-06)
+
+Resource revision 2026110601 uses independent original images from the [Minghe formal pool notice](https://endfield.hypergryph.com/news/7204) and [Tangtang phase-one refactor notice](https://endfield.hypergryph.com/news/3893). Both files retain the publisher's original bytes without cropping, resizing or conversion. Artwork rights remain with Hypergryph / GRYPHLINE; these source records do not grant an image license.
+
+| Resource file | Official original | Dimensions / bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `images/endfield/starry-flow-banner.png` | [Original PNG](https://web.hycdn.cn/upload/image/20261027/131177beccbe5a8d9e1b6f552e604ee5.png) | 1650 x 300; 1,066,482 bytes | `7d0854572e03e673e71ee5a400054f91a95a92408e41bb3d252d7c04bd80536f` |
+| `images/endfield/refactor-tangtang.png` | [Original PNG](https://web.hycdn.cn/upload/image/20261029/584402670a2fd8afd90412ee0bbb4dd9.png) | 1600 x 900; 2,502,392 bytes | `726d4a3f257dce53abc4522bfcec748edc7d32135d9c7e29f3dbb281c714db4c` |
+
+The Minghe pool banner replaces the temporary version-guide visual; the separately mapped Minghe portrait retains that earlier attributed file. Tangtang aliases refer only to refactor phase one. These are public display assets, independent of client releases and user gacha archives.

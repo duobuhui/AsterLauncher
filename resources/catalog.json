@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026102101,
-  "publishedAt": "2026-10-21T15:23:28.054Z",
+  "revision": 2026110601,
+  "publishedAt": "2026-11-06T08:44:47.303Z",
   "pools": [
     {
       "gameId": "endfield",
@@ -147,7 +147,7 @@
       "endsAt": null,
       "weaponPool": "月映申领",
       "weapon": "唤月",
-      "source": "https://endfield.hypergryph.com/news/6094",
+      "source": "https://endfield.hypergryph.com/news/7204",
       "endsOn": "2026-11-26",
       "category": "chartered",
       "featuredOperator": "明河"
@@ -161,7 +161,7 @@
       "endsAt": "2026-11-19T11:59:00+08:00",
       "weaponPool": "细枝申领",
       "weapon": "落草",
-      "source": "https://endfield.hypergryph.com/news/6094",
+      "source": "https://endfield.hypergryph.com/news/3893",
       "category": "refactor",
       "featuredOperator": "汤汤"
     }
@@ -227,10 +227,21 @@
       "kind": "banner",
       "key": "烟火邀星河",
       "aliases": [],
-      "file": "images/endfield/starry-flow.png",
-      "sha256": "4bdd820f1d808f336a64daa77bf061cf909077c63f84965d75636dd78e116ab1",
-      "size": 63446,
-      "source": "https://web.hycdn.cn/endfield/webview/_version_briefing/v1d6/assets/imgs/thumbnail.e7113d.png",
+      "file": "images/endfield/starry-flow-banner.png",
+      "sha256": "7d0854572e03e673e71ee5a400054f91a95a92408e41bb3d252d7c04bd80536f",
+      "size": 1066482,
+      "source": "https://web.hycdn.cn/upload/image/20261027/131177beccbe5a8d9e1b6f552e604ee5.png",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "banner",
+      "key": "祖泉的新流",
+      "aliases": ["祖泉的新流 #1", "祖泉的新流#1", "祖泉的新流 ＃1", "祖泉的新流＃1"],
+      "file": "images/endfield/refactor-tangtang.png",
+      "sha256": "726d4a3f257dce53abc4522bfcec748edc7d32135d9c7e29f3dbb281c714db4c",
+      "size": 2502392,
+      "source": "https://web.hycdn.cn/upload/image/20261029/584402670a2fd8afd90412ee0bbb4dd9.png",
       "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
     }
   ],
@@ -376,7 +387,7 @@
       "title": "星河共我签到",
       "startsAt": "2026-11-05T12:00:00+08:00",
       "endsOn": "2026-11-26",
-      "description": "烟火邀星河寻访开放期间的限时签到，累计领取星河共我寻访凭证×5。"
+      "description": "烟火邀星河寻访开放期间的限时签到，累计签到7日领取星河共我寻访凭证×5。"
     },
     {
       "gameId": "endfield",
@@ -453,7 +464,7 @@
       "key": "endfield-ji-mi-sheng-suo-jin-lan-202611",
       "title": "机密圣所·浸蓝兑换",
       "startsAt": "2026-11-05T12:00:00+08:00",
-      "endsAt": "2026-12-03T04:00:00+08:00",
+      "endsAt": "2026-12-02T04:00:00+08:00",
       "description": "使用晶化硬币·浸蓝兑换奖励；兑换期限与危机合约挑战期限不同。"
     },
     {
@@ -465,8 +476,8 @@
       "platforms": [],
       "key": "endfield-li-zhi-bu-gei-202611",
       "title": "理智补给",
-      "startsAt": "2026-11-19T04:00:00+08:00",
-      "endsAt": "2026-11-26T04:00:00+08:00",
+      "startsAt": "2026-11-18T04:00:00+08:00",
+      "endsAt": "2026-11-25T04:00:00+08:00",
       "description": "每日完成指定任务领取理智补给奖励。"
     },
     {

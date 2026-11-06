@@ -168,8 +168,11 @@ public sealed class ResourceCalendarTests
         Assert.Null(challenge.EndsAt);
         Assert.Equal(new DateOnly(2026, 11, 26), challenge.EndsOn);
         var exchange = Assert.Single(catalog.Announcements, p => p.Key == "endfield-ji-mi-sheng-suo-jin-lan-202611");
-        Assert.Equal(DateTimeOffset.Parse("2026-12-03T04:00:00+08:00"), exchange.EndsAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-12-02T04:00:00+08:00"), exchange.EndsAt);
         Assert.Null(exchange.EndsOn);
+        var sanity = Assert.Single(catalog.Announcements, p => p.Key == "endfield-li-zhi-bu-gei-202611");
+        Assert.Equal(DateTimeOffset.Parse("2026-11-18T04:00:00+08:00"), sanity.StartsAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-11-25T04:00:00+08:00"), sanity.EndsAt);
         var guideReward = Assert.Single(catalog.Announcements, p => p.Key == "endfield-danqingdu-guide-reward");
         Assert.Equal(DateTimeOffset.Parse("2026-10-06T21:00:00+08:00"), guideReward.StartsAt);
         Assert.Equal(DateTimeOffset.Parse("2026-10-15T06:00:00+08:00"), guideReward.EndsAt);
@@ -177,7 +180,7 @@ public sealed class ResourceCalendarTests
         Assert.Empty(catalog.Codes);
     }
     [Fact]
-    public void PublishedOctober15FeedUsesAnIndependentFormalSiBanner()
+    public void PublishedFeedUsesIndependentFormalPoolBanners()
     {
         var catalog = ResourceUpdateService.Parse(File.ReadAllBytes(Path.Combine(Fixture, "catalog.json")));
         Assert.True(catalog.Revision >= 2026101501);
@@ -191,8 +194,15 @@ public sealed class ResourceCalendarTests
         Assert.Equal(banner.Size, bytes.LongLength);
         Assert.Equal(banner.Sha256, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
         var minghe = Assert.Single(catalog.Images, item => item.Kind == "banner" && item.Key == "烟火邀星河");
-        Assert.Equal("images/endfield/starry-flow.png", minghe.File);
-        Assert.Contains("/_version_briefing/v1d6/", minghe.Source);
+        Assert.Equal("images/endfield/starry-flow-banner.png", minghe.File);
+        Assert.Equal("https://web.hycdn.cn/upload/image/20261027/131177beccbe5a8d9e1b6f552e604ee5.png", minghe.Source);
+        Assert.Equal("https://endfield.hypergryph.com/news/7204", Assert.Single(catalog.Pools, item => item.Key == minghe.Key).Source);
+        Assert.Equal("images/endfield/starry-flow.png", Assert.Single(catalog.Images, item => item.Kind == "portrait" && item.Key == "明河").File);
+        var tangtang = Assert.Single(catalog.Images, item => item.Kind == "banner" && item.Key == "祖泉的新流");
+        Assert.Equal("https://web.hycdn.cn/upload/image/20261029/584402670a2fd8afd90412ee0bbb4dd9.png", tangtang.Source);
+        Assert.Equal("https://endfield.hypergryph.com/news/3893", Assert.Single(catalog.Pools, item => item.Key == tangtang.Key).Source);
+        Assert.Contains("祖泉的新流 #1", tangtang.Aliases);
+        Assert.DoesNotContain("祖泉的新流 #2", tangtang.Aliases);
     }
 
     [Fact]
