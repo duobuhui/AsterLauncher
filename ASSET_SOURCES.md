@@ -122,3 +122,16 @@ Resource revision 2026110601 uses independent original images from the [Minghe f
 | `images/endfield/refactor-tangtang.png` | [Original PNG](https://web.hycdn.cn/upload/image/20261029/584402670a2fd8afd90412ee0bbb4dd9.png) | 1600 x 900; 2,502,392 bytes | `726d4a3f257dce53abc4522bfcec748edc7d32135d9c7e29f3dbb281c714db4c` |
 
 The Minghe pool banner replaces the temporary version-guide visual; the separately mapped Minghe portrait retains that earlier attributed file. Tangtang aliases refer only to refactor phase one. These are public display assets, independent of client releases and user gacha archives.
+
+## Endfield formal Kay and Perlica pool artwork (2026-11-25)
+
+Resource revision 2026112501 uses the original 1650 × 300 pool banners published in the [Kay pool notice](https://endfield.hypergryph.com/news/8535) and [Perlica phase-one refactor notice](https://endfield.hypergryph.com/news/7201). The new character portraits are the exact character thumbnail assets from the official [version guide](https://endfield.hypergryph.com/version_briefing/latest), version v1d7, for Kay and Mimino. No crop, resize, recoloring or conversion was used. Publisher rights remain with Hypergryph / GRYPHLINE; the source-code license does not license the artwork.
+
+| Resource file | Official original | Dimensions / bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `images/endfield/kay-banner.jpg` | [Original JPEG](https://web.hycdn.cn/upload/image/20261120/8e57f582f6a0e95cdc928f478a4db94d.jpg) | 1650 × 300; 297,111 bytes | `3e8bdeb38d2671653f940dbda5191133023c4a763e899ce30ecbafee1e74baac` |
+| `images/endfield/refactor-perlica.jpg` | [Original JPEG](https://web.hycdn.cn/upload/image/20261123/6eba884a23d0e29ee994b447b87c2c05.jpg) | 1650 × 300; 212,087 bytes | `deb651d19694e46389d08cfa65a804368610d0ced43c279fe5b2d365ea4f879c` |
+| `images/endfield/kay-portrait.png` | [Original PNG](https://web.hycdn.cn/endfield/webview/_version_briefing/v1d7/assets/imgs/thumbnail.c8c991.png) | 350 × 112; 68,539 bytes | `d3043e7c1da398c984c0b7f4ada4ee30937ba51f8635d55d706fd9c208dd225b` |
+| `images/endfield/mimino-portrait.png` | [Original PNG](https://web.hycdn.cn/endfield/webview/_version_briefing/v1d7/assets/imgs/thumbnail.0e0bdc.png) | 350 × 112; 68,177 bytes | `91f4cd93b92ab8288bd7138117530e3e8b4becba4958978318854582433d27e2` |
+
+The upcoming Rosy phase-one refactor has confirmed metadata from the November 25 version notice but no independently verified standalone banner. The combined calendar image is not cropped into a fake banner. All assets are delivered only through the independent resource feed.

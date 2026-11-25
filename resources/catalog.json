@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": 2026110601,
-  "publishedAt": "2026-11-06T08:44:47.303Z",
+  "revision": 2026112501,
+  "publishedAt": "2026-11-25T05:27:13.716Z",
   "pools": [
     {
       "gameId": "endfield",
@@ -144,11 +144,10 @@
       "key": "烟火邀星河",
       "name": "烟火邀星河",
       "startsAt": "2026-11-05T12:00:00+08:00",
-      "endsAt": null,
+      "endsAt": "2026-11-25T06:00:00+08:00",
       "weaponPool": "月映申领",
       "weapon": "唤月",
       "source": "https://endfield.hypergryph.com/news/7204",
-      "endsOn": "2026-11-26",
       "category": "chartered",
       "featuredOperator": "明河"
     },
@@ -164,6 +163,47 @@
       "source": "https://endfield.hypergryph.com/news/3893",
       "category": "refactor",
       "featuredOperator": "汤汤"
+    },
+    {
+      "gameId": "endfield",
+      "key": "锻砧、行囊与蜜糖",
+      "name": "锻砧、行囊与蜜糖",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsAt": "2026-12-23T11:59:00+08:00",
+      "weaponPool": "恣游申领",
+      "weapon": "甜美交易",
+      "source": "https://endfield.hypergryph.com/news/8535",
+      "category": "chartered",
+      "featuredOperator": "小刻"
+    },
+    {
+      "gameId": "endfield",
+      "key": "致每一个飘游之愿",
+      "name": "致每一个飘游之愿",
+      "phase": "1",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsAt": "2026-12-16T11:59:00+08:00",
+      "weaponPool": "飘行申领",
+      "weapon": "使命必达",
+      "source": "https://endfield.hypergryph.com/news/7201",
+      "category": "refactor",
+      "featuredOperator": "洁尔佩塔"
+    },
+    {
+      "gameId": "endfield",
+      "key": "绯红瑰宝",
+      "name": "绯红瑰宝",
+      "phase": "1",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-16T12:00:00+08:00",
+      "endsOn": "2027-01-07",
+      "weaponPool": "赤獠申领",
+      "weapon": "狼之绯",
+      "source": "https://endfield.hypergryph.com/news/5979",
+      "category": "refactor",
+      "featuredOperator": "洛茜"
     }
   ],
   "images": [
@@ -243,6 +283,50 @@
       "size": 2502392,
       "source": "https://web.hycdn.cn/upload/image/20261029/584402670a2fd8afd90412ee0bbb4dd9.png",
       "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "banner",
+      "key": "锻砧、行囊与蜜糖",
+      "aliases": [],
+      "file": "images/endfield/kay-banner.jpg",
+      "sha256": "3e8bdeb38d2671653f940dbda5191133023c4a763e899ce30ecbafee1e74baac",
+      "size": 297111,
+      "source": "https://web.hycdn.cn/upload/image/20261120/8e57f582f6a0e95cdc928f478a4db94d.jpg",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "banner",
+      "key": "致每一个飘游之愿",
+      "aliases": ["致每一个飘游之愿 #1", "致每一个飘游之愿#1", "致每一个飘游之愿 ＃1", "致每一个飘游之愿＃1"],
+      "file": "images/endfield/refactor-perlica.jpg",
+      "sha256": "deb651d19694e46389d08cfa65a804368610d0ced43c279fe5b2d365ea4f879c",
+      "size": 212087,
+      "source": "https://web.hycdn.cn/upload/image/20261123/6eba884a23d0e29ee994b447b87c2c05.jpg",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "portrait",
+      "key": "小刻",
+      "aliases": [],
+      "file": "images/endfield/kay-portrait.png",
+      "sha256": "d3043e7c1da398c984c0b7f4ada4ee30937ba51f8635d55d706fd9c208dd225b",
+      "size": 68539,
+      "source": "https://web.hycdn.cn/endfield/webview/_version_briefing/v1d7/assets/imgs/thumbnail.c8c991.png",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
+    },
+    {
+      "gameId": "endfield",
+      "kind": "portrait",
+      "key": "米米诺",
+      "aliases": [],
+      "file": "images/endfield/mimino-portrait.png",
+      "sha256": "91f4cd93b92ab8288bd7138117530e3e8b4becba4958978318854582433d27e2",
+      "size": 68177,
+      "source": "https://web.hycdn.cn/endfield/webview/_version_briefing/v1d7/assets/imgs/thumbnail.0e0bdc.png",
+      "attribution": "鹰角网络 / GRYPHLINE；仅作游戏资料展示，图片权利归发行商。"
     }
   ],
   "announcements": [
@@ -253,11 +337,11 @@
       "title": "丹青渡",
       "version": "丹青渡",
       "startsOn": "2026-10-15",
-      "endsOn": "2026-11-26",
       "url": "https://endfield.hypergryph.com/news/6094",
       "region": "CN",
       "platforms": [],
-      "description": "10月15日版本更新维护后开启；维护计划为06:00—12:00，实际开服以官方公告为准。11月26日下一版本维护的具体小时尚未公布。"
+      "description": "10月15日维护后开启；新版本维护计划为11月25日06:00—12:00，原版本在11月25日06:00维护开始前结束。",
+      "endsAt": "2026-11-25T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -347,8 +431,8 @@
       "key": "endfield-yan-huo-sheng-yuan-202610",
       "title": "烟火生缘",
       "startsOn": "2026-10-15",
-      "endsOn": "2026-11-26",
-      "description": "版本更新维护后开启，10月22日04:00更新活动内容；限时经营任务在下一版本维护前结束，缘缘庄经营玩法之后仍可体验。"
+      "description": "版本更新维护后开启，10月22日04:00更新活动内容；限时经营任务在下一版本维护前结束，缘缘庄经营玩法之后仍可体验。本次结束边界以11月25日06:00开始的新版本维护为准。",
+      "endsAt": "2026-11-25T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -386,8 +470,8 @@
       "key": "endfield-xing-he-gong-wo-202611",
       "title": "星河共我签到",
       "startsAt": "2026-11-05T12:00:00+08:00",
-      "endsOn": "2026-11-26",
-      "description": "烟火邀星河寻访开放期间的限时签到，累计签到7日领取星河共我寻访凭证×5。"
+      "description": "烟火邀星河寻访开放期间的限时签到，累计签到7日领取星河共我寻访凭证×5。本次结束边界以11月25日06:00开始的新版本维护为准。",
+      "endsAt": "2026-11-25T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -399,8 +483,8 @@
       "key": "endfield-gui-ye-202611",
       "title": "归野",
       "startsAt": "2026-11-05T12:00:00+08:00",
-      "endsOn": "2026-11-26",
-      "description": "明河叙事活动在下一版本更新维护前结束；活动页面下线后，满足参与条件仍可继续体验支线任务。"
+      "description": "明河叙事活动在下一版本更新维护前结束；活动页面下线后，满足参与条件仍可继续体验支线任务。本次结束边界以11月25日06:00开始的新版本维护为准。",
+      "endsAt": "2026-11-25T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -451,8 +535,8 @@
       "key": "endfield-wei-ji-he-yue-jin-lan-202611",
       "title": "危机合约·浸蓝测试作战",
       "startsAt": "2026-11-05T12:00:00+08:00",
-      "endsOn": "2026-11-26",
-      "description": "挑战活动在下一版本更新维护前结束；11月12日12:00更新活动内容，机密圣所兑换另有期限。"
+      "description": "挑战活动在下一版本更新维护前结束；11月12日12:00更新活动内容，机密圣所兑换另有期限。本次结束边界以11月25日06:00开始的新版本维护为准。",
+      "endsAt": "2026-11-25T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -516,8 +600,8 @@
       "key": "endfield-zhan-zheng-hui-xiang-kuang-re-202611",
       "title": "战争回响·狂热赛季",
       "startsAt": "2026-11-05T12:00:00+08:00",
-      "endsOn": "2026-11-26",
-      "description": "新赛季在下一版本更新维护前结束；包含三个轮换周期。"
+      "description": "新赛季在下一版本更新维护前结束；包含三个轮换周期。本次结束边界以11月25日06:00开始的新版本维护为准。",
+      "endsAt": "2026-11-25T06:00:00+08:00"
     },
     {
       "gameId": "endfield",
@@ -575,11 +659,345 @@
       "title": "维护与修复补偿领取",
       "version": "丹青渡",
       "startsOn": "2026-10-15",
-      "endsOn": "2026-11-26",
       "url": "https://endfield.hypergryph.com/news/6094",
       "region": "CN",
       "platforms": [],
-      "description": "更新维护与问题修复补偿各含嵌晶玉×900，分两封游戏内邮件发放。限10月15日更新前创建的角色，解锁邮箱后领取；邮件在下次版本更新维护时过期。"
+      "description": "更新维护与问题修复补偿各含嵌晶玉×900，分两封游戏内邮件发放。限10月15日更新前创建的角色，解锁邮箱后领取；邮件在下次版本更新维护时过期。本次结束边界以11月25日06:00开始的新版本维护为准。",
+      "endsAt": "2026-11-25T06:00:00+08:00"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-moging-version-202611",
+      "kind": "version",
+      "title": "穿越甚大蘑境与你相逢",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "11月25日维护后开放；维护计划06:00—12:00。结束日期暂按官方新版本导览所载1月7日，具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-moging-preview-20261121",
+      "kind": "livestream",
+      "title": "全新版本&2.0揭幕前瞻特别节目",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-11-21T19:30:00+08:00",
+      "url": "https://www.bilibili.com/video/BV1Uis16kEnY/",
+      "region": "CN",
+      "platforms": [],
+      "description": "11月21日播出的官方特别节目，介绍新版本及2.0前瞻。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-moging-guide-reward-202611",
+      "kind": "event",
+      "title": "版本导览奖励",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-11-21T20:00:00+08:00",
+      "endsAt": "2026-11-25T06:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5970",
+      "region": "CN",
+      "platforms": [],
+      "description": "在版本导览网页领取嵌晶玉×1000等，奖励发送到游戏邮箱；非兑换码。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-moging-maintenance-20261125",
+      "kind": "maintenance",
+      "title": "穿越甚大蘑境与你相逢 版本更新维护",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-11-25T06:00:00+08:00",
+      "endsAt": "2026-11-25T12:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "官方计划维护窗口，实际结束与开服以官方公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-moging-preload-pc-20261123",
+      "kind": "event",
+      "title": "蘑境PC预下载",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-23",
+      "url": "https://endfield.hypergryph.com/news/9324",
+      "region": "CN",
+      "platforms": [
+        "PC"
+      ],
+      "description": "11月23日官方公告预下载已开放；PC约7GB，解压需额外预留11GB。开始和结束具体时刻未公布。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-moging-maintenance-compensation-20261125",
+      "kind": "event",
+      "title": "维护与修复补偿领取",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "维护补偿及修复补偿分别为嵌晶玉×900，通过两封游戏邮件发放；更新前已创建角色且解锁邮箱方可领取。下次维护前过期，具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-administrator-thank-you-20261119",
+      "kind": "event",
+      "title": "致管理员的谢礼",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-11-19T00:00:00+08:00",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/0419",
+      "region": "CN",
+      "platforms": [],
+      "description": "版本结束前创建角色并解锁邮箱，可收到嵌晶玉×3000邮件，邮件有效期30天；这是邮件赠礼。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-honeycake-story-202611",
+      "kind": "event",
+      "title": "蜜饼是我的祈愿",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "小刻叙事活动，完成支线可获嵌晶玉×600等；活动结束后仍可按条件体验任务。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-array-old-wounds-202611",
+      "kind": "event",
+      "title": "阵列建设：旧伤弥合",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "生产重建物资、推进建设任务，可获嵌晶玉×1000、起源锻造液·Ⅰ型等。限时任务结束后仍可体验重建禁区玩法。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-roving-signin-202611",
+      "kind": "event",
+      "title": "漫野探奇签到",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsAt": "2026-12-23T11:59:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/8535",
+      "region": "CN",
+      "platforms": [],
+      "description": "累计签到7日可领取漫野探奇寻访凭证×5等。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-kay-trial-202611",
+      "kind": "event",
+      "title": "小刻·作战演练",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsAt": "2026-12-23T11:59:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/8535",
+      "region": "CN",
+      "platforms": [],
+      "description": "在特许寻访期间进行小刻试用关卡，可领取嵌晶玉×100等。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-mushrooms-guide-202611",
+      "kind": "event",
+      "title": "蘑菇！蕈类！真菌！",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsAt": "2026-12-23T12:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "在旧水坝完成指定任务，领取嵌晶玉×1200等。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-sanity-supply-20261209",
+      "kind": "event",
+      "title": "理智补给（第一期）",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-09T04:00:00+08:00",
+      "endsAt": "2026-12-16T04:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "完成每日指定任务可领取理智消耗许可、应急理智加强剂。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-sanity-supply-20261231",
+      "kind": "event",
+      "title": "理智补给（第二期）",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-31T04:00:00+08:00",
+      "endsAt": "2027-01-07T04:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "完成每日指定任务可领取理智消耗许可、应急理智加强剂。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-athletic-meeting-202612",
+      "kind": "event",
+      "title": "方兴！竞技大会！",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-16T12:00:00+08:00",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "完成挑战可获嵌晶玉×1200等奖励，12月18日04:00新增活动内容。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-lucky-carrot-202612",
+      "kind": "event",
+      "title": "“幸运萝卜”的妙趣游乐",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-16T12:00:00+08:00",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "挑战巫术乐园玩法并用萝卜大钞兑换奖励，12月23日04:00新增活动内容。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-marcher-report-202612",
+      "kind": "event",
+      "title": "行军者的报到",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-16T12:00:00+08:00",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "通过登录与玩法获得满潜能5星干员米米诺及5星武器明日之星。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-gift-sorter-202612",
+      "kind": "event",
+      "title": "分拣吧！管礼员",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-23T12:00:00+08:00",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "参与网页礼盒分拣活动，领取嵌晶玉×300等。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-battle-echo-roaming-202611",
+      "kind": "event",
+      "title": "战争回响·游离赛季",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsAt": "2026-12-16T11:59:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "赛季含三个轮换周期，首次完成新增关卡普通难度可获奖励。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-battle-echo-alert-202612",
+      "kind": "event",
+      "title": "战争回响·警觉赛季",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-16T12:00:00+08:00",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "新赛季含三个轮换周期。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-umbral-tyrant-20261202",
+      "kind": "event",
+      "title": "影拓丰碑·暴君武装开放",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-02T12:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "首个特殊关卡开放；常驻玩法未公布结束期限。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-umbral-tyrant-second-20261209",
+      "kind": "event",
+      "title": "影拓丰碑·暴君武装第二关",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-09T04:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "第二个特殊关卡开放；常驻玩法未公布结束期限。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-monument-tyranny-202612",
+      "kind": "event",
+      "title": "丰碑揭示·暴虐",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-02T12:00:00+08:00",
+      "endsAt": "2026-12-23T04:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "完成影拓丰碑指定挑战可获嵌晶玉×1200等奖励；12月9日04:00内容更新。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-cryptic-fungi-20261227",
+      "kind": "event",
+      "title": "密境行者·菌类秘事",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsAt": "2026-12-27T12:00:00+08:00",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "特别篇开放三个协议空间，完成挑战可获嵌晶玉×600等；未公布结束期限。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-moging-protocol-pass-202611",
+      "kind": "event",
+      "title": "协议通行证·蘑境",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "endsOn": "2027-01-07",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "本版本期间开放通行证，提升等级可获基础寻访凭证、嵌晶玉等。具体结束时刻以正式维护公告为准。"
+    },
+    {
+      "gameId": "endfield",
+      "key": "endfield-old-dam-open-20261125",
+      "kind": "event",
+      "title": "武陵·旧水坝开放",
+      "version": "穿越甚大蘑境与你相逢",
+      "startsOn": "2026-11-25",
+      "url": "https://endfield.hypergryph.com/news/5979",
+      "region": "CN",
+      "platforms": [],
+      "description": "新区域及相关探索玩法在版本更新后开放，未公布结束期限。"
     }
   ],
   "codes": []
